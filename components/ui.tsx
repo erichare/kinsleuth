@@ -18,7 +18,7 @@ export function Confidence({ value }: { value: number }) {
   );
 }
 
-export function Status({ children, tone = "ok" }: { children: React.ReactNode; tone?: "ok" | "warning" | "private" }) {
-  return <span className={`status ${tone === "warning" ? "warning" : tone === "private" ? "private" : ""}`}>{children}</span>;
+export function Status({ children, tone = "ok" }: { children: React.ReactNode; tone?: "ok" | "warning" | "private" | "danger" }) {
+  const className = tone === "ok" ? "status" : `status ${tone}`;
+  return <span className={className}>{children}</span>;
 }
-

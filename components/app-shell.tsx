@@ -9,6 +9,7 @@ const nav = [
   { href: "/app/imports", label: "GEDCOM Imports", icon: Icons.Upload },
   { href: "/app/ai", label: "AI Analyst", icon: Icons.Brain },
   { href: "/app/reports", label: "Reports", icon: Icons.BookOpen },
+  { href: "/app/publishing", label: "Publishing", icon: Icons.Shield },
   { href: "/app/settings", label: "Settings", icon: Icons.Settings }
 ];
 

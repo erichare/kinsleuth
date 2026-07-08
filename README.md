@@ -29,6 +29,13 @@ This repository is MIT licensed and intentionally uses synthetic fixtures. Real 
 - Recent local import preview history in `/app/imports`.
 - Versioned health endpoint now reports the current KinSleuth checkpoint.
 
+## V0.4 checkpoint
+
+- Publication readiness review in `/app/publishing` for manually curated public profiles.
+- Per-person publish gates for living status, privacy level, public facts, citation coverage, low-confidence facts, and story context.
+- Publishing readiness API at `/api/publishing/readiness`.
+- Private navigation now includes a dedicated publishing safety workflow before public sharing.
+
 ## Quick start
 
 ```bash

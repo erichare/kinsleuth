@@ -345,6 +345,11 @@ textarea {
   background: var(--accent-soft);
 }
 
+.status.danger {
+  color: var(--danger);
+  background: #fdece7;
+}
+
 .score {
   color: var(--gold);
   background: var(--gold-soft);
@@ -457,7 +462,12 @@ textarea {
 }
 
 .app-card {
+  overflow-x: auto;
   padding: 20px;
+}
+
+.app-card .data-table {
+  min-width: 640px;
 }
 
 .metric-row {
