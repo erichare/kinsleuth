@@ -63,6 +63,25 @@ export type ResearchCase = {
   }>;
 };
 
+export type SourceDocument = {
+  id: string;
+  title: string;
+  sourceType: string;
+  fileName?: string;
+  storageKey?: string;
+  mimeType?: string;
+  size?: number;
+  repository?: string;
+  citationDate?: string;
+  linkedPersonId?: string;
+  linkedCaseId?: string;
+  transcript?: string;
+  notes?: string;
+  privacy: PrivacyLevel;
+  confidence: number;
+  createdAt: string;
+};
+
 export type DnaSide = "maternal" | "paternal" | "both" | "unknown";
 
 export type DnaTreeStatus = "none" | "private" | "partial" | "public" | "unknown";
@@ -110,4 +129,3 @@ export type ImportSummary = {
     maxYear?: number;
   };
 };
-

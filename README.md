@@ -43,6 +43,13 @@ This repository is MIT licensed and intentionally uses synthetic fixtures. Real 
 - Private dashboard, people, cases, DNA, AI, reports, and publishing pages read from the workspace store.
 - Public people, profile, place, and home routes use runtime publish/privacy gates instead of static demo arrays.
 
+## V0.6 checkpoint
+
+- Private Sources workspace at `/app/sources`.
+- Upload API now stores files under ignored `uploads/sources/` and records metadata in the workspace store.
+- Sources support type, repository, citation date, transcript, notes, privacy, confidence, and person/case links.
+- Source register and transcript views make uploaded evidence usable inside research workflows.
+
 ## Quick start
 
 ```bash

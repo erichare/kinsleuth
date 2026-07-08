@@ -3,15 +3,16 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { createDnaConnectionHypothesis, scoreDnaMatch } from "./dna";
 import { demoCases, demoDnaMatches, demoPeople } from "./demo-data";
-import type { DnaConnectionHypothesis, DnaMatch, PersonSummary, ResearchCase } from "./models";
+import type { DnaConnectionHypothesis, DnaMatch, PersonSummary, ResearchCase, SourceDocument } from "./models";
 
 export type ScoredDnaMatch = DnaMatch & { helpfulnessScore: number };
 
 export type WorkspaceData = {
-  version: "0.5.0";
+  version: "0.6.0";
   archiveName: string;
   people: PersonSummary[];
   cases: ResearchCase[];
+  sources: SourceDocument[];
   dnaMatches: DnaMatch[];
   updatedAt: string;
 };
@@ -30,10 +31,25 @@ export function getWorkspacePath(options: WorkspaceStoreOptions = {}): string {
 
 export function createSeedWorkspace(now = new Date()): WorkspaceData {
   return {
-    version: "0.5.0",
+    version: "0.6.0",
     archiveName: "Riemer - Zajicek Archive",
     people: demoPeople,
     cases: demoCases,
+    sources: [
+      {
+        id: "src-synthetic-chicago-birth",
+        title: "Synthetic Chicago birth register",
+        sourceType: "Vital record",
+        repository: "Synthetic Cook County archive",
+        citationDate: "12 Apr 1884",
+        linkedPersonId: "p-elizabeth-riemer",
+        transcript: "Synthetic extract documenting Elizabeth Katherine Riemer's birth in Chicago.",
+        notes: "Seed source used for beta workflow demonstration.",
+        privacy: "public",
+        confidence: 0.92,
+        createdAt: now.toISOString()
+      }
+    ],
     dnaMatches: demoDnaMatches,
     updatedAt: now.toISOString()
   };
@@ -141,6 +157,35 @@ export async function saveDnaMatch(match: DnaMatch, options: WorkspaceStoreOptio
   };
 }
 
+export async function saveSourceDocument(input: Partial<SourceDocument>, options: WorkspaceStoreOptions = {}): Promise<SourceDocument> {
+  if (!input.title?.trim()) {
+    throw new Error("title is required");
+  }
+
+  const workspace = await readWorkspace(options);
+  const created: SourceDocument = {
+    id: input.id ?? `src-${randomUUID()}`,
+    title: input.title.trim(),
+    sourceType: input.sourceType?.trim() || "Document",
+    fileName: input.fileName,
+    storageKey: input.storageKey,
+    mimeType: input.mimeType,
+    size: input.size,
+    repository: input.repository,
+    citationDate: input.citationDate,
+    linkedPersonId: input.linkedPersonId,
+    linkedCaseId: input.linkedCaseId,
+    transcript: input.transcript,
+    notes: input.notes,
+    privacy: input.privacy ?? "private",
+    confidence: input.confidence ?? 0.5,
+    createdAt: input.createdAt ?? new Date().toISOString()
+  };
+
+  await writeWorkspace({ ...workspace, sources: [created, ...workspace.sources.filter((item) => item.id !== created.id)] }, options);
+  return created;
+}
+
 export function scoreWorkspaceDnaMatches(workspace: Pick<WorkspaceData, "dnaMatches">): ScoredDnaMatch[] {
   return workspace.dnaMatches.map((match) => ({
     ...match,
@@ -154,10 +199,11 @@ export function createWorkspaceDnaHypotheses(workspace: Pick<WorkspaceData, "peo
 
 function normalizeWorkspaceData(value: Partial<WorkspaceData>): WorkspaceData {
   return {
-    version: "0.5.0",
+    version: "0.6.0",
     archiveName: value.archiveName || "Riemer - Zajicek Archive",
     people: Array.isArray(value.people) ? value.people : [],
     cases: Array.isArray(value.cases) ? value.cases : [],
+    sources: Array.isArray(value.sources) ? value.sources : [],
     dnaMatches: Array.isArray(value.dnaMatches) ? value.dnaMatches : [],
     updatedAt: value.updatedAt || new Date().toISOString()
   };

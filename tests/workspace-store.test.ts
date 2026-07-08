@@ -3,7 +3,7 @@ import path from "node:path";
 import os from "node:os";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { DnaMatch } from "@/lib/models";
-import { createCase, readWorkspace, saveDnaMatch } from "@/lib/workspace-store";
+import { createCase, readWorkspace, saveDnaMatch, saveSourceDocument } from "@/lib/workspace-store";
 
 let tempDir: string;
 let storagePath: string;
@@ -77,6 +77,31 @@ describe("workspace store", () => {
     expect(workspace.dnaMatches[0]).toMatchObject({
       id: match.id,
       displayName: "Storage Test"
+    });
+  });
+
+  it("persists source documents with links and transcripts", async () => {
+    const source = await saveSourceDocument(
+      {
+        title: "Parish register scan",
+        sourceType: "Church record",
+        fileName: "parish-register.pdf",
+        storageKey: "uploads/sources/parish-register.pdf",
+        linkedPersonId: "p-elizabeth-riemer",
+        transcript: "Baptism entry transcript.",
+        privacy: "private",
+        confidence: 0.74
+      },
+      { storagePath }
+    );
+    const workspace = await readWorkspace({ storagePath });
+
+    expect(source.id).toMatch(/^src-/);
+    expect(workspace.sources[0]).toMatchObject({
+      id: source.id,
+      title: "Parish register scan",
+      linkedPersonId: "p-elizabeth-riemer",
+      transcript: "Baptism entry transcript."
     });
   });
 });

@@ -6,6 +6,7 @@ const nav = [
   { href: "/app/cases", label: "Cases", icon: Icons.FileSearch },
   { href: "/app/people", label: "People", icon: Icons.Users },
   { href: "/app/dna", label: "DNA Matches", icon: Icons.Dna },
+  { href: "/app/sources", label: "Sources", icon: Icons.Database },
   { href: "/app/imports", label: "GEDCOM Imports", icon: Icons.Upload },
   { href: "/app/ai", label: "AI Analyst", icon: Icons.Brain },
   { href: "/app/reports", label: "Reports", icon: Icons.BookOpen },
