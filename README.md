@@ -57,6 +57,13 @@ This repository is MIT licensed and intentionally uses synthetic fixtures. Real 
 - Real `/login` form, `/api/auth/login`, `/api/auth/logout`, and sidebar sign-out.
 - Set `KINSLEUTH_APP_PASSWORD` and `AUTH_SECRET` in `.env` to protect a self-hosted beta instance.
 
+## V0.8 checkpoint
+
+- Private person profile curation controls for published status, privacy level, and living status.
+- Curation API at `/api/people/[id]/curation`.
+- Public pages immediately respect curation edits through existing publish/privacy gates.
+- Password gate now also protects private person curation APIs.
+
 ## Quick start
 
 ```bash

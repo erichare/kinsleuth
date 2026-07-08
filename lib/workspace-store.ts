@@ -3,7 +3,7 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { createDnaConnectionHypothesis, scoreDnaMatch } from "./dna";
 import { demoCases, demoDnaMatches, demoPeople } from "./demo-data";
-import type { DnaConnectionHypothesis, DnaMatch, PersonSummary, ResearchCase, SourceDocument } from "./models";
+import type { DnaConnectionHypothesis, DnaMatch, PersonSummary, PrivacyLevel, ResearchCase, SourceDocument } from "./models";
 
 export type ScoredDnaMatch = DnaMatch & { helpfulnessScore: number };
 
@@ -184,6 +184,34 @@ export async function saveSourceDocument(input: Partial<SourceDocument>, options
 
   await writeWorkspace({ ...workspace, sources: [created, ...workspace.sources.filter((item) => item.id !== created.id)] }, options);
   return created;
+}
+
+export async function updatePersonCuration(
+  personId: string,
+  input: { published?: boolean; privacy?: PrivacyLevel; livingStatus?: PersonSummary["livingStatus"] },
+  options: WorkspaceStoreOptions = {}
+): Promise<PersonSummary> {
+  const workspace = await readWorkspace(options);
+  const person = workspace.people.find((item) => item.id === personId);
+  if (!person) {
+    throw new Error("person not found");
+  }
+
+  const updated: PersonSummary = {
+    ...person,
+    published: input.published ?? person.published,
+    privacy: input.privacy ?? person.privacy,
+    livingStatus: input.livingStatus ?? person.livingStatus
+  };
+
+  await writeWorkspace(
+    {
+      ...workspace,
+      people: workspace.people.map((item) => (item.id === personId ? updated : item))
+    },
+    options
+  );
+  return updated;
 }
 
 export function scoreWorkspaceDnaMatches(workspace: Pick<WorkspaceData, "dnaMatches">): ScoredDnaMatch[] {

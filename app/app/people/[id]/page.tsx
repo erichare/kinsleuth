@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { Icons } from "@/components/icons";
+import { PersonCurationPanel } from "@/components/person-curation-panel";
 import { Confidence, Status } from "@/components/ui";
 import { readWorkspace } from "@/lib/workspace-store";
 
@@ -33,11 +34,7 @@ export default async function AppPersonPage({ params }: { params: Promise<{ id: 
               <Status tone="private">{person.livingStatus}</Status>
             </div>
           </div>
-          <div className="panel" style={{ boxShadow: "none" }}>
-            <strong>Traceability</strong>
-            <p className="muted">Raw GEDCOM xrefs, source citations, and curated facts remain linked.</p>
-            <span className="tag">Profile ID {person.id}</span>
-          </div>
+          <PersonCurationPanel person={person} />
         </div>
         <div className="tabs">
           <span className="active">Facts</span>

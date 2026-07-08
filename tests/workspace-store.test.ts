@@ -3,7 +3,7 @@ import path from "node:path";
 import os from "node:os";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { DnaMatch } from "@/lib/models";
-import { createCase, readWorkspace, saveDnaMatch, saveSourceDocument } from "@/lib/workspace-store";
+import { createCase, readWorkspace, saveDnaMatch, saveSourceDocument, updatePersonCuration } from "@/lib/workspace-store";
 
 let tempDir: string;
 let storagePath: string;
@@ -102,6 +102,30 @@ describe("workspace store", () => {
       title: "Parish register scan",
       linkedPersonId: "p-elizabeth-riemer",
       transcript: "Baptism entry transcript."
+    });
+  });
+
+  it("updates person curation settings", async () => {
+    const updated = await updatePersonCuration(
+      "p-mary-zajicek",
+      {
+        published: true,
+        privacy: "public",
+        livingStatus: "deceased"
+      },
+      { storagePath }
+    );
+    const workspace = await readWorkspace({ storagePath });
+
+    expect(updated).toMatchObject({
+      id: "p-mary-zajicek",
+      published: true,
+      privacy: "public",
+      livingStatus: "deceased"
+    });
+    expect(workspace.people.find((person) => person.id === "p-mary-zajicek")).toMatchObject({
+      published: true,
+      privacy: "public"
     });
   });
 });

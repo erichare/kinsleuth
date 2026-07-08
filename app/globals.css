@@ -641,6 +641,21 @@ textarea {
   min-height: 120px;
 }
 
+.check-row {
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 750;
+}
+
+.check-row input {
+  width: 16px;
+  height: 16px;
+}
+
 .mobile-menu-note {
   display: none;
 }

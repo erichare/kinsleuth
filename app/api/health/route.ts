@@ -4,6 +4,6 @@ export function GET() {
   return NextResponse.json({
     status: "ok",
     product: "KinSleuth",
-    version: "0.7.0"
+    version: "0.8.0"
   });
 }
