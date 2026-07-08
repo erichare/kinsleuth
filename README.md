@@ -50,6 +50,13 @@ This repository is MIT licensed and intentionally uses synthetic fixtures. Real 
 - Sources support type, repository, citation date, transcript, notes, privacy, confidence, and person/case links.
 - Source register and transcript views make uploaded evidence usable inside research workflows.
 
+## V0.7 checkpoint
+
+- Optional local password gate for `/app/*` and private workspace APIs.
+- Signed httpOnly session cookie with seven-day expiry.
+- Real `/login` form, `/api/auth/login`, `/api/auth/logout`, and sidebar sign-out.
+- Set `KINSLEUTH_APP_PASSWORD` and `AUTH_SECRET` in `.env` to protect a self-hosted beta instance.
+
 ## Quick start
 
 ```bash

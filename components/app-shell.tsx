@@ -38,6 +38,9 @@ export function AppShell({ children, active = "/app", title, actions }: { childr
             );
           })}
         </nav>
+        <form action="/api/auth/logout" className="sidebar-auth" method="post">
+          <button type="submit">Sign out</button>
+        </form>
       </aside>
       <main className="app-main">
         <div className="app-topbar">

@@ -426,6 +426,27 @@ textarea {
   background: rgba(255, 255, 255, 0.13);
 }
 
+.sidebar-auth {
+  margin-top: auto;
+}
+
+.sidebar-auth button {
+  width: 100%;
+  min-height: 38px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 7px;
+  color: rgba(255, 255, 255, 0.82);
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 14px;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.sidebar-auth button:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.13);
+}
+
 .app-main {
   min-width: 0;
 }
