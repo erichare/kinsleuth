@@ -194,14 +194,17 @@ export function PeopleWorkspace({ initialResult }: Props) {
               <th>Death</th>
               <th>Privacy</th>
               <th>Facts</th>
+              <th>Profile</th>
             </tr>
           </thead>
           <tbody>
             {result.items.map((person) => (
               <tr key={person.id}>
                 <td>
-                  <Link href={`/app/people/${person.id}`}>{person.displayName}</Link>
-                  <div className="muted">{person.surname || person.slug}</div>
+                  <Link className="person-name-link" href={`/app/people/${person.id}`}>
+                    <span>{person.displayName}</span>
+                    <small>{person.surname || person.slug}</small>
+                  </Link>
                 </td>
                 <td>{formatVital(person.birthDate, person.birthPlace)}</td>
                 <td>{formatVital(person.deathDate, person.deathPlace)}</td>
@@ -213,6 +216,12 @@ export function PeopleWorkspace({ initialResult }: Props) {
                   </div>
                 </td>
                 <td>{person.factCount}</td>
+                <td>
+                  <Link className="row-action-link" href={`/app/people/${person.id}`} aria-label={`Open ${person.displayName} profile`}>
+                    Open
+                    <Icons.ChevronRight size={14} aria-hidden />
+                  </Link>
+                </td>
               </tr>
             ))}
           </tbody>

@@ -1,8 +1,10 @@
 import { notFound } from "next/navigation";
+import Link from "next/link";
 import { AppShell } from "@/components/app-shell";
 import { Icons } from "@/components/icons";
 import { PersonCurationPanel } from "@/components/person-curation-panel";
 import { Confidence, Status } from "@/components/ui";
+import type { PersonSummary } from "@/lib/models";
 import { readWorkspace } from "@/lib/workspace-store";
 
 export const dynamic = "force-dynamic";
@@ -15,16 +17,28 @@ export default async function AppPersonPage({ params }: { params: Promise<{ id: 
   if (!person) {
     notFound();
   }
+  const relatives = person.relatives
+    .map((relativeId) => workspace.people.find((item) => item.id === relativeId))
+    .filter((relative): relative is PersonSummary => Boolean(relative));
 
   return (
-    <AppShell title="Person Profile" active="/app/people">
-      <section className="profile-card" style={{ padding: 24 }}>
+    <AppShell
+      title="Person Profile"
+      active="/app/people"
+      actions={
+        <Link className="button-secondary" href="/app/people">
+          <Icons.ChevronLeft size={16} aria-hidden />
+          People
+        </Link>
+      }
+    >
+      <section className="profile-card person-profile-card">
         <div className="profile-header">
           <div className="portrait">
             <Icons.Users size={58} aria-hidden />
           </div>
           <div>
-            <h1 style={{ margin: 0, fontFamily: "Georgia, Times New Roman, serif", fontSize: 38 }}>{person.displayName}</h1>
+            <h1 className="profile-title">{person.displayName}</h1>
             <p className="muted">
               {person.birthDate} - {person.deathDate} · {person.birthPlace}
             </p>
@@ -83,6 +97,21 @@ export default async function AppPersonPage({ params }: { params: Promise<{ id: 
                 <div className="muted">{fact.place}</div>
               </div>
             ))}
+          </div>
+          <div className="relationship-panel">
+            <h2>Relationships</h2>
+            <div className="evidence-list">
+              {relatives.length > 0 ? (
+                relatives.map((relative) => (
+                  <Link className="evidence-item relationship-link" href={`/app/people/${relative.id}`} key={relative.id}>
+                    <strong>{relative.displayName}</strong>
+                    <span className="muted">{relative.birthDate ?? "Unknown date"}</span>
+                  </Link>
+                ))
+              ) : (
+                <p className="muted">No linked relatives are available in this workspace record.</p>
+              )}
+            </div>
           </div>
         </aside>
       </section>

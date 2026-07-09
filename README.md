@@ -1,129 +1,21 @@
 # KinSleuth
 
-KinSleuth is a self-hostable, AI-assisted genealogy investigation platform. It is designed for one family archive per deployment: a curated public family-history site on the outside and a private research workspace for GEDCOM imports, cases, evidence, DNA match triage, and whole-tree analysis on the inside.
+KinSleuth is a self-hosted genealogy research workspace for one private family archive. It pairs a curated public family-history site with a private workspace for GEDCOM imports, people curation, cases, evidence, DNA match triage, source review, publishing readiness, quality reports, and local AI-assisted analysis.
 
-This repository is MIT licensed and intentionally uses synthetic fixtures. Real family trees, GEDCOM exports, DNA match exports, uploads, and research files belong in `data/` or external storage and are ignored by Git.
+The repository uses synthetic fixtures only. Put real GEDCOM exports, DNA match files, source uploads, and workspace snapshots in ignored local storage such as `data/`, `uploads/`, or `storage/`.
 
-## V0.1 vertical slice
+## What is included
 
-- Public family archive at `/` with manually published ancestor/story/place indexes.
-- Product information at `/kinsleuth`.
-- Private workspace at `/app` with people, cases, DNA matches, imports, AI analysis, and settings.
-- GEDCOM 5.5.1 parser/import scaffolding that preserves raw records, xrefs, custom Ancestry tags, notes, citations, URLs, media references, and import snapshots.
-- DNA match triage with helpfulness scoring and connection hypotheses.
-- Role model for owner, admin, editor, contributor, and viewer.
-- OpenAI-compatible AI provider abstraction with structured checks and semantic-index scaffolding.
-- Docker Compose for app, Postgres with pgvector, MinIO-compatible object storage, and worker.
-
-## V0.2 work in progress
-
-- Connected GEDCOM import preview in `/app/imports`, including browser file loading, parsed summaries, preserved raw-data counts, and optional re-import diff preview.
-- Connected DNA match analysis in `/app/dna`, including editable match details, helpfulness scoring, candidate branch/geography/common-ancestor hypotheses, evidence, and uncertainty.
-- Connected case drafting in `/app/cases`, including initial hypotheses and evidence notes.
-- Quality reports in `/app/reports` for privacy risks, source gaps, DNA triage blockers, and under-evidenced cases.
-
-## V0.3 checkpoint
-
-- Browser-local persistence for DNA analyses, case drafts, and GEDCOM import previews.
-- Workspace snapshot export/import/reset in `/app/settings` so local research edits can be saved as portable JSON.
-- Recent local import preview history in `/app/imports`.
-- Versioned health endpoint now reports the current KinSleuth checkpoint.
-
-## V0.4 checkpoint
-
-- Publication readiness review in `/app/publishing` for manually curated public profiles.
-- Per-person publish gates for living status, privacy level, public facts, citation coverage, low-confidence facts, and story context.
-- Publishing readiness API at `/api/publishing/readiness`.
-- Private navigation now includes a dedicated publishing safety workflow before public sharing.
-
-## V0.5 checkpoint
-
-- Server-side workspace store at ignored `storage/workspace.json`, seeded from synthetic fixtures.
-- Cases and DNA analyses now persist through workspace-backed APIs.
-- Private dashboard, people, cases, DNA, AI, reports, and publishing pages read from the workspace store.
-- Public people, profile, place, and home routes use runtime publish/privacy gates instead of static demo arrays.
-
-## V0.6 checkpoint
-
-- Private Sources workspace at `/app/sources`.
-- Upload API now stores files under ignored `uploads/sources/` and records metadata in the workspace store.
-- Sources support type, repository, citation date, transcript, notes, privacy, confidence, and person/case links.
-- Source register and transcript views make uploaded evidence usable inside research workflows.
-
-## V0.7 checkpoint
-
-- Optional local password gate for `/app/*` and private workspace APIs.
-- Signed httpOnly session cookie with seven-day expiry.
-- Real `/login` form, `/api/auth/login`, `/api/auth/logout`, and sidebar sign-out.
-- Set `KINSLEUTH_APP_PASSWORD` and `AUTH_SECRET` in `.env` to protect a self-hosted beta instance.
-
-## V0.8 checkpoint
-
-- Private person profile curation controls for published status, privacy level, and living status.
-- Curation API at `/api/people/[id]/curation`.
-- Public pages immediately respect curation edits through existing publish/privacy gates.
-- Password gate now also protects private person curation APIs.
-
-## V0.9 checkpoint
-
-- GEDCOM preview can now be applied to the workspace from `/app/imports`.
-- Applying a GEDCOM upserts imported people, extracts GEDCOM source records, preserves raw record text/checksums, and records applied-import history.
-- A JSON backup is written under ignored `storage/backups/` before each apply.
-- Person curation settings are preserved when the same GEDCOM xref is reapplied.
-
-## V0.10 checkpoint
-
-- Private people workspace now supports full-text search across names, places, dates, notes, facts, and GEDCOM identifiers.
-- People can be filtered by publication state, privacy level, and living status.
-- Large imported trees render through paginated result sets instead of dumping every person into one browser table.
-- People table now surfaces publication/privacy/living safety states and fact counts for faster curation.
-
-## V0.11 checkpoint
-
-- DNA match triage now supports CSV bulk import from `/app/dna`.
-- Import mapping accepts common match-name, shared-cM, tree-status, side, surname, place, shared-match, note, and URL headers.
-- DNA CSV rows are validated with row-level skip reasons while valid rows still import.
-- Bulk imports persist through the server workspace store and automatically mark very helpful matches as high priority.
-
-## V0.12 checkpoint
-
-- DNA match triage now has search, side/tree/status/helpfulness filters, sorting, and pagination for larger match lists.
-- Selecting a DNA row updates the hypothesis panel instead of always showing the first match.
-- Selected matches can be triaged, annotated, re-sided, reclassified by tree status, and deleted from the workspace.
-- New `/api/dna/[id]` update/delete endpoints persist match queue cleanup through the server workspace store.
-
-## V0.13 checkpoint
-
-- Selected DNA matches can be linked directly into investigation cases as evidence from `/app/dna`.
-- DNA evidence linking upserts an existing match link instead of creating duplicate evidence entries.
-- New `/api/cases/[id]/evidence` endpoint persists linked DNA evidence to the workspace case store.
-- Case list/detail views now make linked DNA evidence easier to spot during investigation review.
-
-## V0.14 checkpoint
-
-- Private people search now uses server-backed pagination through `/api/people`.
-- `/app/people` no longer hydrates the full GEDCOM person/fact payload into the browser.
-- People list responses return slim rows plus workspace counts, keeping large real trees much lighter to browse.
-
-## V0.15 checkpoint
-
-- Quality reports now paginate the prioritized issue queue on `/app/reports`.
-- Publishing review now paginates both profile readiness and blocker queues on `/app/publishing`.
-- Report and publishing APIs return paged rows by default, reducing large review payloads.
-- Shared pagination utilities now back people, DNA, reports, and publishing review surfaces.
-
-## V0.16 checkpoint
-
-- Added a professional archival visual sweep across private and public surfaces.
-- Introduced a subtle generated contour-map texture, richer evergreen shell, brass dividers, and refined table/card treatments.
-- Improved status, metric, form, button, sidebar, and responsive mobile polish while preserving the research-focused workflow.
-
-## V0.17 checkpoint
-
-- Dashboard metrics now derive from the real workspace instead of static demo counts.
-- The private dashboard now caps case/DNA tables and adds an action queue for quality, publishing, and DNA follow-up.
-- Sources now have server-backed search, filters, pagination, transcript previews, and a small person-link lookup flow.
-- Cases now have filters, pagination, metrics, and a bounded evidence-confidence queue for larger investigation workspaces.
+- Public archive routes for the home page, published people, person profiles, stories, and places.
+- Private workspace routes under `/app` for dashboard, people, cases, DNA, sources, GEDCOM imports, AI Analyst, reports, publishing, and settings.
+- Server-backed workspace persistence at `storage/workspace.json`, seeded from synthetic demo data on first run.
+- GEDCOM 5.5.1 parsing and apply flow that preserves raw records, source records, custom tags, checksums, and import history.
+- People search with server pagination, publication/privacy/living filters, and private curation controls.
+- DNA match triage with CSV import, helpfulness scoring, editable match details, case evidence linking, and connection hypotheses.
+- Source register with upload metadata, transcript/notes fields, filters, search, and person/case links.
+- Publishing readiness and quality reports for privacy risks, source gaps, low-confidence facts, and case/DNA follow-up.
+- Optional password gate for private pages and APIs.
+- AI Analyst local checks for source gaps, privacy risks, date conflicts, DNA leads, and case-focused next steps, with an OpenAI-compatible provider configuration reserved for richer semantic analysis.
 
 ## Quick start
 
@@ -134,6 +26,62 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
+By default, private `/app` routes are open in local development. To protect them, copy `.env.example` to `.env` and set `KINSLEUTH_APP_PASSWORD` plus a long `AUTH_SECRET`.
+
+```bash
+cp .env.example .env
+npm run dev
+```
+
+## Useful routes
+
+| Route | Purpose |
+| --- | --- |
+| `/` | Public archive landing page |
+| `/people` | Published people list |
+| `/people/[slug]` | Public person profile |
+| `/app` | Private investigation dashboard |
+| `/app/people` | Search, filter, and curate people |
+| `/app/cases` | Research cases and evidence |
+| `/app/dna` | DNA match triage and hypotheses |
+| `/app/sources` | Source register and transcript review |
+| `/app/imports` | GEDCOM preview and apply flow |
+| `/app/ai` | AI Analyst local research pass |
+| `/app/reports` | Quality and evidence reports |
+| `/app/publishing` | Public-profile readiness review |
+| `/app/settings` | Workspace snapshot export/import/reset |
+
+## Data and storage
+
+KinSleuth intentionally keeps real genealogy data out of Git.
+
+| Path | Contents | Git status |
+| --- | --- | --- |
+| `fixtures/` | Synthetic sample GEDCOM/data used by tests and demos | committed |
+| `storage/workspace.json` | Runtime workspace store created on first run | ignored |
+| `storage/backups/` | JSON backups written before GEDCOM apply operations | ignored |
+| `uploads/sources/` | Uploaded source files | ignored |
+| `data/` | Optional local GEDCOM, DNA CSV, and research exports | ignored |
+
+If you want to reset local demo data, use the reset flow in `/app/settings` or remove `storage/workspace.json` while the dev server is stopped.
+
+## Environment
+
+`.env.example` documents the supported settings:
+
+| Variable | Notes |
+| --- | --- |
+| `APP_BASE_URL` | Base URL for the running app |
+| `AUTH_SECRET` | Secret used to sign the private workspace session cookie |
+| `KINSLEUTH_APP_PASSWORD` | Enables password protection for `/app` and private APIs when set |
+| `KINSLEUTH_WORKSPACE_PATH` | Optional override for the JSON workspace store path |
+| `DATABASE_URL` | Reserved for the Docker/Postgres architecture |
+| `S3_*` | Reserved for object storage-backed uploads |
+| `AI_BASE_URL` | OpenAI-compatible provider base URL |
+| `AI_API_KEY` | Optional; local deterministic AI checks still run without it |
+| `AI_CHAT_MODEL` | Chat model name for provider-backed analysis |
+| `AI_EMBEDDING_MODEL` | Embedding model name for future semantic retrieval |
+
 ## Docker Compose
 
 ```bash
@@ -141,21 +89,9 @@ cp .env.example .env
 docker compose up --build
 ```
 
-The app runs at [http://localhost:3000](http://localhost:3000), Postgres at `localhost:5432`, and MinIO at [http://localhost:9001](http://localhost:9001).
+The app runs at [http://localhost:3000](http://localhost:3000). Compose also provisions Postgres and MinIO-compatible object storage for the intended self-hosted architecture, although the current vertical slice primarily uses the JSON workspace store.
 
-## Private data
-
-Do not commit real genealogy data. Put local-only files under `data/`, for example:
-
-```text
-data/Riemer - Zajicek 2015 with DNA.ged
-data/dna-matches.csv
-data/uploads/
-```
-
-The public repo should use only synthetic fixtures from `fixtures/`.
-
-## Useful commands
+## Development commands
 
 ```bash
 npm run typecheck
@@ -163,3 +99,27 @@ npm run lint
 npm run test
 npm run build
 ```
+
+Use `npm run test:watch` for focused Vitest iteration.
+
+## Project map
+
+| Path | What lives there |
+| --- | --- |
+| `app/` | Next.js App Router pages and API routes |
+| `components/` | Shared UI and workspace components |
+| `lib/` | GEDCOM parsing, workspace store, search, DNA, AI, privacy, publishing, and report logic |
+| `tests/` | Vitest coverage for core domain behavior |
+| `docs/architecture.md` | Architecture notes and privacy model |
+| `scripts/worker.mjs` | Placeholder worker entry point |
+| `db/migrations/` | Planned relational schema |
+
+## Privacy model
+
+Anonymous visitors only see manually published public content. Private workspace pages and APIs are password-protected when `KINSLEUTH_APP_PASSWORD` is configured. Public profile rendering also applies publication and privacy gates so living, private, and sensitive records are withheld from public routes.
+
+Before publishing real data, review `/app/publishing` and `/app/reports`, then inspect public `/people` and `/people/[slug]` pages manually.
+
+## Current status
+
+KinSleuth is an early vertical slice, not a production genealogy platform. The main workflows are functional enough for local/self-hosted beta exploration, but relational persistence, background jobs, object-storage integration, semantic indexing, role management, and production deployment hardening are still evolving.

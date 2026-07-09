@@ -1,6 +1,7 @@
 :root {
   --background: #f4f7f5;
   --surface: #fffffd;
+  --surface-elevated: #ffffff;
   --surface-muted: #eef4f1;
   --surface-glass: rgba(255, 255, 253, 0.9);
   --ink: #0d1a16;
@@ -11,13 +12,14 @@
   --accent-strong: #003d34;
   --accent-deep: #002b25;
   --accent-soft: #e2f4ed;
+  --accent-faint: rgba(0, 107, 88, 0.08);
   --gold: #b87b18;
   --gold-soft: #fff2d3;
   --danger: #aa372e;
   --danger-soft: #fde9e5;
   --success: #0b7c55;
-  --shadow: 0 18px 48px rgba(13, 26, 22, 0.08);
-  --shadow-soft: 0 12px 30px rgba(13, 26, 22, 0.06);
+  --shadow: 0 22px 58px rgba(13, 26, 22, 0.075);
+  --shadow-soft: 0 12px 30px rgba(13, 26, 22, 0.055);
   --texture: url("/assets/archival-contours.png");
 }
 
@@ -213,6 +215,15 @@ textarea {
 .button-secondary:hover {
   border-color: var(--line-strong);
   box-shadow: var(--shadow-soft);
+}
+
+.button:disabled,
+.button-secondary:disabled,
+.button-ghost:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+  transform: none;
+  box-shadow: none;
 }
 
 .hero {
@@ -662,6 +673,13 @@ textarea {
   letter-spacing: 0;
 }
 
+.app-topbar-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
 .app-content {
   padding: 28px 30px 36px;
 }
@@ -695,6 +713,27 @@ textarea {
   border: 2px solid rgba(214, 225, 220, 0.45);
   border-radius: 999px;
   background: rgba(0, 107, 88, 0.48);
+}
+
+.app-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 18px;
+}
+
+.app-card-header h2 {
+  margin-bottom: 5px;
+}
+
+.app-card-header p {
+  margin: 0;
+}
+
+.app-card-header svg {
+  flex: 0 0 auto;
+  color: var(--accent);
 }
 
 .app-card::before,
@@ -773,6 +812,39 @@ textarea {
   align-items: start;
 }
 
+.person-profile-card {
+  overflow: visible;
+  padding: 24px;
+}
+
+.profile-page-actions {
+  display: flex;
+  justify-content: flex-start;
+  margin: 34px 0 14px;
+}
+
+.profile-title {
+  margin: 0;
+  color: #071612;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(34px, 4vw, 44px);
+  font-weight: 600;
+  line-height: 1.02;
+  letter-spacing: 0;
+}
+
+.public-profile-title {
+  font-size: clamp(38px, 5vw, 52px);
+}
+
+.profile-confidence-panel {
+  box-shadow: none;
+}
+
+.profile-confidence-score {
+  margin-top: 10px;
+}
+
 .portrait {
   aspect-ratio: 1;
   display: grid;
@@ -841,6 +913,28 @@ textarea {
   box-shadow: 0 0 0 2px var(--accent-soft);
 }
 
+.relationship-panel {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+}
+
+.relationship-link {
+  display: grid;
+  gap: 4px;
+}
+
+.relationship-link:hover {
+  border-color: rgba(0, 107, 88, 0.24);
+  background: rgba(226, 244, 237, 0.34);
+}
+
+.side-stack {
+  display: grid;
+  gap: 18px;
+  align-content: start;
+}
+
 .hypothesis-panel {
   border: 1px solid rgba(184, 123, 24, 0.34);
   border-radius: 8px;
@@ -849,6 +943,156 @@ textarea {
     linear-gradient(180deg, rgba(255, 250, 240, 0.96), rgba(255, 247, 229, 0.9)),
     var(--texture);
   background-size: auto, 760px auto;
+}
+
+.ai-workspace {
+  display: grid;
+  gap: 20px;
+}
+
+.ai-metric-row {
+  margin-bottom: 0;
+}
+
+.ai-grid {
+  grid-template-columns: minmax(0, 1.22fr) minmax(340px, 0.78fr);
+}
+
+.analyst-panel form {
+  display: grid;
+  gap: 14px;
+}
+
+.prompt-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.prompt-chip {
+  min-height: 32px;
+  border: 1px solid rgba(0, 107, 88, 0.16);
+  border-radius: 7px;
+  padding: 0 10px;
+  color: var(--accent);
+  background: rgba(226, 244, 237, 0.52);
+  font-size: 13px;
+  font-weight: 750;
+  cursor: pointer;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease,
+    transform 160ms ease;
+}
+
+.prompt-chip:hover {
+  border-color: rgba(0, 107, 88, 0.28);
+  background: rgba(226, 244, 237, 0.82);
+  transform: translateY(-1px);
+}
+
+.analysis-empty,
+.analysis-result {
+  margin-top: 22px;
+}
+
+.analysis-empty {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  border: 1px dashed rgba(0, 107, 88, 0.24);
+  border-radius: 8px;
+  padding: 16px;
+  background: rgba(238, 244, 241, 0.56);
+}
+
+.analysis-empty svg {
+  flex: 0 0 auto;
+  color: var(--accent);
+}
+
+.analysis-empty p {
+  margin: 4px 0 0;
+}
+
+.analysis-result {
+  display: grid;
+  gap: 16px;
+  border-top: 1px solid var(--line);
+  padding-top: 20px;
+}
+
+.analysis-result-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.analysis-result-header h2 {
+  margin: 0;
+}
+
+.analysis-answer {
+  display: grid;
+  gap: 10px;
+  border: 1px solid rgba(0, 107, 88, 0.12);
+  border-radius: 8px;
+  padding: 16px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 253, 0.96), rgba(238, 244, 241, 0.64)),
+    var(--texture);
+  background-size: auto, 760px auto;
+}
+
+.analysis-answer p {
+  margin: 0;
+  line-height: 1.62;
+}
+
+.analysis-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.analysis-list {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 14px;
+  background: rgba(255, 255, 253, 0.84);
+}
+
+.analysis-list ul {
+  display: grid;
+  gap: 8px;
+  margin: 10px 0 0;
+  padding-left: 18px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.hypothesis-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 14px;
+}
+
+.evidence-inline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.form-error {
+  margin: 0;
+  border: 1px solid rgba(170, 55, 46, 0.16);
+  border-radius: 7px;
+  padding: 10px 12px;
+  color: var(--danger);
+  background: var(--danger-soft);
+  font-size: 14px;
 }
 
 .evidence-list {
@@ -974,6 +1218,49 @@ textarea {
 
 .table-link:hover {
   color: var(--accent);
+}
+
+.person-name-link {
+  display: grid;
+  gap: 3px;
+  color: #071612;
+  font-weight: 850;
+}
+
+.person-name-link small {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.person-name-link:hover span {
+  color: var(--accent);
+}
+
+.row-action-link {
+  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border: 1px solid rgba(0, 107, 88, 0.14);
+  border-radius: 7px;
+  padding: 0 10px;
+  color: var(--accent);
+  background: var(--accent-soft);
+  font-size: 12px;
+  font-weight: 850;
+  white-space: nowrap;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease,
+    transform 160ms ease;
+}
+
+.row-action-link:hover {
+  border-color: rgba(0, 107, 88, 0.28);
+  background: rgba(226, 244, 237, 0.78);
+  transform: translateX(1px);
 }
 
 .dna-edit-panel {
@@ -1181,6 +1468,7 @@ textarea {
   .metric-row,
   .grid-3,
   .form-grid,
+  .analysis-columns,
   .people-filter-grid,
   .source-filter-grid,
   .case-filter-grid,

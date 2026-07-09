@@ -55,7 +55,7 @@ export function AppShell({ children, active = "/app", title, actions }: { childr
             <h1>{title}</h1>
             <div className="muted">Riemer - Zajicek Archive</div>
           </div>
-          <div>{actions}</div>
+          {actions ? <div className="app-topbar-actions">{actions}</div> : null}
         </div>
         <div className="app-content">{children}</div>
       </main>

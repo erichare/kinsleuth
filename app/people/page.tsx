@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Icons } from "@/components/icons";
 import { PublicShell } from "@/components/public-shell";
 import { Confidence, Status } from "@/components/ui";
 import { canPublishPerson } from "@/lib/privacy";
@@ -26,13 +27,17 @@ export default async function PeoplePage() {
                 <th>Death</th>
                 <th>Confidence</th>
                 <th>Status</th>
+                <th>Profile</th>
               </tr>
             </thead>
             <tbody>
               {publishedPeople.map((person) => (
                 <tr key={person.id}>
                   <td>
-                    <Link href={`/people/${person.slug}`}>{person.displayName}</Link>
+                    <Link className="person-name-link" href={`/people/${person.slug}`}>
+                      <span>{person.displayName}</span>
+                      <small>{person.slug}</small>
+                    </Link>
                   </td>
                   <td>{person.birthDate} · {person.birthPlace}</td>
                   <td>{person.deathDate} · {person.deathPlace}</td>
@@ -41,6 +46,12 @@ export default async function PeoplePage() {
                   </td>
                   <td>
                     <Status>Published</Status>
+                  </td>
+                  <td>
+                    <Link className="row-action-link" href={`/people/${person.slug}`} aria-label={`Open ${person.displayName} profile`}>
+                      Open
+                      <Icons.ChevronRight size={14} aria-hidden />
+                    </Link>
                   </td>
                 </tr>
               ))}
