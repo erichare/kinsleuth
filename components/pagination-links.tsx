@@ -14,15 +14,15 @@ type Props = {
 
 export function PaginationLinks({ ariaLabel, page, pageCount, pageParam, pathname, searchParams }: Props) {
   return (
-    <div className="pagination-controls" aria-label={ariaLabel}>
+    <nav className="pagination-controls" aria-label={ariaLabel}>
       <PageLink ariaLabel="Previous page" disabled={page <= 1} href={buildHref(pathname, searchParams, pageParam, page - 1)}>
         <Icons.ChevronLeft size={16} aria-hidden />
       </PageLink>
-      <span className="tag">{page.toLocaleString()}</span>
+      <span aria-current="page" aria-label={`Page ${page.toLocaleString()}`} className="tag">{page.toLocaleString()}</span>
       <PageLink ariaLabel="Next page" disabled={page >= pageCount} href={buildHref(pathname, searchParams, pageParam, page + 1)}>
         <Icons.ChevronRight size={16} aria-hidden />
       </PageLink>
-    </div>
+    </nav>
   );
 }
 

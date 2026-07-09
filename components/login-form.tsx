@@ -47,15 +47,26 @@ export function LoginForm({ nextPath, authRequired }: { nextPath: string; authRe
   }
 
   return (
-    <form className="form-grid" style={{ gridTemplateColumns: "1fr" }} onSubmit={submit}>
-      <div className="field">
-        <label>Password</label>
-        <input autoComplete="current-password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} />
-      </div>
-      <button className="button" disabled={status === "loading"} type="submit">
+    <form aria-busy={status === "loading"} className="form-grid" style={{ gridTemplateColumns: "1fr" }} onSubmit={submit}>
+      <label className="field">
+        <span>Password</span>
+        <input
+          aria-describedby={status === "error" ? "login-password-error" : undefined}
+          aria-invalid={status === "error"}
+          autoComplete="current-password"
+          type="password"
+          value={password}
+          onChange={(event) => setPassword(event.target.value)}
+        />
+      </label>
+      <button aria-busy={status === "loading"} className="button" disabled={status === "loading"} type="submit">
         {status === "loading" ? "Opening..." : "Open workspace"}
       </button>
-      {status === "error" ? <Status tone="warning">Invalid password</Status> : null}
+      {status === "error" ? (
+        <span aria-atomic="true" id="login-password-error" role="alert">
+          <Status tone="warning">Invalid password</Status>
+        </span>
+      ) : null}
     </form>
   );
 }

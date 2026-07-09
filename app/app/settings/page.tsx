@@ -13,43 +13,43 @@ export default async function SettingsPage() {
         <div className="app-card">
           <h2>Archive branding</h2>
           <div className="form-grid">
-            <div className="field">
-              <label>Archive name</label>
+            <label className="field">
+              <span>Archive name</span>
               <input defaultValue="Riemer - Zajicek Archive" />
-            </div>
-            <div className="field">
-              <label>Tagline</label>
+            </label>
+            <label className="field">
+              <span>Tagline</span>
               <input defaultValue="A free and open archive of curated family history." />
-            </div>
-            <div className="field">
-              <label>Accent color</label>
+            </label>
+            <label className="field">
+              <span>Accent color</span>
               <input defaultValue="#00634f" />
-            </div>
-            <div className="field">
-              <label>Public root</label>
+            </label>
+            <label className="field">
+              <span>Public root</span>
               <input defaultValue="/" />
-            </div>
+            </label>
           </div>
         </div>
         <aside className="app-card">
           <h2>AI provider</h2>
           <div className="form-grid" style={{ gridTemplateColumns: "1fr" }}>
-            <div className="field">
-              <label>Base URL</label>
+            <label className="field">
+              <span>Base URL</span>
               <input readOnly value={runtime.ai.baseUrl} />
-            </div>
-            <div className="field">
-              <label>Chat model</label>
+            </label>
+            <label className="field">
+              <span>Chat model</span>
               <input readOnly value={runtime.ai.chatModel} />
-            </div>
-            <div className="field">
-              <label>Embedding model</label>
+            </label>
+            <label className="field">
+              <span>Embedding model</span>
               <input readOnly value={runtime.ai.embeddingModel} />
-            </div>
-            <div className="field">
-              <label>API mode</label>
+            </label>
+            <label className="field">
+              <span>API mode</span>
               <input readOnly value={runtime.ai.mode} />
-            </div>
+            </label>
             <Status tone={runtime.ai.configured ? "ok" : "warning"}>{runtime.ai.configured ? "Provider key configured" : "API key stored server-side only"}</Status>
           </div>
         </aside>
@@ -64,28 +64,28 @@ export default async function SettingsPage() {
           <Status tone={runtime.database.connected ? "ok" : "warning"}>{runtime.database.connected ? "Postgres connected" : "Database unavailable"}</Status>
         </div>
         <div className="form-grid">
-          <div className="field">
-            <label>Database</label>
+          <label className="field">
+            <span>Database</span>
             <input readOnly value={runtime.database.configured ? "Configured in DATABASE_URL" : "Missing DATABASE_URL"} />
-          </div>
-          <div className="field">
-            <label>Archive id</label>
+          </label>
+          <label className="field">
+            <span>Archive id</span>
             <input readOnly value={runtime.database.archiveId} />
-          </div>
-          <div className="field">
-            <label>People</label>
+          </label>
+          <label className="field">
+            <span>People</span>
             <input readOnly value={runtime.database.peopleCount.toLocaleString()} />
-          </div>
-          <div className="field">
-            <label>Cases</label>
+          </label>
+          <label className="field">
+            <span>Cases</span>
             <input readOnly value={runtime.database.caseCount.toLocaleString()} />
-          </div>
-          <div className="field">
-            <label>AI runs</label>
+          </label>
+          <label className="field">
+            <span>AI runs</span>
             <input readOnly value={runtime.database.aiRunCount.toLocaleString()} />
-          </div>
+          </label>
         </div>
-        {runtime.database.error ? <p className="form-error">{runtime.database.error}</p> : null}
+        {runtime.database.error ? <p className="form-error" role="alert">{runtime.database.error}</p> : null}
       </section>
 
       <section className="app-card" style={{ marginTop: 20 }}>

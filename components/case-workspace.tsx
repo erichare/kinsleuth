@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Icons } from "@/components/icons";
 import {
   caseEvidenceQueue,
@@ -12,7 +12,7 @@ import {
   type CaseStatusFilter
 } from "@/lib/case-search";
 import type { ResearchCase } from "@/lib/models";
-import { Confidence, Metric, Status } from "./ui";
+import { Confidence, Metric, Status, TableScroll } from "./ui";
 
 type CaseDraft = {
   title: string;
@@ -47,7 +47,14 @@ export function CaseWorkspace({ initialCases }: { initialCases: ResearchCase[] }
     () => searchCasesPage(cases, { query, status: statusFilter, privacy, evidence, sort }, { page, pageSize }),
     [cases, evidence, page, pageSize, privacy, query, sort, statusFilter]
   );
+  const resultSummary = `Showing ${result.start.toLocaleString()}-${result.end.toLocaleString()} of ${result.total.toLocaleString()}`;
+  const [announcedResultSummary, setAnnouncedResultSummary] = useState(resultSummary);
   const evidenceQueue = useMemo(() => caseEvidenceQueue(cases, 50), [cases]);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => setAnnouncedResultSummary(resultSummary), 400);
+    return () => window.clearTimeout(timeout);
+  }, [resultSummary]);
 
   async function createCase() {
     setStatus("loading");
@@ -216,14 +223,15 @@ export function CaseWorkspace({ initialCases }: { initialCases: ResearchCase[] }
           <div className="table-heading-row">
             <div>
               <h2>Case queue</h2>
-              <p className="muted">
-                Showing {result.start.toLocaleString()}-{result.end.toLocaleString()} of {result.total.toLocaleString()}
+              <p aria-atomic="true" aria-live="polite" className="muted" role="status">
+                {announcedResultSummary}
               </p>
             </div>
             <PaginationControls page={result.page} pageCount={result.pageCount} onPageChange={setPage} />
           </div>
 
-          <table className="data-table">
+          <TableScroll label="Investigation case queue">
+            <table className="data-table">
             <thead>
               <tr>
                 <th>Case</th>
@@ -256,7 +264,8 @@ export function CaseWorkspace({ initialCases }: { initialCases: ResearchCase[] }
                 </tr>
               ))}
             </tbody>
-          </table>
+            </table>
+          </TableScroll>
 
           {result.items.length === 0 ? <p className="muted empty-state">No cases match these filters.</p> : null}
 
@@ -268,7 +277,7 @@ export function CaseWorkspace({ initialCases }: { initialCases: ResearchCase[] }
           </div>
         </div>
 
-        <aside className="app-card">
+        <aside aria-busy={status === "loading"} className="app-card">
           <h2>New case</h2>
           <div className="form-grid" style={{ gridTemplateColumns: "1fr" }}>
             <Field label="Title" value={draft.title} onChange={(value) => setDraft({ ...draft, title: value })} />
@@ -276,10 +285,14 @@ export function CaseWorkspace({ initialCases }: { initialCases: ResearchCase[] }
             <Field label="Focus" value={draft.focus} onChange={(value) => setDraft({ ...draft, focus: value })} />
             <TextArea label="First hypothesis" value={draft.firstHypothesis} onChange={(value) => setDraft({ ...draft, firstHypothesis: value })} />
             <TextArea label="First evidence note" value={draft.firstEvidence} onChange={(value) => setDraft({ ...draft, firstEvidence: value })} />
-            <button className="button" disabled={status === "loading"} onClick={createCase} type="button">
+            <button aria-busy={status === "loading"} className="button" disabled={status === "loading"} onClick={createCase} type="button">
               {status === "loading" ? "Creating..." : "Create case"}
             </button>
-            {status === "error" ? <Status tone="warning">Case creation failed</Status> : null}
+            {status === "error" ? (
+              <span aria-atomic="true" role="alert">
+                <Status tone="warning">Case creation failed</Status>
+              </span>
+            ) : null}
           </div>
         </aside>
       </div>
@@ -317,7 +330,7 @@ function PaginationControls({ page, pageCount, onPageChange }: { page: number; p
       <button className="button-secondary icon-button" disabled={page <= 1} onClick={() => onPageChange(page - 1)} type="button" aria-label="Previous page">
         <Icons.ChevronLeft size={16} aria-hidden />
       </button>
-      <span className="tag">{page.toLocaleString()}</span>
+      <span aria-current="page" className="tag">{page.toLocaleString()}</span>
       <button className="button-secondary icon-button" disabled={page >= pageCount} onClick={() => onPageChange(page + 1)} type="button" aria-label="Next page">
         <Icons.ChevronRight size={16} aria-hidden />
       </button>

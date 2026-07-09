@@ -36,6 +36,7 @@ export function AIAnalystWorkspace({ initialQuestion, cases, initialRuns, anomal
   const [selectedCaseId, setSelectedCaseId] = useState(cases[0]?.id ?? "");
   const [taskTitle, setTaskTitle] = useState("Verify the AI Analyst recommendation against primary evidence.");
   const [taskMessage, setTaskMessage] = useState("");
+  const [taskMessageRole, setTaskMessageRole] = useState<"alert" | "status">("status");
   const [error, setError] = useState("");
   const [isRunning, setIsRunning] = useState(false);
   const [isCreatingTask, setIsCreatingTask] = useState(false);
@@ -86,6 +87,7 @@ export function AIAnalystWorkspace({ initialQuestion, cases, initialRuns, anomal
     const targetCaseId = suggestion.linkedCaseId || selectedCaseId;
     if (!targetCaseId) {
       setTaskMessage("Choose a case before adding this suggestion as a task.");
+      setTaskMessageRole("alert");
       return;
     }
 
@@ -106,8 +108,10 @@ export function AIAnalystWorkspace({ initialQuestion, cases, initialRuns, anomal
 
       setConfirmedSuggestionIds((current) => [...new Set([...current, suggestion.id])]);
       setTaskMessage("Suggested task added to case.");
+      setTaskMessageRole("status");
     } catch (requestError) {
       setTaskMessage(requestError instanceof Error ? requestError.message : "Task creation failed");
+      setTaskMessageRole("alert");
     } finally {
       setBusySuggestionId("");
     }
@@ -116,6 +120,7 @@ export function AIAnalystWorkspace({ initialQuestion, cases, initialRuns, anomal
   async function createCaseTask() {
     if (!selectedCaseId || !result) {
       setTaskMessage("Choose a case and run analysis first.");
+      setTaskMessageRole("alert");
       return;
     }
 
@@ -135,8 +140,10 @@ export function AIAnalystWorkspace({ initialQuestion, cases, initialRuns, anomal
       }
 
       setTaskMessage("Task added to case.");
+      setTaskMessageRole("status");
     } catch (requestError) {
       setTaskMessage(requestError instanceof Error ? requestError.message : "Task creation failed");
+      setTaskMessageRole("alert");
     } finally {
       setIsCreatingTask(false);
     }
@@ -163,7 +170,7 @@ export function AIAnalystWorkspace({ initialQuestion, cases, initialRuns, anomal
             </Status>
           </div>
 
-          <form onSubmit={runAnalysis}>
+          <form aria-busy={isRunning} onSubmit={runAnalysis}>
             <label className="field">
               <span>Case context</span>
               <select value={selectedCaseId} onChange={(event) => setSelectedCaseId(event.target.value)}>
@@ -177,7 +184,12 @@ export function AIAnalystWorkspace({ initialQuestion, cases, initialRuns, anomal
             </label>
             <label className="field">
               <span>Research question</span>
-              <textarea value={question} onChange={(event) => setQuestion(event.target.value)} />
+              <textarea
+                aria-describedby={error ? "ai-analysis-error" : undefined}
+                aria-invalid={Boolean(error) && !question.trim()}
+                value={question}
+                onChange={(event) => setQuestion(event.target.value)}
+              />
             </label>
             <div className="prompt-row" aria-label="Suggested research questions">
               {suggestedQuestions.map((suggestion) => (
@@ -187,13 +199,13 @@ export function AIAnalystWorkspace({ initialQuestion, cases, initialRuns, anomal
               ))}
             </div>
             <div className="hero-actions">
-              <button className="button" disabled={isRunning} type="submit">
+              <button aria-busy={isRunning} className="button" disabled={isRunning} type="submit">
                 <Icons.Brain size={16} aria-hidden />
                 {isRunning ? "Analyzing..." : "Run analysis"}
               </button>
               <Status tone="private">Owner/Admin only</Status>
             </div>
-            {error ? <p className="form-error">{error}</p> : null}
+            {error ? <p aria-atomic="true" className="form-error" id="ai-analysis-error" role="alert">{error}</p> : null}
           </form>
 
           <AnalysisResult result={result} />
@@ -201,6 +213,7 @@ export function AIAnalystWorkspace({ initialQuestion, cases, initialRuns, anomal
             cases={cases}
             isCreating={isCreatingTask}
             message={taskMessage}
+            messageRole={taskMessageRole}
             result={result}
             selectedCaseId={selectedCaseId}
             taskTitle={taskTitle}
@@ -302,6 +315,7 @@ function TaskAction({
   cases,
   isCreating,
   message,
+  messageRole,
   result,
   selectedCaseId,
   taskTitle,
@@ -314,6 +328,7 @@ function TaskAction({
   cases: ResearchCase[];
   isCreating: boolean;
   message: string;
+  messageRole: "alert" | "status";
   result: AIAnalysisResult | null;
   selectedCaseId: string;
   taskTitle: string;
@@ -352,7 +367,13 @@ function TaskAction({
                     {targetCase ? targetCase.title : "No case selected"} · {Math.round(suggestion.confidence * 100)}% confidence
                   </p>
                 </div>
-                <button className="button-secondary" disabled={confirmed || Boolean(busySuggestionId) || !targetCase} onClick={() => onCreateSuggestionTask(suggestion)} type="button">
+                <button
+                  aria-busy={busySuggestionId === suggestion.id}
+                  className="button-secondary"
+                  disabled={confirmed || Boolean(busySuggestionId) || !targetCase}
+                  onClick={() => onCreateSuggestionTask(suggestion)}
+                  type="button"
+                >
                   {confirmed ? "Added" : busySuggestionId === suggestion.id ? "Adding..." : "Add task"}
                 </button>
               </div>
@@ -365,7 +386,7 @@ function TaskAction({
         <input value={taskTitle} onChange={(event) => onTaskTitleChange(event.target.value)} />
       </label>
       <div className="hero-actions">
-        <button className="button-secondary" disabled={isCreating || !selectedCaseId || !taskTitle.trim()} onClick={onCreateTask} type="button">
+        <button aria-busy={isCreating} className="button-secondary" disabled={isCreating || !selectedCaseId || !taskTitle.trim()} onClick={onCreateTask} type="button">
           {isCreating ? "Adding..." : "Add task"}
         </button>
         {selectedCaseId ? (
@@ -374,7 +395,7 @@ function TaskAction({
           </a>
         ) : null}
       </div>
-      {message ? <p className="muted">{message}</p> : null}
+      {message ? <p aria-atomic="true" className={messageRole === "alert" ? "form-error" : "muted"} role={messageRole}>{message}</p> : null}
     </div>
   );
 }
@@ -394,7 +415,7 @@ function AnalysisResult({ result }: { result: AIAnalysisResult | null }) {
 
   return (
     <div className="analysis-result">
-      <div className="analysis-result-header">
+      <div aria-atomic="true" aria-live="polite" className="analysis-result-header">
         <h2>Recommendation</h2>
         <Status tone={result.status === "ready" ? "ok" : "warning"}>{formatAnalysisStatus(result.status)}</Status>
       </div>

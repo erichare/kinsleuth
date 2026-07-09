@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Icons } from "@/components/icons";
-import { Metric, Status } from "@/components/ui";
+import { Metric, Status, TableScroll } from "@/components/ui";
 import { type PeopleListItem, type PeopleLivingFilter, type PeoplePrivacyFilter, type PeoplePublicationFilter, type PeopleSearchResult, type PeopleSortKey } from "@/lib/people-search";
 
 type Props = {
@@ -200,7 +200,8 @@ export function PeopleWorkspace({ initialResult }: Props) {
           <PaginationControls page={result.page} pageCount={result.pageCount} onPageChange={setPage} />
         </div>
 
-        <table className="data-table people-table">
+        <TableScroll label="Imported and curated people">
+          <table className="data-table people-table">
           <thead>
             <tr>
               <th>Name</th>
@@ -239,7 +240,8 @@ export function PeopleWorkspace({ initialResult }: Props) {
               </tr>
             ))}
           </tbody>
-        </table>
+          </table>
+        </TableScroll>
 
         {result.items.length === 0 ? <p className="muted empty-state">No people match these filters.</p> : null}
 

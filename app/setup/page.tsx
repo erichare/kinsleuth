@@ -13,41 +13,41 @@ export default function SetupPage() {
           <div className="panel">
             <h2>Archive basics</h2>
             <div className="form-grid">
-              <div className="field">
-                <label>Archive name</label>
+              <label className="field">
+                <span>Archive name</span>
                 <input defaultValue="Riemer - Zajicek Archive" />
-              </div>
-              <div className="field">
-                <label>Accent color</label>
+              </label>
+              <label className="field">
+                <span>Accent color</span>
                 <input defaultValue="#00634f" />
-              </div>
-              <div className="field">
-                <label>Owner email</label>
+              </label>
+              <label className="field">
+                <span>Owner email</span>
                 <input defaultValue="owner@example.com" />
-              </div>
-              <div className="field">
-                <label>Living-person rule</label>
+              </label>
+              <label className="field">
+                <span>Living-person rule</span>
                 <select defaultValue="conservative-100">
                   <option value="conservative-100">Conservative 100 year rule</option>
                 </select>
-              </div>
+              </label>
             </div>
           </div>
           <div className="panel">
             <h2>Import and AI</h2>
             <div className="form-grid" style={{ gridTemplateColumns: "1fr" }}>
-              <div className="field">
-                <label>GEDCOM file</label>
+              <label className="field">
+                <span>GEDCOM file</span>
                 <input type="file" />
-              </div>
-              <div className="field">
-                <label>AI base URL</label>
+              </label>
+              <label className="field">
+                <span>AI base URL</span>
                 <input defaultValue="https://api.openai.com/v1" />
-              </div>
-              <div className="field">
-                <label>Chat model</label>
+              </label>
+              <label className="field">
+                <span>Chat model</span>
                 <input defaultValue="gpt-5-mini" />
-              </div>
+              </label>
             </div>
             <div className="hero-actions">
               <Link className="button" href="/app/imports">
@@ -60,4 +60,3 @@ export default function SetupPage() {
     </PublicShell>
   );
 }
-

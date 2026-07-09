@@ -12,6 +12,7 @@ export function CaseTaskList({ caseId, initialTasks }: { caseId: string; initial
   const [tasks, setTasks] = useState(initialTasks);
   const [title, setTitle] = useState("");
   const [message, setMessage] = useState("");
+  const [messageRole, setMessageRole] = useState<"alert" | "status">("status");
   const [busyTaskId, setBusyTaskId] = useState("");
   const [isAdding, setIsAdding] = useState(false);
 
@@ -19,6 +20,7 @@ export function CaseTaskList({ caseId, initialTasks }: { caseId: string; initial
     const trimmedTitle = title.trim();
     if (!trimmedTitle) {
       setMessage("Add a task title first.");
+      setMessageRole("alert");
       return;
     }
 
@@ -40,8 +42,10 @@ export function CaseTaskList({ caseId, initialTasks }: { caseId: string; initial
       setTasks((current) => [body.task as CaseTask, ...current]);
       setTitle("");
       setMessage("Task added.");
+      setMessageRole("status");
     } catch (requestError) {
       setMessage(requestError instanceof Error ? requestError.message : "Task creation failed");
+      setMessageRole("alert");
     } finally {
       setIsAdding(false);
     }
@@ -66,19 +70,20 @@ export function CaseTaskList({ caseId, initialTasks }: { caseId: string; initial
       setTasks((current) => current.map((item) => (item.id === task.id ? (body.task as CaseTask) : item)));
     } catch (requestError) {
       setMessage(requestError instanceof Error ? requestError.message : "Task update failed");
+      setMessageRole("alert");
     } finally {
       setBusyTaskId("");
     }
   }
 
   return (
-    <div className="case-task-workspace">
+    <div aria-busy={isAdding || Boolean(busyTaskId)} className="case-task-workspace">
       <div className="task-add-row">
         <label className="field">
           <span>New task</span>
           <input placeholder="Search a parish register, verify a source, compare a DNA cluster..." value={title} onChange={(event) => setTitle(event.target.value)} />
         </label>
-        <button className="button-secondary" disabled={isAdding} onClick={addTask} type="button">
+        <button aria-busy={isAdding} className="button-secondary" disabled={isAdding} onClick={addTask} type="button">
           {isAdding ? "Adding..." : "Add"}
         </button>
       </div>
@@ -90,9 +95,17 @@ export function CaseTaskList({ caseId, initialTasks }: { caseId: string; initial
               <strong>{task.title}</strong>
               <Status tone={task.status === "done" ? "ok" : task.status === "doing" ? "warning" : "private"}>{task.status}</Status>
             </div>
-            <div className="segmented-control" aria-label={`Update ${task.title} status`}>
+            <div className="segmented-control" aria-label={`Update ${task.title} status`} role="group">
               {statusOptions.map((status) => (
-                <button className={task.status === status ? "active" : undefined} disabled={busyTaskId === task.id} key={status} onClick={() => updateStatus(task, status)} type="button">
+                <button
+                  aria-busy={busyTaskId === task.id}
+                  aria-pressed={task.status === status}
+                  className={task.status === status ? "active" : undefined}
+                  disabled={busyTaskId === task.id}
+                  key={status}
+                  onClick={() => updateStatus(task, status)}
+                  type="button"
+                >
                   {status}
                 </button>
               ))}
@@ -102,7 +115,7 @@ export function CaseTaskList({ caseId, initialTasks }: { caseId: string; initial
       </div>
 
       {tasks.length === 0 ? <p className="muted empty-state">No tasks yet.</p> : null}
-      {message ? <p className="muted">{message}</p> : null}
+      {message ? <p aria-atomic="true" className={messageRole === "alert" ? "form-error" : "muted"} role={messageRole}>{message}</p> : null}
     </div>
   );
 }

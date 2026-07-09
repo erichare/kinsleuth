@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Icons } from "@/components/icons";
 import { filterDnaMatches, paginateDnaMatches, type DnaHelpfulnessFilter, type DnaSideFilter, type DnaSortKey, type DnaStatusFilter, type DnaTreeFilter, type ScoredDnaMatch } from "@/lib/dna-search";
 import type { DnaConnectionHypothesis, DnaMatch, ResearchCase } from "@/lib/models";
-import { Confidence, Metric, Status } from "./ui";
+import { Confidence, Metric, Status, TableScroll } from "./ui";
 
 type DnaAnalysisResponse = {
   helpfulnessScore: number;
@@ -109,6 +109,8 @@ export function DnaTriageWorkspace({ initialMatches, initialHypotheses = [], ini
     [matches, query, statusFilter, sideFilter, treeFilter, helpfulnessFilter, sort]
   );
   const pagination = useMemo(() => paginateDnaMatches(filteredMatches, page, pageSize), [filteredMatches, page, pageSize]);
+  const resultSummary = `Showing ${pagination.start.toLocaleString()}-${pagination.end.toLocaleString()} of ${pagination.total.toLocaleString()}`;
+  const [announcedResultSummary, setAnnouncedResultSummary] = useState(resultSummary);
   const selectedMatch = useMemo(
     () => matches.find((match) => match.id === selectedMatchId) ?? pagination.items[0] ?? matches[0],
     [matches, pagination.items, selectedMatchId]
@@ -116,6 +118,11 @@ export function DnaTriageWorkspace({ initialMatches, initialHypotheses = [], ini
   const hypothesis = selectedMatch ? hypotheses[selectedMatch.id] ?? createFallbackHypothesis(selectedMatch) : createFallbackHypothesis();
   const highPriorityCount = useMemo(() => matches.filter((match) => match.triageStatus === "high_priority").length, [matches]);
   const needsReviewCount = useMemo(() => matches.filter((match) => match.triageStatus === "needs_review").length, [matches]);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => setAnnouncedResultSummary(resultSummary), 400);
+    return () => window.clearTimeout(timeout);
+  }, [resultSummary]);
 
   function resetPaging() {
     setPage(1);
@@ -158,7 +165,7 @@ export function DnaTriageWorkspace({ initialMatches, initialHypotheses = [], ini
 
     if (!response.ok) {
       setStatus("error");
-      setError(await response.text());
+      setError((await response.text()) || "DNA analysis failed.");
       return;
     }
 
@@ -394,14 +401,15 @@ export function DnaTriageWorkspace({ initialMatches, initialHypotheses = [], ini
           <div className="table-heading-row">
             <div>
               <h2>Ranked matches</h2>
-              <p className="muted">
-                Showing {pagination.start.toLocaleString()}-{pagination.end.toLocaleString()} of {pagination.total.toLocaleString()}
+              <p aria-atomic="true" aria-live="polite" className="muted" role="status">
+                {announcedResultSummary}
               </p>
             </div>
             <PaginationControls page={pagination.page} pageCount={pagination.pageCount} onPageChange={setPage} />
           </div>
 
-          <table className="data-table dna-table">
+          <TableScroll label="Ranked DNA matches">
+            <table className="data-table dna-table">
             <thead>
               <tr>
                 <th>Match</th>
@@ -417,7 +425,13 @@ export function DnaTriageWorkspace({ initialMatches, initialHypotheses = [], ini
               {pagination.items.map((match) => (
                 <tr className={match.id === selectedMatch?.id ? "selected-row" : undefined} key={match.id}>
                   <td>
-                    <button className="table-link" onClick={() => selectMatch(match)} type="button">
+                    <button
+                      aria-controls="dna-match-details"
+                      aria-pressed={match.id === selectedMatch?.id}
+                      className="table-link"
+                      onClick={() => selectMatch(match)}
+                      type="button"
+                    >
                       {match.displayName}
                     </button>
                     <div className="muted">{match.surnames.slice(0, 3).join(", ") || match.places.slice(0, 2).join(", ") || "No tree details yet"}</div>
@@ -433,7 +447,8 @@ export function DnaTriageWorkspace({ initialMatches, initialHypotheses = [], ini
                 </tr>
               ))}
             </tbody>
-          </table>
+            </table>
+          </TableScroll>
 
           {pagination.items.length === 0 ? <p className="muted empty-state">No DNA matches match these filters.</p> : null}
 
@@ -445,29 +460,33 @@ export function DnaTriageWorkspace({ initialMatches, initialHypotheses = [], ini
           </div>
         </div>
 
-        <section className="section">
+        <section aria-busy={importStatus === "loading"} className="section">
           <h2>Import DNA matches</h2>
           <div className="form-grid">
-            <div className="field">
-              <label>CSV file</label>
+            <label className="field">
+              <span>CSV file</span>
               <input accept=".csv,text/csv" type="file" onChange={(event) => setImportFile(event.target.files?.[0] ?? null)} />
-            </div>
-            <div className="field">
-              <label>Expected columns</label>
+            </label>
+            <label className="field">
+              <span>Expected columns</span>
               <input readOnly value="Match name, shared cM, side, tree, surnames, places, notes" />
-            </div>
+            </label>
           </div>
           <div className="hero-actions">
-            <button className="button" disabled={importStatus === "loading"} onClick={importCsv} type="button">
+            <button aria-busy={importStatus === "loading"} className="button" disabled={importStatus === "loading"} onClick={importCsv} type="button">
               {importStatus === "loading" ? "Importing..." : "Import CSV"}
             </button>
             {importStatus === "error" ? <Status tone="warning">Import failed</Status> : null}
             {importStatus === "success" ? <Status>Import complete</Status> : null}
           </div>
-          {importMessage ? <p className="muted">{importMessage}</p> : null}
+          {importMessage ? (
+            <p aria-atomic="true" className={importStatus === "error" ? "form-error" : "muted"} role={importStatus === "error" ? "alert" : "status"}>
+              {importMessage}
+            </p>
+          ) : null}
         </section>
 
-        <section className="section">
+        <section aria-busy={status === "loading"} className="section">
           <h2>Analyze a match</h2>
           <div className="form-grid">
             <TextField label="Match name" value={form.displayName} onChange={(value) => setForm({ ...form, displayName: value })} />
@@ -479,23 +498,23 @@ export function DnaTriageWorkspace({ initialMatches, initialHypotheses = [], ini
             <TextField label="Surnames" value={form.surnames} onChange={(value) => setForm({ ...form, surnames: value })} />
             <TextField label="Places" value={form.places} onChange={(value) => setForm({ ...form, places: value })} />
             <TextField label="Shared matches" value={form.sharedMatches} onChange={(value) => setForm({ ...form, sharedMatches: value })} />
-            <div className="field" style={{ gridColumn: "1 / -1" }}>
-              <label>Notes</label>
+            <label className="field" style={{ gridColumn: "1 / -1" }}>
+              <span>Notes</span>
               <textarea value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} />
-            </div>
+            </label>
           </div>
           <div className="hero-actions">
-            <button className="button" disabled={status === "loading"} onClick={analyzeMatch} type="button">
+            <button aria-busy={status === "loading"} className="button" disabled={status === "loading"} onClick={analyzeMatch} type="button">
               {status === "loading" ? "Analyzing..." : "Analyze match"}
             </button>
             {status === "error" ? <Status tone="warning">Analysis failed</Status> : selectedMatch ? <Status>Helpfulness {selectedMatch.helpfulnessScore}</Status> : null}
           </div>
-          {error ? <p className="muted">{error}</p> : null}
+          {error ? <p aria-atomic="true" className="form-error" role="alert">{error}</p> : null}
         </section>
       </div>
 
-      <aside className="app-card">
-        <h2>Match: {selectedMatch?.displayName ?? "No match selected"}</h2>
+      <aside className="app-card" id="dna-match-details">
+        <h2 aria-atomic="true" aria-live="polite">Match: {selectedMatch?.displayName ?? "No match selected"}</h2>
         {selectedMatch ? (
           <>
             <div className="hero-actions" style={{ marginTop: 0 }}>
@@ -527,7 +546,7 @@ export function DnaTriageWorkspace({ initialMatches, initialHypotheses = [], ini
               </ul>
             </div>
 
-            <div className="section dna-edit-panel">
+            <div aria-busy={linkStatus === "saving"} className="section dna-edit-panel">
               <h2>Link to case</h2>
               {cases.length > 0 ? (
                 <>
@@ -539,14 +558,14 @@ export function DnaTriageWorkspace({ initialMatches, initialHypotheses = [], ini
                       options={cases.map((researchCase) => [researchCase.id, researchCase.title])}
                     />
                     <TextField label="Evidence title" value={linkForm.title} onChange={(value) => setLinkForm({ ...linkForm, title: value })} />
-                    <div className="field">
-                      <label>Evidence summary</label>
+                    <label className="field">
+                      <span>Evidence summary</span>
                       <textarea value={linkForm.summary} onChange={(event) => setLinkForm({ ...linkForm, summary: event.target.value })} />
-                    </div>
+                    </label>
                     <TextField label="Confidence" value={linkForm.confidence} onChange={(value) => setLinkForm({ ...linkForm, confidence: value })} />
                   </div>
                   <div className="hero-actions">
-                    <button className="button" disabled={linkStatus === "saving"} onClick={linkSelectedMatchToCase} type="button">
+                    <button aria-busy={linkStatus === "saving"} className="button" disabled={linkStatus === "saving"} onClick={linkSelectedMatchToCase} type="button">
                       <Icons.FileSearch size={16} aria-hidden />
                       {linkStatus === "saving" ? "Linking..." : "Add evidence"}
                     </button>
@@ -558,14 +577,18 @@ export function DnaTriageWorkspace({ initialMatches, initialHypotheses = [], ini
                     {linkStatus === "error" ? <Status tone="warning">Link failed</Status> : null}
                     {linkStatus === "success" ? <Status>Linked</Status> : null}
                   </div>
-                  {linkMessage ? <p className="muted">{linkMessage}</p> : null}
+                  {linkMessage ? (
+                    <p aria-atomic="true" className={linkStatus === "error" ? "form-error" : "muted"} role={linkStatus === "error" ? "alert" : "status"}>
+                      {linkMessage}
+                    </p>
+                  ) : null}
                 </>
               ) : (
                 <p className="muted">Create a case first, then link DNA evidence here.</p>
               )}
             </div>
 
-            <div className="section dna-edit-panel">
+            <div aria-busy={editStatus === "saving" || editStatus === "deleting"} className="section dna-edit-panel">
               <h2>Triage selected match</h2>
               <div className="form-grid" style={{ gridTemplateColumns: "1fr" }}>
                 <SelectField label="Status" value={editForm.triageStatus} onChange={(value) => setEditForm({ ...editForm, triageStatus: value as DnaMatch["triageStatus"] })} options={["high_priority", "needs_review", "triaged", "ignored"]} />
@@ -573,24 +596,28 @@ export function DnaTriageWorkspace({ initialMatches, initialHypotheses = [], ini
                 <SelectField label="Tree status" value={editForm.treeStatus} onChange={(value) => setEditForm({ ...editForm, treeStatus: value as DnaMatch["treeStatus"] })} options={["public", "partial", "private", "none", "unknown"]} />
                 <TextField label="Predicted relationship" value={editForm.predictedRelationship} onChange={(value) => setEditForm({ ...editForm, predictedRelationship: value })} />
                 <TextField label="Ancestry/profile URL" value={editForm.ancestryUrl} onChange={(value) => setEditForm({ ...editForm, ancestryUrl: value })} />
-                <div className="field">
-                  <label>Notes</label>
+                <label className="field">
+                  <span>Notes</span>
                   <textarea value={editForm.notes} onChange={(event) => setEditForm({ ...editForm, notes: event.target.value })} />
-                </div>
+                </label>
               </div>
               <div className="hero-actions">
-                <button className="button" disabled={editStatus === "saving" || editStatus === "deleting"} onClick={saveSelectedMatch} type="button">
+                <button aria-busy={editStatus === "saving"} className="button" disabled={editStatus === "saving" || editStatus === "deleting"} onClick={saveSelectedMatch} type="button">
                   <Icons.Save size={16} aria-hidden />
                   {editStatus === "saving" ? "Saving..." : "Save"}
                 </button>
-                <button className="button-secondary danger-action" disabled={editStatus === "saving" || editStatus === "deleting"} onClick={deleteSelectedMatch} type="button">
+                <button aria-busy={editStatus === "deleting"} className="button-secondary danger-action" disabled={editStatus === "saving" || editStatus === "deleting"} onClick={deleteSelectedMatch} type="button">
                   <Icons.Trash2 size={16} aria-hidden />
                   {editStatus === "deleting" ? "Deleting..." : "Delete"}
                 </button>
                 {editStatus === "error" ? <Status tone="warning">Update failed</Status> : null}
                 {editStatus === "success" ? <Status>Saved</Status> : null}
               </div>
-              {editMessage ? <p className="muted">{editMessage}</p> : null}
+              {editMessage ? (
+                <p aria-atomic="true" className={editStatus === "error" ? "form-error" : "muted"} role={editStatus === "error" ? "alert" : "status"}>
+                  {editMessage}
+                </p>
+              ) : null}
             </div>
           </>
         ) : (
@@ -607,7 +634,7 @@ function PaginationControls({ page, pageCount, onPageChange }: { page: number; p
       <button className="button-secondary icon-button" disabled={page <= 1} onClick={() => onPageChange(page - 1)} type="button" aria-label="Previous page">
         <Icons.ChevronLeft size={16} aria-hidden />
       </button>
-      <span className="tag">{page.toLocaleString()}</span>
+      <span aria-current="page" className="tag">{page.toLocaleString()}</span>
       <button className="button-secondary icon-button" disabled={page >= pageCount} onClick={() => onPageChange(page + 1)} type="button" aria-label="Next page">
         <Icons.ChevronRight size={16} aria-hidden />
       </button>
@@ -652,17 +679,17 @@ function createFallbackHypothesis(match?: ScoredDnaMatch): DnaConnectionHypothes
 
 function TextField({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
   return (
-    <div className="field">
-      <label>{label}</label>
+    <label className="field">
+      <span>{label}</span>
       <input value={value} onChange={(event) => onChange(event.target.value)} />
-    </div>
+    </label>
   );
 }
 
 function SelectField({ label, value, options, onChange }: { label: string; value: string; options: Array<string | [string, string]>; onChange: (value: string) => void }) {
   return (
-    <div className="field">
-      <label>{label}</label>
+    <label className="field">
+      <span>{label}</span>
       <select value={value} onChange={(event) => onChange(event.target.value)}>
         {options.map((option) => {
           const [optionValue, optionLabel] = Array.isArray(option) ? option : [option, formatOption(option)];
@@ -673,7 +700,7 @@ function SelectField({ label, value, options, onChange }: { label: string; value
           );
         })}
       </select>
-    </div>
+    </label>
   );
 }
 

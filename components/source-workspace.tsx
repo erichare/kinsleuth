@@ -11,7 +11,7 @@ import {
   type SourceSearchResult,
   type SourceSortKey
 } from "@/lib/source-search";
-import { Confidence, Metric, Status } from "./ui";
+import { Confidence, Metric, Status, TableScroll } from "./ui";
 
 type Props = {
   initialResult: SourceSearchResult;
@@ -53,6 +53,7 @@ export function SourceWorkspace({ initialResult, initialPersonOptions, caseOptio
   const [status, setStatus] = useState<"idle" | "saving" | "error">("idle");
   const [error, setError] = useState("");
   const [searchError, setSearchError] = useState("");
+  const [isSearching, setIsSearching] = useState(false);
 
   const sourceTypeOptions = useMemo(() => {
     const values = sourceType !== "all" && !result.types.includes(sourceType) ? [sourceType, ...result.types] : result.types;
@@ -81,6 +82,7 @@ export function SourceWorkspace({ initialResult, initialPersonOptions, caseOptio
     const controller = new AbortController();
 
     async function loadSources() {
+      setIsSearching(true);
       try {
         const response = await fetch(buildSourceApiPath({ query: debouncedQuery, privacy, sourceType, linkStatus, sort, page, pageSize }), {
           signal: controller.signal
@@ -95,6 +97,10 @@ export function SourceWorkspace({ initialResult, initialPersonOptions, caseOptio
       } catch (requestError) {
         if (!controller.signal.aborted) {
           setSearchError(requestError instanceof Error ? requestError.message : "Source search failed");
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setIsSearching(false);
         }
       }
     }
@@ -183,7 +189,7 @@ export function SourceWorkspace({ initialResult, initialPersonOptions, caseOptio
       </div>
 
       <div className="app-grid">
-        <section className="app-card people-search-card">
+        <section aria-busy={isSearching} className="app-card people-search-card">
           <div className="people-search-header">
             <div>
               <h2>Source register</h2>
@@ -287,15 +293,17 @@ export function SourceWorkspace({ initialResult, initialPersonOptions, caseOptio
           <div className="table-heading-row">
             <div>
               <h2>Evidence sources</h2>
-              <p className="muted">
+              <p aria-atomic="true" aria-live="polite" className="muted">
                 Showing {result.start.toLocaleString()}-{result.end.toLocaleString()} of {result.total.toLocaleString()}
+                {isSearching ? " · Updating..." : ""}
               </p>
-              {searchError ? <p className="muted">{searchError}</p> : null}
+              {searchError ? <p aria-atomic="true" className="form-error" role="alert">{searchError}</p> : null}
             </div>
             <PaginationControls page={result.page} pageCount={result.pageCount} onPageChange={setPage} />
           </div>
 
-          <table className="data-table source-table">
+          <TableScroll label="Evidence sources">
+            <table className="data-table source-table">
             <thead>
               <tr>
                 <th>Source</th>
@@ -329,7 +337,8 @@ export function SourceWorkspace({ initialResult, initialPersonOptions, caseOptio
                 </tr>
               ))}
             </tbody>
-          </table>
+            </table>
+          </TableScroll>
 
           {result.items.length === 0 ? <p className="muted empty-state">No sources match these filters.</p> : null}
 
@@ -341,7 +350,7 @@ export function SourceWorkspace({ initialResult, initialPersonOptions, caseOptio
           </div>
         </section>
 
-        <aside className="app-card">
+        <aside aria-busy={status === "saving"} className="app-card">
           <h2>Add source</h2>
           <div className="form-grid" style={{ gridTemplateColumns: "1fr" }}>
             <Field label="Title" value={form.title} onChange={(value) => setForm({ ...form, title: value })} />
@@ -362,17 +371,21 @@ export function SourceWorkspace({ initialResult, initialPersonOptions, caseOptio
               ]}
             />
             <Field label="Confidence 0-1" value={form.confidence} onChange={(value) => setForm({ ...form, confidence: value })} />
-            <div className="field">
-              <label>File</label>
+            <label className="field">
+              <span>File</span>
               <input type="file" onChange={(event) => setFile(event.target.files?.[0] ?? null)} />
-            </div>
+            </label>
             <TextArea label="Transcript" value={form.transcript} onChange={(value) => setForm({ ...form, transcript: value })} />
             <TextArea label="Notes" value={form.notes} onChange={(value) => setForm({ ...form, notes: value })} />
-            <button className="button" disabled={status === "saving"} onClick={saveSource} type="button">
+            <button aria-busy={status === "saving"} className="button" disabled={status === "saving"} onClick={saveSource} type="button">
               {status === "saving" ? "Saving..." : "Save source"}
             </button>
-            {status === "error" ? <Status tone="warning">Upload failed</Status> : null}
-            {error ? <p className="muted">{error}</p> : null}
+            {status === "error" || error ? (
+              <div aria-atomic="true" role="alert">
+                {status === "error" ? <Status tone="warning">Upload failed</Status> : null}
+                {error ? <p className={status === "error" ? "muted" : "form-error"}>{error}</p> : null}
+              </div>
+            ) : null}
           </div>
         </aside>
       </div>
@@ -407,7 +420,7 @@ function PaginationControls({ page, pageCount, onPageChange }: { page: number; p
       <button className="button-secondary icon-button" disabled={page <= 1} onClick={() => onPageChange(page - 1)} type="button" aria-label="Previous page">
         <Icons.ChevronLeft size={16} aria-hidden />
       </button>
-      <span className="tag">{page.toLocaleString()}</span>
+      <span aria-current="page" className="tag">{page.toLocaleString()}</span>
       <button className="button-secondary icon-button" disabled={page >= pageCount} onClick={() => onPageChange(page + 1)} type="button" aria-label="Next page">
         <Icons.ChevronRight size={16} aria-hidden />
       </button>

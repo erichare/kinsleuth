@@ -76,7 +76,7 @@ export function ImportPreviewWorkspace() {
 
     if (!response.ok) {
       setStatus("error");
-      setError(await response.text());
+      setError((await response.text()) || "GEDCOM preview failed.");
       return;
     }
 
@@ -108,7 +108,7 @@ export function ImportPreviewWorkspace() {
 
     if (!response.ok) {
       setStatus("error");
-      setError(await response.text());
+      setError((await response.text()) || "GEDCOM import failed.");
       return;
     }
 
@@ -148,38 +148,40 @@ export function ImportPreviewWorkspace() {
 
   return (
     <div className="app-grid">
-      <div className="app-card">
+      <div aria-busy={status === "loading"} className="app-card">
         <h2>Preview GEDCOM import</h2>
         <p className="muted">Preview a GEDCOM, preserve raw records, and apply it to the private workspace with a backup before changes are saved.</p>
         <div className="form-grid">
-          <div className="field">
-            <label>New GEDCOM</label>
+          <label className="field">
+            <span>New GEDCOM</span>
             <input accept=".ged,.gedcom,text/plain" type="file" onChange={(event) => readFile(event.target.files?.[0], setCurrentContent, setCurrentFile)} />
-          </div>
-          <div className="field">
-            <label>Previous GEDCOM for diff</label>
+          </label>
+          <label className="field">
+            <span>Previous GEDCOM for diff</span>
             <input accept=".ged,.gedcom,text/plain" type="file" onChange={(event) => readFile(event.target.files?.[0], setPreviousContent, setPreviousFile)} />
-          </div>
-          <div className="field" style={{ gridColumn: "1 / -1" }}>
-            <label>Source name</label>
+          </label>
+          <label className="field" style={{ gridColumn: "1 / -1" }}>
+            <span>Source name</span>
             <input value={sourceName} onChange={(event) => setSourceName(event.target.value)} />
-          </div>
+          </label>
         </div>
         <div className="hero-actions">
-          <button className="button" disabled={status === "loading" || currentContent.length === 0} onClick={previewImport}>
+          <button aria-busy={status === "loading"} className="button" disabled={status === "loading" || currentContent.length === 0} onClick={previewImport} type="button">
             {status === "loading" ? "Parsing..." : "Preview import"}
           </button>
-          {currentContent ? <Status>{currentContent.length.toLocaleString()} characters loaded</Status> : <Status tone="private">No file loaded</Status>}
+          <span aria-atomic="true" aria-live="polite" role="status">
+            {currentContent ? <Status>{currentContent.length.toLocaleString()} characters loaded</Status> : <Status tone="private">No file loaded</Status>}
+          </span>
         </div>
-        {status === "error" ? <p className="muted">{error}</p> : null}
+        {status === "error" ? <p aria-atomic="true" className="form-error" role="alert">{error}</p> : null}
       </div>
 
-      <aside className="app-card">
+      <aside aria-busy={status === "applying"} className="app-card">
         <h2>Import result</h2>
         {result ? (
           <div className="evidence-list">
             <div className="evidence-item">
-              <strong>{result.snapshot.sourceName}</strong>
+              <strong aria-label={`Preview ready: ${result.snapshot.sourceName}`} aria-live="polite" role="status">{result.snapshot.sourceName}</strong>
               <p className="muted">Checksum {result.snapshot.checksum}</p>
               <div className="grid-3">
                 <MiniStat label="People" value={result.snapshot.summary.individuals} />
@@ -194,13 +196,13 @@ export function ImportPreviewWorkspace() {
               </p>
             </div>
             {result.applied ? null : (
-              <button className="button" disabled={status === "applying"} onClick={applyImport}>
+              <button aria-busy={status === "applying"} className="button" disabled={status === "applying"} onClick={applyImport} type="button">
                 {status === "applying" ? "Applying..." : "Apply import"}
               </button>
             )}
             {result.applied ? (
               <div className="evidence-item">
-                <strong>Applied to workspace</strong>
+                <strong aria-atomic="true" aria-live="polite" role="status">Applied to workspace</strong>
                 <p className="muted">
                   {result.applied.import.peopleImported.toLocaleString()} people · {result.applied.import.sourcesImported.toLocaleString()} sources · {result.applied.import.rawRecordCount.toLocaleString()} raw records
                 </p>

@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { Icons } from "@/components/icons";
 import { PublicShell } from "@/components/public-shell";
-import { Confidence, Status } from "@/components/ui";
+import { Confidence, EmptyState, PersonMonogram, Status, TableScroll } from "@/components/ui";
 import type { PersonSummary } from "@/lib/models";
 import { canPublishPerson, publicFactFilter } from "@/lib/privacy";
 import { readWorkspace } from "@/lib/workspace-store";
@@ -19,6 +19,8 @@ export default async function PublicPersonPage({ params }: { params: Promise<{ s
   }
 
   const publicFacts = person.facts.filter(publicFactFilter);
+  const publicBirth = publicFacts.find((fact) => isFactType(fact.type, "BIRT", "Birth"));
+  const profileConfidence = averageConfidence(publicFacts);
   const publicRelatives = person.relatives
     .map((relativeId) => workspace.people.find((item) => item.id === relativeId && item.published && canPublishPerson(item)))
     .filter((relative): relative is PersonSummary => Boolean(relative));
@@ -32,24 +34,24 @@ export default async function PublicPersonPage({ params }: { params: Promise<{ s
             Published People
           </Link>
         </div>
-        <section className="section profile-card person-profile-card">
+        <section className="section profile-card person-profile-card surface-featured">
           <div className="profile-header">
             <div className="portrait">
-              <Icons.Users size={58} aria-hidden />
+              <PersonMonogram name={person.displayName} />
             </div>
             <div>
               <h1 className="profile-title public-profile-title">{person.displayName}</h1>
-              <p className="muted">{person.birthDate} · {person.birthPlace}</p>
-              <p>{person.notes}</p>
+              <p className="muted">{formatVital(publicBirth?.date, publicBirth?.place)}</p>
+              <p>Published profile curated from selected public facts and citations.</p>
               <div className="hero-actions">
                 <Status>Published</Status>
                 <Status tone="private">Sensitive details withheld</Status>
               </div>
             </div>
-            <div className="panel profile-confidence-panel">
-              <strong>Profile confidence</strong>
+            <div className="panel profile-confidence-panel surface-inset">
+              <strong>Public fact confidence</strong>
               <div className="profile-confidence-score">
-                <Confidence value={0.86} />
+                {profileConfidence === null ? <span className="muted">Not scored</span> : <Confidence value={profileConfidence} />}
               </div>
               <p className="muted">Selected citations and public facts only.</p>
             </div>
@@ -58,6 +60,8 @@ export default async function PublicPersonPage({ params }: { params: Promise<{ s
 
         <section className="section grid-2">
           <div className="table-panel">
+            {publicFacts.length > 0 ? (
+            <TableScroll label={`Published facts for ${person.displayName}`}>
             <table className="data-table">
               <thead>
                 <tr>
@@ -82,11 +86,17 @@ export default async function PublicPersonPage({ params }: { params: Promise<{ s
                 ))}
               </tbody>
             </table>
+            </TableScroll>
+            ) : (
+              <EmptyState icon={<Icons.BookOpen size={22} aria-hidden />} title="No public facts selected">
+                This profile is published, but no individual facts are available for public display yet.
+              </EmptyState>
+            )}
           </div>
           <div className="side-stack">
             <aside className="panel">
               <h2>Timeline</h2>
-              <div className="timeline">
+              {publicFacts.length > 0 ? <div className="timeline">
                 {publicFacts.map((fact) => (
                   <div className="timeline-item" key={fact.id}>
                     <strong>{fact.date}</strong>
@@ -94,7 +104,7 @@ export default async function PublicPersonPage({ params }: { params: Promise<{ s
                     <div className="muted">{fact.place}</div>
                   </div>
                 ))}
-              </div>
+              </div> : <p className="muted">Timeline details have not been selected for public display.</p>}
             </aside>
             <aside className="panel">
               <h2>Published relatives</h2>
@@ -103,7 +113,7 @@ export default async function PublicPersonPage({ params }: { params: Promise<{ s
                   publicRelatives.map((relative) => (
                     <Link className="evidence-item relationship-link" href={`/people/${relative.slug}`} key={relative.id}>
                       <strong>{relative.displayName}</strong>
-                      <span className="muted">{relative.birthDate ?? "Unknown date"}</span>
+                      <span className="muted">Published relative</span>
                     </Link>
                   ))
                 ) : (
@@ -116,4 +126,16 @@ export default async function PublicPersonPage({ params }: { params: Promise<{ s
       </div>
     </PublicShell>
   );
+}
+
+function isFactType(type: string, gedcomType: string, label: string): boolean {
+  return type.toUpperCase() === gedcomType || type.toLowerCase() === label.toLowerCase();
+}
+
+function averageConfidence(facts: Array<{ confidence: number }>): number | null {
+  return facts.length > 0 ? facts.reduce((sum, fact) => sum + fact.confidence, 0) / facts.length : null;
+}
+
+function formatVital(date?: string, place?: string): string {
+  return [date, place].filter(Boolean).join(" · ") || "Public vital details withheld";
 }

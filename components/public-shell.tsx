@@ -9,11 +9,23 @@ const links = [
   { href: "/kinsleuth", label: "Product" }
 ];
 
-export function PublicShell({ children, active = "/" }: { children: React.ReactNode; active?: string }) {
+function PublicLinks({ active, className, label }: { active?: string; className: string; label: string }) {
+  return (
+    <nav className={className} aria-label={label}>
+      {links.map((link) => (
+        <Link aria-current={active === link.href ? "page" : undefined} className={active === link.href ? "active" : undefined} href={link.href} key={link.href}>
+          {link.label}
+        </Link>
+      ))}
+    </nav>
+  );
+}
+
+export function PublicShell({ children, active }: { children: React.ReactNode; active?: string }) {
   return (
     <div className="public-shell">
       <header className="public-header">
-        <nav className="public-nav" aria-label="Public navigation">
+        <div className="public-nav">
           <Link className="brand" href="/">
             <span className="brand-mark">
               <Icons.TreePine size={22} aria-hidden />
@@ -23,20 +35,27 @@ export function PublicShell({ children, active = "/" }: { children: React.ReactN
               <small>Family history. Openly shared.</small>
             </span>
           </Link>
-          <div className="nav-links">
-            {links.map((link) => (
-              <Link className={active === link.href ? "active" : undefined} href={link.href} key={link.href}>
-                {link.label}
-              </Link>
-            ))}
-          </div>
-          <Link className="button-secondary" href="/login">
+          <PublicLinks active={active} className="nav-links" label="Public navigation" />
+          <Link className="button-secondary public-workspace-link" href="/login">
             <Icons.Lock size={16} aria-hidden />
             Private workspace
           </Link>
-        </nav>
+          <details className="mobile-menu public-mobile-menu">
+            <summary>
+              <Icons.Menu size={19} aria-hidden />
+              Menu
+            </summary>
+            <div className="mobile-menu-panel">
+              <PublicLinks active={active} className="mobile-menu-links" label="Mobile public navigation" />
+              <Link className="button-secondary" href="/login">
+                <Icons.Lock size={16} aria-hidden />
+                Private workspace
+              </Link>
+            </div>
+          </details>
+        </div>
       </header>
-      <main>{children}</main>
+      <main id="main-content" tabIndex={-1}>{children}</main>
       <footer className="public-footer">
         <div className="footer-inner">
           <Link className="brand" href="/">
@@ -51,4 +70,3 @@ export function PublicShell({ children, active = "/" }: { children: React.ReactN
     </div>
   );
 }
-
