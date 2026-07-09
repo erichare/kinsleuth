@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import Link from "next/link";
+import { useState } from "react";
 import type { ResearchCase } from "@/lib/models";
-import { workspaceStorageKeys } from "@/lib/workspace-snapshot";
 import { Confidence, Status } from "./ui";
 
 type CaseDraft = {
@@ -25,26 +25,6 @@ export function CaseWorkspace({ initialCases }: { initialCases: ResearchCase[] }
   const [cases, setCases] = useState(initialCases);
   const [draft, setDraft] = useState(initialDraft);
   const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
-  const [hydrated, setHydrated] = useState(false);
-
-  useEffect(() => {
-    const timeout = window.setTimeout(() => {
-      const stored = readLocalJson<ResearchCase[]>(workspaceStorageKeys.cases);
-      if (stored?.length) {
-        setCases(stored);
-      }
-      setHydrated(true);
-    }, 0);
-
-    return () => window.clearTimeout(timeout);
-  }, []);
-
-  useEffect(() => {
-    if (!hydrated) {
-      return;
-    }
-    window.localStorage.setItem(workspaceStorageKeys.cases, JSON.stringify(cases));
-  }, [cases, hydrated]);
 
   async function createCase() {
     setStatus("loading");
@@ -107,13 +87,19 @@ export function CaseWorkspace({ initialCases }: { initialCases: ResearchCase[] }
             <tbody>
               {cases.map((researchCase) => (
                 <tr key={researchCase.id}>
-                  <td>{researchCase.title}</td>
+                  <td>
+                    <Link href={`/app/cases/${researchCase.id}`}>{researchCase.title}</Link>
+                    <div className="muted">{researchCase.focus}</div>
+                  </td>
                   <td>{researchCase.question}</td>
                   <td>
                     <Status tone={researchCase.status === "planning" ? "warning" : "ok"}>{researchCase.status}</Status>
                   </td>
                   <td>{researchCase.hypotheses.length}</td>
-                  <td>{researchCase.evidence.length}</td>
+                  <td>
+                    {researchCase.evidence.length}
+                    {countDnaEvidence(researchCase) ? <div className="muted">{countDnaEvidence(researchCase)} DNA</div> : null}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -140,7 +126,10 @@ export function CaseWorkspace({ initialCases }: { initialCases: ResearchCase[] }
         <div className="evidence-list">
           {cases.flatMap((researchCase) => researchCase.evidence).map((evidence) => (
             <div className="evidence-item" key={evidence.id}>
-              <strong>{evidence.title}</strong>
+              <div className="evidence-item-heading">
+                <strong>{evidence.title}</strong>
+                {evidence.linkedDnaMatchId ? <Status tone="warning">DNA linked</Status> : <Status>{evidence.type}</Status>}
+              </div>
               <p className="muted">{evidence.summary}</p>
               <Confidence value={evidence.confidence} />
             </div>
@@ -151,17 +140,8 @@ export function CaseWorkspace({ initialCases }: { initialCases: ResearchCase[] }
   );
 }
 
-function readLocalJson<T>(key: string): T | undefined {
-  const value = window.localStorage.getItem(key);
-  if (!value) {
-    return undefined;
-  }
-
-  try {
-    return JSON.parse(value) as T;
-  } catch {
-    return undefined;
-  }
+function countDnaEvidence(researchCase: ResearchCase): number {
+  return researchCase.evidence.filter((evidence) => evidence.linkedDnaMatchId).length;
 }
 
 function Field({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {

@@ -92,6 +92,13 @@ This repository is MIT licensed and intentionally uses synthetic fixtures. Real 
 - Selected matches can be triaged, annotated, re-sided, reclassified by tree status, and deleted from the workspace.
 - New `/api/dna/[id]` update/delete endpoints persist match queue cleanup through the server workspace store.
 
+## V0.13 checkpoint
+
+- Selected DNA matches can be linked directly into investigation cases as evidence from `/app/dna`.
+- DNA evidence linking upserts an existing match link instead of creating duplicate evidence entries.
+- New `/api/cases/[id]/evidence` endpoint persists linked DNA evidence to the workspace case store.
+- Case list/detail views now make linked DNA evidence easier to spot during investigation review.
+
 ## Quick start
 
 ```bash

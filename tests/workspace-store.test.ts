@@ -3,7 +3,7 @@ import path from "node:path";
 import os from "node:os";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { DnaMatch } from "@/lib/models";
-import { createCase, deleteDnaMatch, readWorkspace, saveDnaMatch, saveDnaMatches, saveSourceDocument, updateDnaMatch, updatePersonCuration } from "@/lib/workspace-store";
+import { createCase, deleteDnaMatch, linkDnaMatchToCase, readWorkspace, saveDnaMatch, saveDnaMatches, saveSourceDocument, updateDnaMatch, updatePersonCuration } from "@/lib/workspace-store";
 
 let tempDir: string;
 let storagePath: string;
@@ -153,6 +153,67 @@ describe("workspace store", () => {
     await deleteDnaMatch("dna-update-delete", { storagePath });
     workspace = await readWorkspace({ storagePath });
     expect(workspace.dnaMatches.some((match) => match.id === "dna-update-delete")).toBe(false);
+  });
+
+  it("links DNA matches to cases as upserted evidence", async () => {
+    const createdCase = await createCase(
+      {
+        id: "case-dna-link",
+        title: "DNA link test",
+        question: "Where does this match belong?",
+        focus: "DNA cluster"
+      },
+      { storagePath }
+    );
+    await saveDnaMatch(
+      {
+        id: "dna-link-target",
+        displayName: "Evidence Match",
+        totalCm: 238,
+        predictedRelationship: "likely 2C1R",
+        side: "maternal",
+        treeStatus: "partial",
+        surnames: ["Riemer", "Fletcher"],
+        places: ["Chicago"],
+        sharedMatches: ["A. Zajicek"],
+        notes: "Useful match.",
+        triageStatus: "high_priority"
+      },
+      { storagePath }
+    );
+
+    const first = await linkDnaMatchToCase(
+      createdCase.id,
+      "dna-link-target",
+      {
+        title: "Evidence Match DNA",
+        summary: "First evidence summary.",
+        confidence: 0.81
+      },
+      { storagePath }
+    );
+    const second = await linkDnaMatchToCase(
+      createdCase.id,
+      "dna-link-target",
+      {
+        title: "Evidence Match DNA updated",
+        summary: "Updated evidence summary.",
+        confidence: 0.84
+      },
+      { storagePath }
+    );
+    const workspace = await readWorkspace({ storagePath });
+    const updatedCase = workspace.cases.find((item) => item.id === createdCase.id);
+
+    expect(first.created).toBe(true);
+    expect(second.created).toBe(false);
+    expect(second.evidence).toMatchObject({
+      id: first.evidence.id,
+      title: "Evidence Match DNA updated",
+      linkedDnaMatchId: "dna-link-target",
+      confidence: 0.84
+    });
+    expect(updatedCase?.evidence.filter((item) => item.linkedDnaMatchId === "dna-link-target")).toHaveLength(1);
   });
 
   it("persists source documents with links and transcripts", async () => {

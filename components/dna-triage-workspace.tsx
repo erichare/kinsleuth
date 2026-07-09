@@ -1,9 +1,10 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Icons } from "@/components/icons";
 import { filterDnaMatches, paginateDnaMatches, type DnaHelpfulnessFilter, type DnaSideFilter, type DnaSortKey, type DnaStatusFilter, type DnaTreeFilter, type ScoredDnaMatch } from "@/lib/dna-search";
-import type { DnaConnectionHypothesis, DnaMatch } from "@/lib/models";
+import type { DnaConnectionHypothesis, DnaMatch, ResearchCase } from "@/lib/models";
 import { Confidence, Metric, Status } from "./ui";
 
 type DnaAnalysisResponse = {
@@ -25,9 +26,17 @@ type DnaUpdateResponse = {
   match: ScoredDnaMatch;
 };
 
+type CaseEvidenceResponse = {
+  case: ResearchCase;
+  evidence: ResearchCase["evidence"][number];
+  match: ScoredDnaMatch;
+  created: boolean;
+};
+
 type Props = {
   initialMatches: ScoredDnaMatch[];
   initialHypotheses?: DnaConnectionHypothesis[];
+  initialCases: ResearchCase[];
 };
 
 type MatchEditForm = {
@@ -37,6 +46,13 @@ type MatchEditForm = {
   predictedRelationship: string;
   ancestryUrl: string;
   notes: string;
+};
+
+type CaseLinkForm = {
+  caseId: string;
+  title: string;
+  summary: string;
+  confidence: string;
 };
 
 const defaultForm = {
@@ -54,12 +70,14 @@ const defaultForm = {
 
 const pageSizeOptions = [10, 25, 50, 100];
 
-export function DnaTriageWorkspace({ initialMatches, initialHypotheses = [] }: Props) {
+export function DnaTriageWorkspace({ initialMatches, initialHypotheses = [], initialCases }: Props) {
   const [matches, setMatches] = useState(initialMatches);
+  const [cases, setCases] = useState(initialCases);
   const [hypotheses, setHypotheses] = useState(() => indexHypotheses(initialHypotheses));
   const [selectedMatchId, setSelectedMatchId] = useState(initialMatches[0]?.id ?? "");
   const [form, setForm] = useState(defaultForm);
   const [editForm, setEditForm] = useState<MatchEditForm>(() => createEditForm(initialMatches[0]));
+  const [linkForm, setLinkForm] = useState<CaseLinkForm>(() => createCaseLinkForm(initialMatches[0], initialCases[0]?.id ?? ""));
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<DnaStatusFilter>("all");
   const [sideFilter, setSideFilter] = useState<DnaSideFilter>("all");
@@ -75,6 +93,8 @@ export function DnaTriageWorkspace({ initialMatches, initialHypotheses = [] }: P
   const [importMessage, setImportMessage] = useState("");
   const [editStatus, setEditStatus] = useState<"idle" | "saving" | "deleting" | "error" | "success">("idle");
   const [editMessage, setEditMessage] = useState("");
+  const [linkStatus, setLinkStatus] = useState<"idle" | "saving" | "error" | "success">("idle");
+  const [linkMessage, setLinkMessage] = useState("");
 
   const filteredMatches = useMemo(
     () =>
@@ -104,8 +124,11 @@ export function DnaTriageWorkspace({ initialMatches, initialHypotheses = [] }: P
   function selectMatch(match: ScoredDnaMatch) {
     setSelectedMatchId(match.id);
     setEditForm(createEditForm(match));
+    setLinkForm(createCaseLinkForm(match, linkForm.caseId || cases[0]?.id || ""));
     setEditStatus("idle");
     setEditMessage("");
+    setLinkStatus("idle");
+    setLinkMessage("");
   }
 
   async function analyzeMatch() {
@@ -245,8 +268,48 @@ export function DnaTriageWorkspace({ initialMatches, initialHypotheses = [] }: P
     setMatches(nextMatches);
     setSelectedMatchId(nextSelected?.id ?? "");
     setEditForm(createEditForm(nextSelected));
+    setLinkForm(createCaseLinkForm(nextSelected, linkForm.caseId || cases[0]?.id || ""));
     setEditStatus("success");
     setEditMessage("Match deleted.");
+  }
+
+  async function linkSelectedMatchToCase() {
+    if (!selectedMatch || !linkForm.caseId) {
+      setLinkStatus("error");
+      setLinkMessage("Choose a case before linking evidence.");
+      return;
+    }
+
+    setLinkStatus("saving");
+    setLinkMessage("");
+
+    const response = await fetch(`/api/cases/${encodeURIComponent(linkForm.caseId)}/evidence`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        linkedDnaMatchId: selectedMatch.id,
+        title: linkForm.title,
+        summary: linkForm.summary,
+        confidence: Number(linkForm.confidence)
+      })
+    });
+    const body = (await response.json()) as Partial<CaseEvidenceResponse> & { error?: string };
+
+    if (!response.ok || !body.case || !body.evidence) {
+      setLinkStatus("error");
+      setLinkMessage(body.error ?? "Could not link DNA evidence.");
+      return;
+    }
+
+    setCases((current) => current.map((researchCase) => (researchCase.id === body.case?.id ? body.case : researchCase)));
+    setLinkForm({
+      caseId: body.case.id,
+      title: body.evidence.title,
+      summary: body.evidence.summary,
+      confidence: String(body.evidence.confidence)
+    });
+    setLinkStatus("success");
+    setLinkMessage(body.created ? "DNA evidence added to case." : "Existing DNA evidence updated.");
   }
 
   function upsertMatches(incoming: ScoredDnaMatch[]) {
@@ -465,6 +528,44 @@ export function DnaTriageWorkspace({ initialMatches, initialHypotheses = [] }: P
             </div>
 
             <div className="section dna-edit-panel">
+              <h2>Link to case</h2>
+              {cases.length > 0 ? (
+                <>
+                  <div className="form-grid" style={{ gridTemplateColumns: "1fr" }}>
+                    <SelectField
+                      label="Case"
+                      value={linkForm.caseId}
+                      onChange={(value) => setLinkForm({ ...linkForm, caseId: value })}
+                      options={cases.map((researchCase) => [researchCase.id, researchCase.title])}
+                    />
+                    <TextField label="Evidence title" value={linkForm.title} onChange={(value) => setLinkForm({ ...linkForm, title: value })} />
+                    <div className="field">
+                      <label>Evidence summary</label>
+                      <textarea value={linkForm.summary} onChange={(event) => setLinkForm({ ...linkForm, summary: event.target.value })} />
+                    </div>
+                    <TextField label="Confidence" value={linkForm.confidence} onChange={(value) => setLinkForm({ ...linkForm, confidence: value })} />
+                  </div>
+                  <div className="hero-actions">
+                    <button className="button" disabled={linkStatus === "saving"} onClick={linkSelectedMatchToCase} type="button">
+                      <Icons.FileSearch size={16} aria-hidden />
+                      {linkStatus === "saving" ? "Linking..." : "Add evidence"}
+                    </button>
+                    {linkStatus === "success" ? (
+                      <Link className="button-secondary" href={`/app/cases/${linkForm.caseId}`}>
+                        View case
+                      </Link>
+                    ) : null}
+                    {linkStatus === "error" ? <Status tone="warning">Link failed</Status> : null}
+                    {linkStatus === "success" ? <Status>Linked</Status> : null}
+                  </div>
+                  {linkMessage ? <p className="muted">{linkMessage}</p> : null}
+                </>
+              ) : (
+                <p className="muted">Create a case first, then link DNA evidence here.</p>
+              )}
+            </div>
+
+            <div className="section dna-edit-panel">
               <h2>Triage selected match</h2>
               <div className="form-grid" style={{ gridTemplateColumns: "1fr" }}>
                 <SelectField label="Status" value={editForm.triageStatus} onChange={(value) => setEditForm({ ...editForm, triageStatus: value as DnaMatch["triageStatus"] })} options={["high_priority", "needs_review", "triaged", "ignored"]} />
@@ -558,16 +659,19 @@ function TextField({ label, value, onChange }: { label: string; value: string; o
   );
 }
 
-function SelectField({ label, value, options, onChange }: { label: string; value: string; options: string[]; onChange: (value: string) => void }) {
+function SelectField({ label, value, options, onChange }: { label: string; value: string; options: Array<string | [string, string]>; onChange: (value: string) => void }) {
   return (
     <div className="field">
       <label>{label}</label>
       <select value={value} onChange={(event) => onChange(event.target.value)}>
-        {options.map((option) => (
-          <option key={option} value={option}>
-            {formatOption(option)}
+        {options.map((option) => {
+          const [optionValue, optionLabel] = Array.isArray(option) ? option : [option, formatOption(option)];
+          return (
+          <option key={optionValue} value={optionValue}>
+            {optionLabel}
           </option>
-        ))}
+          );
+        })}
       </select>
     </div>
   );
@@ -588,4 +692,27 @@ function statusTone(status: DnaMatch["triageStatus"]): "ok" | "warning" | "priva
 
 function formatOption(value: string): string {
   return value.replace(/_/g, " ");
+}
+
+function createCaseLinkForm(match: ScoredDnaMatch | undefined, caseId: string): CaseLinkForm {
+  return {
+    caseId,
+    title: match ? `${match.displayName} DNA match` : "",
+    summary: match ? createDnaEvidenceSummary(match) : "",
+    confidence: match ? String(Math.max(0.25, Math.min(0.95, match.helpfulnessScore / 100)).toFixed(2)) : "0.5"
+  };
+}
+
+function createDnaEvidenceSummary(match: ScoredDnaMatch): string {
+  const parts = [
+    `${match.totalCm} cM`,
+    match.predictedRelationship,
+    match.side !== "unknown" ? `${match.side} side` : undefined,
+    match.treeStatus !== "unknown" ? `${match.treeStatus} tree` : undefined,
+    match.surnames.length ? `surnames: ${match.surnames.slice(0, 5).join(", ")}` : undefined,
+    match.places.length ? `places: ${match.places.slice(0, 5).join(", ")}` : undefined,
+    `${match.helpfulnessScore}/100 helpfulness`
+  ].filter(Boolean);
+
+  return parts.join("; ");
 }

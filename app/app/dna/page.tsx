@@ -11,7 +11,7 @@ export default async function DnaPage() {
 
   return (
     <AppShell title="DNA Match Triage" active="/app/dna">
-      <DnaTriageWorkspace initialMatches={scoredDnaMatches} initialHypotheses={dnaHypotheses} />
+      <DnaTriageWorkspace initialCases={workspace.cases} initialMatches={scoredDnaMatches} initialHypotheses={dnaHypotheses} />
     </AppShell>
   );
 }

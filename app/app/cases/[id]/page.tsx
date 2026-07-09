@@ -9,6 +9,7 @@ export default async function CaseDetailPage({ params }: { params: Promise<{ id:
   const { id } = await params;
   const workspace = await readWorkspace();
   const researchCase = workspace.cases.find((item) => item.id === id);
+  const dnaMatchesById = new Map(workspace.dnaMatches.map((match) => [match.id, match]));
 
   if (!researchCase) {
     notFound();
@@ -53,7 +54,13 @@ export default async function CaseDetailPage({ params }: { params: Promise<{ id:
         <div className="evidence-list">
           {researchCase.evidence.map((evidence) => (
             <div className="evidence-item" key={evidence.id}>
-              <strong>{evidence.title}</strong>
+              <div className="evidence-item-heading">
+                <strong>{evidence.title}</strong>
+                {evidence.linkedDnaMatchId ? <Status tone="warning">DNA linked</Status> : <Status>{evidence.type}</Status>}
+              </div>
+              {evidence.linkedDnaMatchId ? (
+                <p className="muted">Linked match: {dnaMatchesById.get(evidence.linkedDnaMatchId)?.displayName ?? evidence.linkedDnaMatchId}</p>
+              ) : null}
               <p>{evidence.summary}</p>
               <Confidence value={evidence.confidence} />
             </div>

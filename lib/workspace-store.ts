@@ -9,7 +9,7 @@ import type { AppliedGedcomImport, DnaConnectionHypothesis, DnaMatch, PersonSumm
 export type ScoredDnaMatch = DnaMatch & { helpfulnessScore: number };
 
 export type WorkspaceData = {
-  version: "0.12.0";
+  version: "0.13.0";
   archiveName: string;
   people: PersonSummary[];
   cases: ResearchCase[];
@@ -35,7 +35,7 @@ export function getWorkspacePath(options: WorkspaceStoreOptions = {}): string {
 
 export function createSeedWorkspace(now = new Date()): WorkspaceData {
   return {
-    version: "0.12.0",
+    version: "0.13.0",
     archiveName: "Riemer - Zajicek Archive",
     people: demoPeople,
     cases: demoCases,
@@ -237,6 +237,61 @@ export async function deleteDnaMatch(matchId: string, options: WorkspaceStoreOpt
   return { deleted: matchId };
 }
 
+export async function linkDnaMatchToCase(
+  caseId: string,
+  matchId: string,
+  input: { title?: string; summary?: string; confidence?: number } = {},
+  options: WorkspaceStoreOptions = {}
+): Promise<{
+  case: ResearchCase;
+  evidence: ResearchCase["evidence"][number];
+  match: ScoredDnaMatch;
+  created: boolean;
+}> {
+  const workspace = await readWorkspace(options);
+  const researchCase = workspace.cases.find((item) => item.id === caseId);
+  if (!researchCase) {
+    throw new Error("Case not found");
+  }
+
+  const match = workspace.dnaMatches.find((item) => item.id === matchId);
+  if (!match) {
+    throw new Error("DNA match not found");
+  }
+
+  const helpfulnessScore = scoreDnaMatch(match);
+  const existingEvidence = researchCase.evidence.find((item) => item.linkedDnaMatchId === matchId);
+  const evidence: ResearchCase["evidence"][number] = {
+    id: existingEvidence?.id ?? `ev-dna-${match.id.replace(/[^a-zA-Z0-9_-]+/g, "-")}-${randomUUID().slice(0, 8)}`,
+    title: input.title?.trim() || `${match.displayName} DNA match`,
+    type: "DNA",
+    summary: input.summary?.trim() || createDnaEvidenceSummary(match, helpfulnessScore),
+    confidence: normalizeConfidence(input.confidence ?? Math.max(0.25, Math.min(0.95, helpfulnessScore / 100))),
+    linkedDnaMatchId: match.id
+  };
+  const updatedCase: ResearchCase = {
+    ...researchCase,
+    evidence: existingEvidence
+      ? researchCase.evidence.map((item) => (item.id === existingEvidence.id ? evidence : item))
+      : [evidence, ...researchCase.evidence]
+  };
+
+  await writeWorkspace(
+    {
+      ...workspace,
+      cases: workspace.cases.map((item) => (item.id === caseId ? updatedCase : item))
+    },
+    options
+  );
+
+  return {
+    case: updatedCase,
+    evidence,
+    match: { ...match, helpfulnessScore },
+    created: !existingEvidence
+  };
+}
+
 export async function saveSourceDocument(input: Partial<SourceDocument>, options: WorkspaceStoreOptions = {}): Promise<SourceDocument> {
   if (!input.title?.trim()) {
     throw new Error("title is required");
@@ -356,7 +411,7 @@ export function createWorkspaceDnaHypotheses(workspace: Pick<WorkspaceData, "peo
 
 function normalizeWorkspaceData(value: Partial<WorkspaceData>): WorkspaceData {
   return {
-    version: "0.12.0",
+    version: "0.13.0",
     archiveName: value.archiveName || "Riemer - Zajicek Archive",
     people: Array.isArray(value.people) ? value.people : [],
     cases: Array.isArray(value.cases) ? value.cases : [],
@@ -389,6 +444,28 @@ async function writeWorkspaceBackup(workspace: WorkspaceData, reason: string, op
   await mkdir(path.dirname(backupPath), { recursive: true });
   await writeFile(backupPath, `${JSON.stringify(workspace, null, 2)}\n`, "utf8");
   return backup;
+}
+
+function createDnaEvidenceSummary(match: DnaMatch, helpfulnessScore: number): string {
+  const parts = [
+    `${match.totalCm} cM`,
+    match.predictedRelationship,
+    match.side !== "unknown" ? `${match.side} side` : undefined,
+    match.treeStatus !== "unknown" ? `${match.treeStatus} tree` : undefined,
+    match.surnames.length ? `surnames: ${match.surnames.slice(0, 5).join(", ")}` : undefined,
+    match.places.length ? `places: ${match.places.slice(0, 5).join(", ")}` : undefined,
+    `${helpfulnessScore}/100 helpfulness`
+  ].filter(Boolean);
+
+  return parts.join("; ");
+}
+
+function normalizeConfidence(value: number): number {
+  if (!Number.isFinite(value)) {
+    return 0.5;
+  }
+
+  return Math.max(0, Math.min(1, Number(value.toFixed(2))));
 }
 
 function normalizeDnaMatch(match: DnaMatch): DnaMatch {
