@@ -118,6 +118,13 @@ This repository is MIT licensed and intentionally uses synthetic fixtures. Real 
 - Introduced a subtle generated contour-map texture, richer evergreen shell, brass dividers, and refined table/card treatments.
 - Improved status, metric, form, button, sidebar, and responsive mobile polish while preserving the research-focused workflow.
 
+## V0.17 checkpoint
+
+- Dashboard metrics now derive from the real workspace instead of static demo counts.
+- The private dashboard now caps case/DNA tables and adds an action queue for quality, publishing, and DNA follow-up.
+- Sources now have server-backed search, filters, pagination, transcript previews, and a small person-link lookup flow.
+- Cases now have filters, pagination, metrics, and a bounded evidence-confidence queue for larger investigation workspaces.
+
 ## Quick start
 
 ```bash

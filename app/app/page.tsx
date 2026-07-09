@@ -2,15 +2,16 @@ import Link from "next/link";
 import { AppShell } from "@/components/app-shell";
 import { Icons } from "@/components/icons";
 import { Confidence, Metric, Status } from "@/components/ui";
-import { archiveStats } from "@/lib/demo-data";
-import { createWorkspaceDnaHypotheses, readWorkspace, scoreWorkspaceDnaMatches } from "@/lib/workspace-store";
+import { buildDashboardSummary } from "@/lib/dashboard";
+import { createDnaConnectionHypothesis } from "@/lib/dna";
+import { readWorkspace } from "@/lib/workspace-store";
 
 export const dynamic = "force-dynamic";
 
 export default async function AppDashboardPage() {
   const workspace = await readWorkspace();
-  const dnaHypotheses = createWorkspaceDnaHypotheses(workspace);
-  const scoredDnaMatches = scoreWorkspaceDnaMatches(workspace);
+  const dashboard = buildDashboardSummary(workspace);
+  const dnaHypotheses = dashboard.dnaLeads.slice(0, 2).map((match) => createDnaConnectionHypothesis(match, workspace.people));
 
   return (
     <AppShell
@@ -30,10 +31,10 @@ export default async function AppDashboardPage() {
       }
     >
       <div className="metric-row">
-        <Metric label="Imported people" value={archiveStats.people.toLocaleString()} detail="from private GEDCOM" />
-        <Metric label="Source refs" value={archiveStats.citations.toLocaleString()} detail="preserved citations" />
-        <Metric label="DNA matches" value={archiveStats.dnaMatches.toLocaleString()} detail={`${archiveStats.triagedMatches} triaged`} />
-        <Metric label="High priority" value={archiveStats.highPriorityMatches} detail="DNA leads" />
+        <Metric label="Imported people" value={dashboard.metrics.people.toLocaleString()} detail="from private workspace" />
+        <Metric label="Source refs" value={dashboard.metrics.sourceReferences.toLocaleString()} detail={`${dashboard.metrics.sourceDocuments.toLocaleString()} source docs`} />
+        <Metric label="DNA matches" value={dashboard.metrics.dnaMatches.toLocaleString()} detail={`${dashboard.metrics.triagedDnaMatches.toLocaleString()} triaged`} />
+        <Metric label="Active cases" value={dashboard.metrics.activeCases.toLocaleString()} detail={`${dashboard.metrics.highPriorityDnaMatches.toLocaleString()} high-priority DNA`} />
       </div>
 
       <div className="app-grid">
@@ -48,23 +49,44 @@ export default async function AppDashboardPage() {
                 <th>Evidence</th>
               </tr>
             </thead>
-          <tbody>
-            {workspace.cases.map((researchCase) => (
-              <tr key={researchCase.id}>
-                <td>
-                  <Link href={`/app/cases/${researchCase.id}`}>{researchCase.title}</Link>
+            <tbody>
+              {dashboard.caseRows.map((researchCase) => (
+                <tr key={researchCase.id}>
+                  <td>
+                    <Link href={`/app/cases/${researchCase.id}`}>{researchCase.title}</Link>
                   </td>
                   <td>
                     <Status tone={researchCase.status === "planning" ? "warning" : "ok"}>{researchCase.status}</Status>
                   </td>
                   <td>{researchCase.focus}</td>
-                  <td>{researchCase.evidence.length}</td>
+                  <td>
+                    {researchCase.evidenceCount}
+                    {researchCase.dnaEvidenceCount ? <div className="muted">{researchCase.dnaEvidenceCount} DNA</div> : null}
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
 
+        <aside className="app-card">
+          <h2>Action queue</h2>
+          <div className="evidence-list">
+            {dashboard.actions.map((action) => (
+              <Link className="evidence-item" href={action.href} key={action.id}>
+                <div className="evidence-item-heading">
+                  <strong>{action.title}</strong>
+                  <Status tone={action.tone}>{action.tone}</Status>
+                </div>
+                <p className="muted">{action.detail}</p>
+              </Link>
+            ))}
+          </div>
+          {dashboard.actions.length === 0 ? <p className="muted empty-state">No urgent review items found.</p> : null}
+        </aside>
+      </div>
+
+      <div className="app-grid" style={{ marginTop: 20 }}>
         <aside className="app-card">
           <h2>AI Analyst</h2>
           <div className="evidence-list">
@@ -77,40 +99,40 @@ export default async function AppDashboardPage() {
             ))}
           </div>
         </aside>
-      </div>
 
-      <div className="app-card" style={{ marginTop: 20 }}>
-        <h2>Recent DNA triage</h2>
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Match</th>
-              <th>cM</th>
-              <th>Side</th>
-              <th>Tree</th>
-              <th>Helpfulness</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {scoredDnaMatches.map((match) => (
-              <tr key={match.id}>
-                <td>
-                  <Link href="/app/dna">{match.displayName}</Link>
-                </td>
-                <td>{match.totalCm}</td>
-                <td>{match.side}</td>
-                <td>{match.treeStatus}</td>
-                <td>
-                  <Confidence value={match.helpfulnessScore / 100} />
-                </td>
-                <td>
-                  <Status tone={match.triageStatus === "high_priority" ? "warning" : "ok"}>{match.triageStatus.replace("_", " ")}</Status>
-                </td>
+        <div className="app-card">
+          <h2>Recent DNA triage</h2>
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Match</th>
+                <th>cM</th>
+                <th>Side</th>
+                <th>Tree</th>
+                <th>Helpfulness</th>
+                <th>Status</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {dashboard.dnaLeads.map((match) => (
+                <tr key={match.id}>
+                  <td>
+                    <Link href="/app/dna">{match.displayName}</Link>
+                  </td>
+                  <td>{match.totalCm}</td>
+                  <td>{match.side}</td>
+                  <td>{match.treeStatus}</td>
+                  <td>
+                    <Confidence value={match.helpfulnessScore / 100} />
+                  </td>
+                  <td>
+                    <Status tone={match.triageStatus === "high_priority" ? "warning" : "ok"}>{match.triageStatus.replace("_", " ")}</Status>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </AppShell>
   );

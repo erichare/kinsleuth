@@ -9,7 +9,7 @@ import type { AppliedGedcomImport, DnaConnectionHypothesis, DnaMatch, PersonSumm
 export type ScoredDnaMatch = DnaMatch & { helpfulnessScore: number };
 
 export type WorkspaceData = {
-  version: "0.16.0";
+  version: "0.17.0";
   archiveName: string;
   people: PersonSummary[];
   cases: ResearchCase[];
@@ -35,7 +35,7 @@ export function getWorkspacePath(options: WorkspaceStoreOptions = {}): string {
 
 export function createSeedWorkspace(now = new Date()): WorkspaceData {
   return {
-    version: "0.16.0",
+    version: "0.17.0",
     archiveName: "Riemer - Zajicek Archive",
     people: demoPeople,
     cases: demoCases,
@@ -411,7 +411,7 @@ export function createWorkspaceDnaHypotheses(workspace: Pick<WorkspaceData, "peo
 
 function normalizeWorkspaceData(value: Partial<WorkspaceData>): WorkspaceData {
   return {
-    version: "0.16.0",
+    version: "0.17.0",
     archiveName: value.archiveName || "Riemer - Zajicek Archive",
     people: Array.isArray(value.people) ? value.people : [],
     cases: Array.isArray(value.cases) ? value.cases : [],

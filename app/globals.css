@@ -670,6 +670,7 @@ textarea {
   display: grid;
   grid-template-columns: minmax(0, 1.35fr) minmax(360px, 0.65fr);
   gap: 20px;
+  align-items: start;
 }
 
 .app-card {
@@ -876,6 +877,11 @@ textarea {
   gap: 14px;
 }
 
+.form-grid > .button,
+.form-grid > .button-secondary {
+  width: 100%;
+}
+
 .people-workspace {
   display: grid;
   gap: 20px;
@@ -883,6 +889,7 @@ textarea {
 
 .people-search-card {
   display: grid;
+  align-content: start;
   gap: 18px;
 }
 
@@ -909,6 +916,14 @@ textarea {
 .people-filter-grid {
   display: grid;
   grid-template-columns: minmax(240px, 2fr) repeat(5, minmax(130px, 1fr));
+  gap: 14px;
+  align-items: end;
+}
+
+.source-filter-grid,
+.case-filter-grid {
+  display: grid;
+  grid-template-columns: minmax(240px, 2fr) repeat(5, minmax(128px, 1fr));
   gap: 14px;
   align-items: end;
 }
@@ -1013,6 +1028,10 @@ textarea {
   min-width: 220px;
 }
 
+.source-table td:first-child {
+  min-width: 260px;
+}
+
 .status-stack {
   display: flex;
   flex-wrap: wrap;
@@ -1048,6 +1067,7 @@ textarea {
 .field {
   display: grid;
   gap: 7px;
+  min-width: 0;
 }
 
 .field label,
@@ -1061,6 +1081,8 @@ textarea {
 .field input,
 .field select,
 .field textarea {
+  width: 100%;
+  min-width: 0;
   min-height: 40px;
   border: 1px solid var(--line);
   border-radius: 7px;
@@ -1160,6 +1182,8 @@ textarea {
   .grid-3,
   .form-grid,
   .people-filter-grid,
+  .source-filter-grid,
+  .case-filter-grid,
   .dna-filter-grid {
     grid-template-columns: 1fr;
   }
