@@ -17,6 +17,8 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     env:
+      PRODUCTION_URL: https://kinsleuth.vercel.app
+      RELEASE_TAG: ${{ github.event.release.tag_name }}
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
       VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
@@ -55,6 +57,7 @@ jobs:
             const { readFileSync } = require("node:fs");
             const required = ["DATABASE_URL", "AUTH_SECRET", "KINSLEUTH_APP_PASSWORD"];
             const { envs = [] } = JSON.parse(readFileSync(`${process.env.RUNNER_TEMP}/vercel-env.json`, "utf8"));
+            const project = JSON.parse(readFileSync(".vercel/project.json", "utf8"));
             const configured = new Set(
               envs
                 .filter(({ target = [] }) => target.includes("production"))
@@ -63,6 +66,10 @@ jobs:
             const missing = required.filter((name) => !configured.has(name));
             if (missing.length) {
               console.error(`Missing required Vercel production settings: ${missing.join(", ")}`);
+              process.exit(1);
+            }
+            if (project.settings?.framework !== "nextjs") {
+              console.error(`Expected the Vercel framework preset to be nextjs, got ${project.settings?.framework ?? "unset"}`);
               process.exit(1);
             }
           '
@@ -77,14 +84,24 @@ jobs:
           echo "url=$deployment_url" >> "$GITHUB_OUTPUT"
 
       - name: Verify production health and access gate
-        env:
-          DEPLOYMENT_URL: ${{ steps.deploy.outputs.url }}
         run: |
-          health_status="$(curl --retry 10 --retry-delay 3 --retry-all-errors --max-time 20 --silent --show-error --output health.json --write-out '%{http_code}' "$DEPLOYMENT_URL/api/health")"
+          health_status="$(curl --retry 10 --retry-delay 3 --retry-all-errors --fail-with-body --max-time 20 --silent --show-error --output health.json --write-out '%{http_code}' "$PRODUCTION_URL/api/health")"
           test "$health_status" = "200"
+          node -e '
+            const { readFileSync } = require("node:fs");
+            const health = JSON.parse(readFileSync("health.json", "utf8"));
+            const expectedVersion = process.env.RELEASE_TAG.replace(/^v/, "");
+            if (health.status !== "ok" || health.database?.connected !== true || health.version !== expectedVersion) {
+              console.error("Production health response did not match the released, connected application", health);
+              process.exit(1);
+            }
+          '
 
-          app_status="$(curl --max-time 20 --silent --show-error --output /dev/null --write-out '%{http_code}' "$DEPLOYMENT_URL/app")"
+          app_status="$(curl --max-time 20 --silent --show-error --output /dev/null --write-out '%{http_code}' "$PRODUCTION_URL/app")"
           case "$app_status" in
             302|303|307|308) ;;
             *) echo "Expected /app to redirect to login, got HTTP $app_status" >&2; exit 1 ;;
           esac
+
+          echo "Production deployment: ${{ steps.deploy.outputs.url }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Public application: $PRODUCTION_URL" >> "$GITHUB_STEP_SUMMARY"
