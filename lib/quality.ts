@@ -33,9 +33,9 @@ export type QualityReportPage = Omit<QualityReport, "issues"> & {
 export function buildQualityReport(people: PersonSummary[], dnaMatches: DnaMatch[], cases: ResearchCase[]): QualityReport {
   const issues: QualityIssue[] = [];
 
-  for (const anomaly of findStructuredAnomalies(people)) {
+  for (const [index, anomaly] of findStructuredAnomalies(people).entries()) {
     issues.push({
-      id: `anomaly-${slugify(anomaly.title)}`,
+      id: `anomaly-${slugify(anomaly.title)}-${index}`,
       area: anomaly.type === "privacy_risk" ? "privacy" : anomaly.type === "date_conflict" ? "dates" : "sources",
       severity: anomaly.severity,
       title: anomaly.title,

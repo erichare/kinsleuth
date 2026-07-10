@@ -93,7 +93,7 @@ function actionFromPublicationBlocker(blocker: PublicationBlocker): DashboardAct
     id: `publishing-${blocker.id}`,
     title: `${blocker.personName}: ${blocker.title}`,
     detail: blocker.action,
-    href: `/app/people/${blocker.personId}`,
+    href: `/app/people/${encodeURIComponent(blocker.personId)}`,
     tone: "danger"
   };
 }

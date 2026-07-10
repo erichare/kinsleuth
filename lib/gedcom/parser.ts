@@ -156,6 +156,8 @@ export function summarizeGedcom(records: GedcomRecord[]): ImportSummary {
 }
 
 export function extractPeople(records: GedcomRecord[]): PersonSummary[] {
+  const relativesByPersonId = buildFamilyRelationshipMap(records);
+
   return records
     .filter((record) => record.type === "INDI")
     .map((record) => {
@@ -181,13 +183,43 @@ export function extractPeople(records: GedcomRecord[]): PersonSummary[] {
         privacy: "private",
         published: false,
         facts,
-        relatives: findChildren(record.root, "FAMC")
-          .concat(findChildren(record.root, "FAMS"))
-          .map((node) => node.value ?? "")
-          .filter(Boolean),
+        relatives: record.xref ? (relativesByPersonId.get(record.xref) ?? []) : [],
         notes: findChildren(record.root, "NOTE").map(textWithContinuations).filter(Boolean).join("\n\n")
       };
     });
+}
+
+export function buildFamilyRelationshipMap(records: GedcomRecord[]): Map<string, string[]> {
+  const relationships = new Map<string, Set<string>>();
+
+  for (const record of records) {
+    if (record.type !== "FAM") {
+      continue;
+    }
+
+    const parents = [findChild(record.root, "HUSB")?.value, findChild(record.root, "WIFE")?.value].filter(isGedcomPointer);
+    const children = findChildren(record.root, "CHIL").map((node) => node.value).filter(isGedcomPointer);
+
+    for (const parent of parents) {
+      for (const otherParent of parents) {
+        addRelationship(relationships, parent, otherParent);
+      }
+      for (const child of children) {
+        addRelationship(relationships, parent, child);
+      }
+    }
+
+    for (const child of children) {
+      for (const parent of parents) {
+        addRelationship(relationships, child, parent);
+      }
+      for (const sibling of children) {
+        addRelationship(relationships, child, sibling);
+      }
+    }
+  }
+
+  return new Map(Array.from(relationships.entries()).map(([personId, relatives]) => [personId, Array.from(relatives)]));
 }
 
 export function extractFacts(root: GedcomNode): PersonFact[] {
@@ -224,6 +256,20 @@ export function walk(node: GedcomNode, visitor: (node: GedcomNode) => void): voi
   }
 }
 
+function addRelationship(relationships: Map<string, Set<string>>, personId: string, relativeId: string): void {
+  if (personId === relativeId) {
+    return;
+  }
+
+  const relatives = relationships.get(personId) ?? new Set<string>();
+  relatives.add(relativeId);
+  relationships.set(personId, relatives);
+}
+
+function isGedcomPointer(value: string | undefined): value is string {
+  return Boolean(value?.startsWith("@") && value.endsWith("@"));
+}
+
 export function slugify(value: string): string {
   return value
     .toLowerCase()
@@ -231,4 +277,3 @@ export function slugify(value: string): string {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
 }
-

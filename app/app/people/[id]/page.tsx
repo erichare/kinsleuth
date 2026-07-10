@@ -3,7 +3,7 @@ import Link from "next/link";
 import { AppShell } from "@/components/app-shell";
 import { Icons } from "@/components/icons";
 import { PersonCurationPanel } from "@/components/person-curation-panel";
-import { Confidence, Status } from "@/components/ui";
+import { Confidence, EmptyState, Status } from "@/components/ui";
 import type { PersonSummary } from "@/lib/models";
 import { readWorkspace } from "@/lib/workspace-store";
 
@@ -21,6 +21,8 @@ export default async function AppPersonPage({ params }: { params: Promise<{ id: 
   const relatives = person.relatives
     .map((relativeId) => workspace.people.find((item) => item.id === relativeId))
     .filter((relative): relative is PersonSummary => Boolean(relative));
+  const deathSummary = person.deathDate ?? (person.livingStatus === "deceased" ? "Unknown death" : undefined);
+  const lifeSummary = [person.birthDate ?? "Unknown birth", deathSummary, person.birthPlace].filter(Boolean).join(" · ");
 
   return (
     <AppShell
@@ -40,9 +42,7 @@ export default async function AppPersonPage({ params }: { params: Promise<{ id: 
           </div>
           <div>
             <h1 className="profile-title">{person.displayName}</h1>
-            <p className="muted">
-              {person.birthDate} - {person.deathDate} · {person.birthPlace}
-            </p>
+            <p className="muted">{lifeSummary}</p>
             <p>{person.notes ?? "Imported profile with curated facts and source confidence."}</p>
             <div className="hero-actions">
               <Status tone={person.published ? "ok" : "private"}>{person.published ? "Published" : "Private"}</Status>
@@ -63,41 +63,51 @@ export default async function AppPersonPage({ params }: { params: Promise<{ id: 
 
       <section className="section grid-2">
         <div className="table-panel">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Fact</th>
-                <th>Date</th>
-                <th>Place</th>
-                <th>Source</th>
-                <th>Confidence</th>
-              </tr>
-            </thead>
-            <tbody>
-              {person.facts.map((fact) => (
-                <tr key={fact.id}>
-                  <td>{fact.type}</td>
-                  <td>{fact.date}</td>
-                  <td>{fact.place}</td>
-                  <td>{fact.source ?? "Needs source"}</td>
-                  <td>
-                    <Confidence value={fact.confidence} />
-                  </td>
+          {person.facts.length > 0 ? (
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Fact</th>
+                  <th>Date</th>
+                  <th>Place</th>
+                  <th>Source</th>
+                  <th>Confidence</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {person.facts.map((fact) => (
+                  <tr key={fact.id}>
+                    <td>{fact.type}</td>
+                    <td>{fact.date ?? "Unknown"}</td>
+                    <td>{fact.place ?? "Unknown"}</td>
+                    <td>{fact.source ?? "Needs source"}</td>
+                    <td>
+                      <Confidence value={fact.confidence} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <EmptyState icon={<Icons.Users size={20} aria-hidden />} title="No dated facts imported for this person">
+              This usually means the GEDCOM contained a placeholder individual, private tree stub, or relationship-only record.
+            </EmptyState>
+          )}
         </div>
         <aside className="app-card">
           <h2>Timeline</h2>
           <div className="timeline">
-            {person.facts.map((fact) => (
-              <div className="timeline-item" key={fact.id}>
-                <strong>{fact.date}</strong>
-                <div>{fact.type}</div>
-                <div className="muted">{fact.place}</div>
-              </div>
-            ))}
+            {person.facts.length > 0 ? (
+              person.facts.map((fact) => (
+                <div className="timeline-item" key={fact.id}>
+                  <strong>{fact.date ?? "Unknown date"}</strong>
+                  <div>{fact.type}</div>
+                  <div className="muted">{fact.place ?? "Unknown place"}</div>
+                </div>
+              ))
+            ) : (
+              <p className="muted">No timeline facts are available for this imported record.</p>
+            )}
           </div>
           <div className="relationship-panel">
             <h2>Relationships</h2>

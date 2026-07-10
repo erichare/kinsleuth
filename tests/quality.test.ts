@@ -33,4 +33,25 @@ describe("quality reports", () => {
     expect(report.issues.total).toBeGreaterThan(2);
     expect(report.summary.sourceGaps).toBeGreaterThan(0);
   });
+
+  it("keeps issue ids unique when imported people produce duplicate anomaly titles", () => {
+    const duplicatePeople = [
+      {
+        ...demoPeople[0],
+        id: "dup-1",
+        displayName: "Same Name",
+        facts: [{ id: "dup-1-birth", type: "BIRT", date: "1900", confidence: 0.45 }]
+      },
+      {
+        ...demoPeople[0],
+        id: "dup-2",
+        displayName: "Same Name",
+        facts: [{ id: "dup-2-birth", type: "BIRT", date: "1901", confidence: 0.45 }]
+      }
+    ];
+    const report = buildQualityReport(duplicatePeople, [], []);
+    const ids = report.issues.map((issue) => issue.id);
+
+    expect(new Set(ids).size).toBe(ids.length);
+  });
 });
