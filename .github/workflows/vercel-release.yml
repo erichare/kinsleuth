@@ -50,9 +50,17 @@ jobs:
 
       - name: Verify required production settings
         run: |
-          node --env-file=.vercel/.env.production.local -e '
+          npx --yes vercel@55.0.0 env ls production --format json --token="$VERCEL_TOKEN" > "$RUNNER_TEMP/vercel-env.json"
+          node -e '
+            const { readFileSync } = require("node:fs");
             const required = ["DATABASE_URL", "AUTH_SECRET", "KINSLEUTH_APP_PASSWORD"];
-            const missing = required.filter((name) => !process.env[name]);
+            const { envs = [] } = JSON.parse(readFileSync(`${process.env.RUNNER_TEMP}/vercel-env.json`, "utf8"));
+            const configured = new Set(
+              envs
+                .filter(({ target = [] }) => target.includes("production"))
+                .map(({ key }) => key)
+            );
+            const missing = required.filter((name) => !configured.has(name));
             if (missing.length) {
               console.error(`Missing required Vercel production settings: ${missing.join(", ")}`);
               process.exit(1);
