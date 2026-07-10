@@ -69,7 +69,7 @@ export default async function PublishingPage({ searchParams }: { searchParams: P
                     <Status tone={statusTone(profile.status)}>{profile.status.replace("_", " ")}</Status>
                   </td>
                   <td>
-                    <Link href={`/app/people/${profile.personId}`}>{profile.displayName}</Link>
+                    <Link href={`/app/people/${encodeURIComponent(profile.personId)}`}>{profile.displayName}</Link>
                     <div className="muted">
                       {profile.published ? "Published" : "Draft"} ·{" "}
                       {profile.status === "blocked" ? (
@@ -137,7 +137,7 @@ export default async function PublishingPage({ searchParams }: { searchParams: P
               {review.blockers.items.map((issue) => (
                 <tr key={issue.id}>
                   <td>
-                    <Link href={`/app/people/${issue.personId}`}>{issue.personName}</Link>
+                    <Link href={`/app/people/${encodeURIComponent(issue.personId)}`}>{issue.personName}</Link>
                   </td>
                   <td>
                     <strong>{issue.title}</strong>

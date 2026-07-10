@@ -4,6 +4,7 @@ import { withTransaction, type DatabaseOptions } from "./db";
 import { createDnaConnectionHypothesis, scoreDnaMatch } from "./dna";
 import { demoCases, demoDnaMatches, demoPeople } from "./demo-data";
 import { prepareGedcomImport } from "./gedcom/apply";
+import { buildFamilyRelationshipMap, parseGedcom } from "./gedcom/parser";
 import type {
   AIAnalysisRun,
   AIAnalysisStatus,
@@ -517,6 +518,115 @@ export async function applyGedcomImport(
     sourcesImported: prepared.sources.length,
     rawRecordCount: prepared.rawRecords.length
   };
+}
+
+export type GedcomRelationshipRepairResult = {
+  rawRecordCount: number;
+  importedPeopleChecked: number;
+  updatedPeople: number;
+  relationshipCount: number;
+};
+
+export async function repairGedcomRelationshipLinks(options: WorkspaceStoreOptions = {}): Promise<GedcomRelationshipRepairResult> {
+  const archiveId = getArchiveId(options);
+
+  return withTransaction(options, async (client) => {
+    // Lock the archive row so the read-transform-write below cannot interleave
+    // with another repair and clobber a concurrent workspace write.
+    const archive = await client.query<{ id: string }>("SELECT id FROM archives WHERE id = $1 FOR UPDATE", [archiveId]);
+    if (archive.rowCount === 0) {
+      return { rawRecordCount: 0, importedPeopleChecked: 0, updatedPeople: 0, relationshipCount: 0 };
+    }
+
+    const workspace = await loadWorkspace(client, archiveId);
+    const { workspace: repairedWorkspace, result } = repairGedcomRelationshipLinksInWorkspace(workspace);
+
+    if (result.updatedPeople > 0) {
+      await persistWorkspace(client, archiveId, normalizeWorkspaceData({ ...repairedWorkspace, updatedAt: new Date().toISOString() }));
+    }
+
+    return result;
+  });
+}
+
+export function repairGedcomRelationshipLinksInWorkspace(workspace: WorkspaceData): { workspace: WorkspaceData; result: GedcomRelationshipRepairResult } {
+  const gedcomRecords = workspace.rawRecords.filter((record) => record.type === "INDI" || record.type === "FAM");
+  if (gedcomRecords.length === 0) {
+    return {
+      workspace,
+      result: {
+        rawRecordCount: 0,
+        importedPeopleChecked: 0,
+        updatedPeople: 0,
+        relationshipCount: 0
+      }
+    };
+  }
+
+  const relativesByPersonId = buildRepairedRelativesByPersonId(workspace, gedcomRecords);
+  const linkPairs = new Set<string>();
+  let updatedPeople = 0;
+
+  const people = workspace.people.map((person) => {
+    const relatives = relativesByPersonId.get(person.id);
+    if (!relatives) {
+      return person;
+    }
+
+    for (const relativeId of relatives) {
+      linkPairs.add(person.id < relativeId ? `${person.id}|${relativeId}` : `${relativeId}|${person.id}`);
+    }
+
+    if (sameStringArray(person.relatives, relatives)) {
+      return person;
+    }
+
+    updatedPeople += 1;
+    return {
+      ...person,
+      relatives
+    };
+  });
+
+  return {
+    workspace: {
+      ...workspace,
+      people
+    },
+    result: {
+      rawRecordCount: gedcomRecords.length,
+      importedPeopleChecked: relativesByPersonId.size,
+      updatedPeople,
+      relationshipCount: linkPairs.size
+    }
+  };
+}
+
+function buildRepairedRelativesByPersonId(workspace: WorkspaceData, gedcomRecords: RawGedcomRecord[]): Map<string, string[]> {
+  // GEDCOM xrefs are only unique within a single file, so each import must be
+  // parsed in isolation. Imports are replayed oldest-first so the newest import
+  // containing a person's xref owns their relationships, matching the
+  // last-write-wins merge that applyGedcomImport uses for people.
+  const appliedAtByImportId = new Map(workspace.imports.map((item) => [item.id, item.appliedAt]));
+  const recordsByImportId = groupBy(gedcomRecords, (record) => record.importId);
+  const orderedImportIds = Array.from(recordsByImportId.keys()).sort((left, right) =>
+    (appliedAtByImportId.get(left) ?? "").localeCompare(appliedAtByImportId.get(right) ?? "")
+  );
+
+  const relativesByPersonId = new Map<string, string[]>();
+  for (const importId of orderedImportIds) {
+    const records = recordsByImportId.get(importId) ?? [];
+    const parsed = parseGedcom(records.map((record) => record.raw).join("\n"));
+    const relationshipMap = buildFamilyRelationshipMap(parsed.records);
+
+    for (const record of parsed.records) {
+      if (record.type === "INDI" && record.xref) {
+        relativesByPersonId.set(record.xref, relationshipMap.get(record.xref) ?? []);
+      }
+    }
+  }
+
+  return relativesByPersonId;
 }
 
 export function scoreWorkspaceDnaMatches(workspace: Pick<WorkspaceData, "dnaMatches">): ScoredDnaMatch[] {
@@ -1174,6 +1284,10 @@ function mergeImportedPeople(existing: PersonSummary[], imported: PersonSummary[
 function mergeById<T extends { id: string }>(existing: T[], imported: T[]): T[] {
   const importedIds = new Set(imported.map((item) => item.id));
   return [...imported, ...existing.filter((item) => !importedIds.has(item.id))];
+}
+
+function sameStringArray(left: string[], right: string[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
 function groupBy<T, K>(items: T[], keyForItem: (item: T) => K): Map<K, T[]> {

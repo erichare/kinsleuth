@@ -1,4 +1,5 @@
 import { AppShell } from "@/components/app-shell";
+import { ImportMaintenancePanel } from "@/components/import-maintenance-panel";
 import { ImportPreviewWorkspace } from "@/components/import-preview-workspace";
 import { Status } from "@/components/ui";
 import { readWorkspace } from "@/lib/workspace-store";
@@ -56,6 +57,7 @@ export default async function ImportsPage() {
               <strong>Traceable by design</strong>
               <p className="muted">Raw xrefs, Ancestry IDs, URLs, citations, notes, and media pointers remain attached to imported records.</p>
             </div>
+            <ImportMaintenancePanel rawRecordCount={workspace.rawRecords.length} />
           </div>
         </aside>
       </div>
