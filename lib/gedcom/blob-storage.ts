@@ -1,4 +1,5 @@
 import { del, get, head, list } from "@vercel/blob";
+import { decodeGedcomBuffer, type DecodedGedcom } from "./charset";
 import {
   gedcomUploadPrefix,
   maximumGedcomFileSizeBytes,
@@ -16,7 +17,7 @@ export class GedcomUploadError extends Error {
   }
 }
 
-export async function readStagedGedcomUpload(reference: GedcomUploadReference): Promise<string> {
+export async function readStagedGedcomUpload(reference: GedcomUploadReference): Promise<DecodedGedcom> {
   validateReference(reference);
 
   let metadata;
@@ -52,7 +53,7 @@ export async function readStagedGedcomUpload(reference: GedcomUploadReference): 
   }
 
   try {
-    return await new Response(result.stream).text();
+    return decodeGedcomBuffer(await new Response(result.stream).arrayBuffer());
   } catch (error) {
     throw new GedcomUploadError(`The staged GEDCOM upload could not be read: ${errorMessage(error)}`, 502);
   }

@@ -42,7 +42,8 @@ export function CaseWorkspace({ initialCases }: { initialCases: ResearchCase[] }
   const [sort, setSort] = useState<CaseSortKey>("status");
   const [pageSize, setPageSize] = useState(25);
   const [page, setPage] = useState(1);
-  const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
+  const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
+  const [error, setError] = useState("");
   const result = useMemo(
     () => searchCasesPage(cases, { query, status: statusFilter, privacy, evidence, sort }, { page, pageSize }),
     [cases, evidence, page, pageSize, privacy, query, sort, statusFilter]
@@ -58,50 +59,64 @@ export function CaseWorkspace({ initialCases }: { initialCases: ResearchCase[] }
 
   async function createCase() {
     setStatus("loading");
-    const response = await fetch("/api/cases", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        title: draft.title,
-        question: draft.question,
-        focus: draft.focus,
-        hypotheses: draft.firstHypothesis
-          ? [
-              {
-                id: "hyp-draft",
-                statement: draft.firstHypothesis,
-                confidence: 0.45,
-                status: "open"
-              }
-            ]
-          : [],
-        evidence: draft.firstEvidence
-          ? [
-              {
-                id: "ev-draft",
-                title: "Initial evidence note",
-                type: "Research note",
-                summary: draft.firstEvidence,
-                confidence: 0.5
-              }
-            ]
-          : []
-      })
-    });
+    setError("");
 
-    if (!response.ok) {
+    try {
+      const response = await fetch("/api/cases", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          title: draft.title,
+          question: draft.question,
+          focus: draft.focus,
+          hypotheses: draft.firstHypothesis
+            ? [
+                {
+                  id: "hyp-draft",
+                  statement: draft.firstHypothesis,
+                  confidence: 0.45,
+                  status: "open"
+                }
+              ]
+            : [],
+          evidence: draft.firstEvidence
+            ? [
+                {
+                  id: "ev-draft",
+                  title: "Initial evidence note",
+                  type: "Research note",
+                  summary: draft.firstEvidence,
+                  confidence: 0.5
+                }
+              ]
+            : []
+        })
+      });
+
+      if (!response.ok) {
+        const body = (await response.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(body?.error ?? "Case creation failed");
+      }
+
+      const created = (await response.json()) as ResearchCase;
+      setCases((current) => [created, ...current]);
+      setPage(1);
+      setStatus("success");
+    } catch (requestError) {
       setStatus("error");
-      return;
+      setError(requestError instanceof Error ? requestError.message : "Case creation failed");
+    } finally {
+      setStatus((current) => (current === "loading" ? "idle" : current));
     }
-
-    const created = (await response.json()) as ResearchCase;
-    setCases((current) => [created, ...current]);
-    setPage(1);
-    setStatus("idle");
   }
 
   function resetPaging() {
     setPage(1);
+  }
+
+  function updateDraft(patch: Partial<CaseDraft>) {
+    setDraft((current) => ({ ...current, ...patch }));
+    setStatus((current) => (current === "success" ? "idle" : current));
   }
 
   return (
@@ -280,18 +295,24 @@ export function CaseWorkspace({ initialCases }: { initialCases: ResearchCase[] }
         <aside aria-busy={status === "loading"} className="app-card">
           <h2>New case</h2>
           <div className="form-grid" style={{ gridTemplateColumns: "1fr" }}>
-            <Field label="Title" value={draft.title} onChange={(value) => setDraft({ ...draft, title: value })} />
-            <TextArea label="Research question" value={draft.question} onChange={(value) => setDraft({ ...draft, question: value })} />
-            <Field label="Focus" value={draft.focus} onChange={(value) => setDraft({ ...draft, focus: value })} />
-            <TextArea label="First hypothesis" value={draft.firstHypothesis} onChange={(value) => setDraft({ ...draft, firstHypothesis: value })} />
-            <TextArea label="First evidence note" value={draft.firstEvidence} onChange={(value) => setDraft({ ...draft, firstEvidence: value })} />
+            <Field label="Title" value={draft.title} onChange={(value) => updateDraft({ title: value })} />
+            <TextArea label="Research question" value={draft.question} onChange={(value) => updateDraft({ question: value })} />
+            <Field label="Focus" value={draft.focus} onChange={(value) => updateDraft({ focus: value })} />
+            <TextArea label="First hypothesis" value={draft.firstHypothesis} onChange={(value) => updateDraft({ firstHypothesis: value })} />
+            <TextArea label="First evidence note" value={draft.firstEvidence} onChange={(value) => updateDraft({ firstEvidence: value })} />
             <button aria-busy={status === "loading"} className="button" disabled={status === "loading"} onClick={createCase} type="button">
               {status === "loading" ? "Creating..." : "Create case"}
             </button>
+            {status === "success" ? (
+              <div aria-atomic="true" role="status">
+                <Status>Case created</Status>
+              </div>
+            ) : null}
             {status === "error" ? (
-              <span aria-atomic="true" role="alert">
+              <div aria-atomic="true" role="alert">
                 <Status tone="warning">Case creation failed</Status>
-              </span>
+                {error ? <p className="muted">{error}</p> : null}
+              </div>
             ) : null}
           </div>
         </aside>

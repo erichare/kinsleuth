@@ -28,6 +28,7 @@ export default async function AppPersonPage({ params }: { params: Promise<{ id: 
     <AppShell
       title="Person Profile"
       active="/app/people"
+      archiveName={workspace.archiveName}
       actions={
         <Link className="button-secondary" href="/app/people">
           <Icons.ChevronLeft size={16} aria-hidden />
@@ -49,7 +50,7 @@ export default async function AppPersonPage({ params }: { params: Promise<{ id: 
               <Status tone="private">{person.livingStatus}</Status>
             </div>
           </div>
-          <PersonCurationPanel person={person} />
+          <PersonCurationPanel key={person.id} person={person} />
         </div>
         <div className="tabs">
           <span className="active">Facts</span>

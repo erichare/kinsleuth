@@ -20,9 +20,9 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   });
 
   return (
-    <AppShell title="Quality Reports" active="/app/reports">
+    <AppShell title="Quality Reports" active="/app/reports" archiveName={workspace.archiveName}>
       <div className="metric-row">
-        <Metric label="Archive quality" value={`${report.score}%`} detail="demo score" />
+        <Metric label="Archive quality" value={`${report.score}%`} detail="from automated checks" />
         <Metric label="High severity" value={report.summary.high} detail="fix before publishing" />
         <Metric label="Source gaps" value={report.summary.sourceGaps} detail="vital facts" />
         <Metric label="DNA gaps" value={report.summary.dnaGaps} detail="triage blockers" />

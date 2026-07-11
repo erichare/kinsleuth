@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { buildFamilyRelationshipMap, extractPeople, parseGedcom, textWithContinuations } from "@/lib/gedcom/parser";
+import { buildFamilyRelationshipMap, extractPeople, parseGedcom, parseGedcomLine, textWithContinuations } from "@/lib/gedcom/parser";
 
 describe("GEDCOM parser", () => {
   it("parses synthetic GEDCOM records and summary counts", () => {
@@ -75,6 +75,33 @@ describe("GEDCOM parser", () => {
   it("preserves continuation text", () => {
     const parsed = parseGedcom("0 @N1@ NOTE First line\n1 CONT Second line\n1 CONC joined");
     expect(textWithContinuations(parsed.records[0].root)).toBe("First line\nSecond linejoined");
+  });
+
+  it("preserves the leading space of CONC values split mid sentence", () => {
+    const parsed = parseGedcom("0 @N1@ NOTE This is a long note that was split by the\n1 CONC  exporter mid sentence");
+    expect(textWithContinuations(parsed.records[0].root)).toBe("This is a long note that was split by the exporter mid sentence");
+  });
+
+  it("preserves leading indentation on CONT lines", () => {
+    const parsed = parseGedcom("0 @N1@ NOTE Transcript:\n1 CONT   indented body line");
+    expect(textWithContinuations(parsed.records[0].root)).toBe("Transcript:\n  indented body line");
+  });
+
+  it("strips a UTF-8 BOM and tolerates blank and indented lines", () => {
+    const parsed = parseGedcom("\uFEFF0 HEAD\n   \n\n  1 SOUR KinSleuth\n\t0 TRLR\n");
+
+    expect(parsed.records.map((record) => record.type)).toEqual(["HEAD", "TRLR"]);
+    expect(parsed.records[0].root.children[0].tag).toBe("SOUR");
+  });
+
+  it("tolerates repeated delimiters before the tag but treats extra spaces after it as value", () => {
+    const pointerLine = parseGedcomLine("0   @I1@   INDI", 0);
+    expect(pointerLine.xref).toBe("@I1@");
+    expect(pointerLine.tag).toBe("INDI");
+    expect(pointerLine.value).toBeUndefined();
+
+    const noteLine = parseGedcomLine("1 NOTE  double spaced", 1);
+    expect(noteLine.value).toBe(" double spaced");
   });
 
   it("rejects malformed lines", () => {

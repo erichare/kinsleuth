@@ -72,7 +72,7 @@ export function CaseTaskList({ caseId, initialTasks }: { caseId: string; initial
       setMessage(requestError instanceof Error ? requestError.message : "Task update failed");
       setMessageRole("alert");
     } finally {
-      setBusyTaskId("");
+      setBusyTaskId((current) => (current === task.id ? "" : current));
     }
   }
 

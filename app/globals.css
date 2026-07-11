@@ -1461,6 +1461,15 @@ textarea {
   gap: 8px;
 }
 
+.pagination-controls .tag {
+  white-space: nowrap;
+}
+
+.pagination-count {
+  font-weight: 400;
+  opacity: 0.65;
+}
+
 .icon-button {
   width: 38px;
   padding: 0;

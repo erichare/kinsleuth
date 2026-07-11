@@ -10,7 +10,7 @@ export default async function AppPeoplePage() {
   const initialResult = searchPeoplePage(workspace.people, { sort: "name" }, { page: 1, pageSize: 50 });
 
   return (
-    <AppShell title="People" active="/app/people">
+    <AppShell title="People" active="/app/people" archiveName={workspace.archiveName}>
       <PeopleWorkspace initialResult={initialResult} />
     </AppShell>
   );

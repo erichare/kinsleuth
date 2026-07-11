@@ -8,6 +8,8 @@ export type RuntimeStatus = {
     configured: boolean;
     connected: boolean;
     archiveId: string;
+    archiveName: string;
+    archiveTagline: string;
     archiveCount: number;
     peopleCount: number;
     caseCount: number;
@@ -42,6 +44,8 @@ export async function getRuntimeStatus(): Promise<RuntimeStatus> {
         configured: false,
         connected: false,
         archiveId,
+        archiveName: "",
+        archiveTagline: "",
         archiveCount: 0,
         peopleCount: 0,
         caseCount: 0,
@@ -53,12 +57,16 @@ export async function getRuntimeStatus(): Promise<RuntimeStatus> {
 
   try {
     const result = await query<{
+      archive_name: string | null;
+      archive_tagline: string | null;
       archive_count: string;
       people_count: string;
       case_count: string;
       ai_run_count: string;
     }>(
       `SELECT
+        (SELECT name FROM archives WHERE id = $1) AS archive_name,
+        (SELECT tagline FROM archives WHERE id = $1) AS archive_tagline,
         (SELECT COUNT(*) FROM archives) AS archive_count,
         (SELECT COUNT(*) FROM people WHERE archive_id = $1) AS people_count,
         (SELECT COUNT(*) FROM research_cases WHERE archive_id = $1) AS case_count,
@@ -77,6 +85,8 @@ export async function getRuntimeStatus(): Promise<RuntimeStatus> {
         configured: true,
         connected: true,
         archiveId,
+        archiveName: row?.archive_name ?? "",
+        archiveTagline: row?.archive_tagline ?? "",
         archiveCount: Number(row?.archive_count ?? 0),
         peopleCount: Number(row?.people_count ?? 0),
         caseCount: Number(row?.case_count ?? 0),
@@ -93,6 +103,8 @@ export async function getRuntimeStatus(): Promise<RuntimeStatus> {
         configured: true,
         connected: false,
         archiveId,
+        archiveName: "",
+        archiveTagline: "",
         archiveCount: 0,
         peopleCount: 0,
         caseCount: 0,

@@ -19,6 +19,7 @@ export default async function AppDashboardPage() {
     <AppShell
       title="Investigation Dashboard"
       active="/app"
+      archiveName={workspace.archiveName}
       actions={
         <div className="hero-actions" style={{ marginTop: 0 }}>
           <Link className="button" href="/app/cases">

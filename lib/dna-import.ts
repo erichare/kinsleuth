@@ -112,7 +112,9 @@ function parseTreeStatus(value: string): DnaTreeStatus {
   if (!normalized) return "unknown";
   if (normalized.includes("unknown")) return "unknown";
   if (normalized.includes("private")) return "private";
-  if (normalized.includes("partial")) return "partial";
+  // "Unlinked tree" must be checked before "linked": the tree exists but is
+  // not attached to the match, so it is browsable yet unverified.
+  if (normalized.includes("unlinked") || normalized.includes("partial")) return "partial";
   if (normalized.includes("none") || normalized.includes("notree") || normalized.startsWith("no")) return "none";
   if (normalized.includes("public") || normalized.includes("linked") || normalized.includes("tree")) return "public";
   return "unknown";

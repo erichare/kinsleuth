@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { Icons } from "@/components/icons";
 import { Confidence, Metric, Status } from "@/components/ui";
 import type { AIAnalysisResult, StructuredAnomaly } from "@/lib/ai";
@@ -42,8 +42,22 @@ export function AIAnalystWorkspace({ initialQuestion, cases, initialRuns, anomal
   const [isCreatingTask, setIsCreatingTask] = useState(false);
   const [busySuggestionId, setBusySuggestionId] = useState("");
   const [confirmedSuggestionIds, setConfirmedSuggestionIds] = useState<string[]>([]);
+  const [pendingSuggestion, setPendingSuggestion] = useState("");
   const visibleAnomalies = anomalies.slice(0, 75);
   const hiddenAnomalyCount = anomalies.length - visibleAnomalies.length;
+
+  function applySuggestedQuestion(suggestion: string) {
+    const currentQuestion = question.trim();
+    const hasCustomQuestion = currentQuestion !== "" && currentQuestion !== initialQuestion.trim() && currentQuestion !== suggestion;
+
+    if (hasCustomQuestion && pendingSuggestion !== suggestion) {
+      setPendingSuggestion(suggestion);
+      return;
+    }
+
+    setQuestion(suggestion);
+    setPendingSuggestion("");
+  }
 
   async function runAnalysis(event?: React.FormEvent<HTMLFormElement>) {
     event?.preventDefault();
@@ -188,13 +202,22 @@ export function AIAnalystWorkspace({ initialQuestion, cases, initialRuns, anomal
                 aria-describedby={error ? "ai-analysis-error" : undefined}
                 aria-invalid={Boolean(error) && !question.trim()}
                 value={question}
-                onChange={(event) => setQuestion(event.target.value)}
+                onChange={(event) => {
+                  setQuestion(event.target.value);
+                  setPendingSuggestion("");
+                }}
               />
             </label>
             <div className="prompt-row" aria-label="Suggested research questions">
               {suggestedQuestions.map((suggestion) => (
-                <button className="prompt-chip" key={suggestion} onClick={() => setQuestion(suggestion)} type="button">
-                  {suggestion}
+                <button
+                  aria-label={pendingSuggestion === suggestion ? `Replace current question with: ${suggestion}` : undefined}
+                  className="prompt-chip"
+                  key={suggestion}
+                  onClick={() => applySuggestedQuestion(suggestion)}
+                  type="button"
+                >
+                  {pendingSuggestion === suggestion ? "Replace current question?" : suggestion}
                 </button>
               ))}
             </div>
@@ -276,7 +299,7 @@ export function AIAnalystWorkspace({ initialQuestion, cases, initialRuns, anomal
                 </div>
                 <p>{summarizeAnswer(run.answer)}</p>
                 <p className="muted">
-                  {new Date(run.createdAt).toLocaleString()} · {run.provider ?? "local"} · {run.evidenceUsed.length.toLocaleString()} evidence notes · {run.suggestions.length.toLocaleString()} staged
+                  <ClientDate value={run.createdAt} /> · {run.provider ?? "local"} · {run.evidenceUsed.length.toLocaleString()} evidence notes · {run.suggestions.length.toLocaleString()} staged
                 </p>
               </div>
             ))
@@ -470,6 +493,18 @@ function AnomalyItem({ anomaly }: { anomaly: StructuredAnomaly }) {
       <p className="muted">{anomaly.evidence.join(" · ")}</p>
     </div>
   );
+}
+
+const subscribeToNothing = () => () => {};
+
+function ClientDate({ value }: { value: string }) {
+  const mounted = useSyncExternalStore(subscribeToNothing, () => true, () => false);
+
+  if (!mounted) {
+    return <>{value.slice(0, 10)}</>;
+  }
+
+  return <>{new Date(value).toLocaleString()}</>;
 }
 
 function createTaskTitle(result: AIAnalysisResult): string {

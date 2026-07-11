@@ -52,7 +52,9 @@ export function splitCsvLine(line: string): string[] {
     const char = line[index];
     const next = line[index + 1];
 
-    if (char === '"' && next === '"') {
+    // A doubled quote is only an escaped quote inside a quoted field;
+    // outside one, `""` is an empty quoted field and must toggle state twice.
+    if (quoted && char === '"' && next === '"') {
       current += '"';
       index += 1;
     } else if (char === '"') {

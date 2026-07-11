@@ -1,6 +1,16 @@
 export const sessionCookieName = "kinsleuth_session";
 export const sessionMaxAgeSeconds = 60 * 60 * 24 * 7;
 
+// Only allow same-origin absolute paths. A second "/" or "\" would make the
+// browser treat the value as protocol-relative (it normalizes "\" to "/"),
+// turning the login redirect into an open redirect.
+export function safeInternalPath(next: string | undefined, fallback = "/app"): string {
+  if (!next || !next.startsWith("/") || next.startsWith("//") || next.startsWith("/\\")) {
+    return fallback;
+  }
+  return next;
+}
+
 const encoder = new TextEncoder();
 
 export async function createSessionToken(secret: string, issuedAt = Date.now()): Promise<string> {

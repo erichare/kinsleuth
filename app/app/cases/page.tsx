@@ -8,7 +8,7 @@ export default async function CasesPage() {
   const workspace = await readWorkspace();
 
   return (
-    <AppShell title="Cases" active="/app/cases">
+    <AppShell title="Cases" active="/app/cases" archiveName={workspace.archiveName}>
       <CaseWorkspace initialCases={workspace.cases} />
     </AppShell>
   );

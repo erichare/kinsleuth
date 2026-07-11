@@ -29,4 +29,10 @@ describe("CSV helpers", () => {
       notes: "line one\nline two"
     });
   });
+
+  it("parses empty quoted fields as empty strings", () => {
+    expect(splitCsvLine('a,"",b')).toEqual(["a", "", "b"]);
+    expect(splitCsvLine('"",""')).toEqual(["", ""]);
+    expect(splitCsvLine('"a""b",""')).toEqual(['a"b', ""]);
+  });
 });

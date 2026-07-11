@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createImportSnapshot, diffImportSnapshots } from "@/lib/gedcom/importer";
 import { prepareGedcomImport } from "@/lib/gedcom/apply";
+import { decodeGedcomBuffer } from "@/lib/gedcom/charset";
 import { deleteStagedGedcomUploads, GedcomUploadError, readStagedGedcomUpload } from "@/lib/gedcom/blob-storage";
 import {
   importDiffPreviewRecordLimit,
@@ -58,7 +59,8 @@ export async function POST(request: Request) {
         recordCount: next.records.length
       },
       diff,
-      applied
+      applied,
+      warnings: body.warnings
     }, { status: applied ? 201 : 200 });
   } catch (error) {
     return importErrorResponse(error);
@@ -80,6 +82,7 @@ type ResolvedImportRequest = {
   previousContent?: string;
   apply?: boolean;
   stagedPathnames: string[];
+  warnings: string[];
 };
 
 async function readImportRequest(request: Request): Promise<ResolvedImportRequest> {
@@ -96,12 +99,16 @@ async function readImportRequest(request: Request): Promise<ResolvedImportReques
       previousFile instanceof File ? previousFile.size : Buffer.byteLength(inlinePreviousContent ?? "")
     );
 
+    const decodedContent = file instanceof File ? decodeGedcomBuffer(await file.arrayBuffer()) : undefined;
+    const decodedPreviousContent = previousFile instanceof File ? decodeGedcomBuffer(await previousFile.arrayBuffer()) : undefined;
+
     return {
       sourceName,
-      content: file instanceof File ? await file.text() : inlineContent,
-      previousContent: previousFile instanceof File ? await previousFile.text() : inlinePreviousContent,
+      content: decodedContent?.content ?? inlineContent,
+      previousContent: decodedPreviousContent?.content ?? inlinePreviousContent,
       apply: getFormText(formData, "apply") === "true",
-      stagedPathnames: []
+      stagedPathnames: [],
+      warnings: mergeImportWarnings(decodedContent?.warnings, decodedPreviousContent?.warnings)
     };
   }
 
@@ -122,18 +129,23 @@ async function readImportRequest(request: Request): Promise<ResolvedImportReques
     body.currentUpload?.size ?? Buffer.byteLength(body.content ?? ""),
     body.previousUpload?.size ?? Buffer.byteLength(body.previousContent ?? "")
   );
-  const [content, previousContent] = await Promise.all([
-    body.currentUpload ? readStagedGedcomUpload(body.currentUpload) : Promise.resolve(body.content),
-    body.previousUpload ? readStagedGedcomUpload(body.previousUpload) : Promise.resolve(body.previousContent)
+  const [stagedContent, stagedPreviousContent] = await Promise.all([
+    body.currentUpload ? readStagedGedcomUpload(body.currentUpload) : Promise.resolve(undefined),
+    body.previousUpload ? readStagedGedcomUpload(body.previousUpload) : Promise.resolve(undefined)
   ]);
 
   return {
     sourceName: body.sourceName,
-    content,
-    previousContent,
+    content: stagedContent?.content ?? body.content,
+    previousContent: stagedPreviousContent?.content ?? body.previousContent,
     apply: body.apply === true,
-    stagedPathnames: [body.currentUpload?.pathname, body.previousUpload?.pathname].filter((pathname): pathname is string => Boolean(pathname))
+    stagedPathnames: [body.currentUpload?.pathname, body.previousUpload?.pathname].filter((pathname): pathname is string => Boolean(pathname)),
+    warnings: mergeImportWarnings(stagedContent?.warnings, stagedPreviousContent?.warnings)
   };
+}
+
+function mergeImportWarnings(...warningLists: Array<string[] | undefined>): string[] {
+  return Array.from(new Set(warningLists.flatMap((warnings) => warnings ?? [])));
 }
 
 function getFormText(formData: FormData, key: string): string | undefined {

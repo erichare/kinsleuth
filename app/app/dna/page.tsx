@@ -10,7 +10,7 @@ export default async function DnaPage() {
   const dnaHypotheses = createWorkspaceDnaHypotheses(workspace);
 
   return (
-    <AppShell title="DNA Match Triage" active="/app/dna">
+    <AppShell title="DNA Match Triage" active="/app/dna" archiveName={workspace.archiveName}>
       <DnaTriageWorkspace initialCases={workspace.cases} initialMatches={scoredDnaMatches} initialHypotheses={dnaHypotheses} />
     </AppShell>
   );

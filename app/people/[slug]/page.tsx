@@ -26,7 +26,7 @@ export default async function PublicPersonPage({ params }: { params: Promise<{ s
     .filter((relative): relative is PersonSummary => Boolean(relative));
 
   return (
-    <PublicShell active="/people">
+    <PublicShell active="/people" tagline={workspace.archiveTagline}>
       <div className="page-wrap">
         <div className="profile-page-actions">
           <Link className="button-secondary" href="/people">

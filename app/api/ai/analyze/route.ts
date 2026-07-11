@@ -58,6 +58,17 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ ...result, run });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "AI analysis failed" }, { status: 403 });
+    const message = error instanceof Error ? error.message : "AI analysis failed";
+
+    if (message.startsWith("Role ") && message.includes("cannot perform")) {
+      return NextResponse.json({ error: message }, { status: 403 });
+    }
+
+    if (message.startsWith("Provider returned ")) {
+      return NextResponse.json({ error: message }, { status: 502 });
+    }
+
+    console.error("AI analysis failed", error);
+    return NextResponse.json({ error: "AI analysis failed. Check the server logs for details." }, { status: 500 });
   }
 }

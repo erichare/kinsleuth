@@ -25,7 +25,7 @@ export default async function PlacesPage() {
     .sort((left, right) => left.name.localeCompare(right.name));
 
   return (
-    <PublicShell active="/places">
+    <PublicShell active="/places" tagline={workspace.archiveTagline}>
       <div className="page-wrap">
         <section className="page-title section">
           <h1>Published Places</h1>

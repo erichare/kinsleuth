@@ -27,7 +27,11 @@ describe("GEDCOM Blob storage", () => {
       blob: { pathname, etag: 'W/"etag-1"', size: 0, contentType: "text/plain; charset=utf-8" }
     });
 
-    await expect(readStagedGedcomUpload({ pathname, etag: '"etag-1"', size: content.length })).resolves.toBe(content);
+    await expect(readStagedGedcomUpload({ pathname, etag: '"etag-1"', size: content.length })).resolves.toEqual({
+      content,
+      charset: "utf-8",
+      warnings: []
+    });
     expect(blobMocks.get).toHaveBeenCalledWith(pathname, { access: "private", useCache: false });
   });
 
