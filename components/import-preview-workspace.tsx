@@ -2,7 +2,7 @@
 
 import { upload } from "@vercel/blob/client";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ImportDiff, ImportSnapshot } from "@/lib/gedcom/importer";
 import {
   createGedcomUploadPath,
@@ -49,6 +49,9 @@ export function ImportPreviewWorkspace() {
   const [uploadProgress, setUploadProgress] = useState<{ fileName: string; percentage: number } | undefined>();
   const [error, setError] = useState("");
   const [hydrated, setHydrated] = useState(false);
+  const [applyArmed, setApplyArmed] = useState(false);
+  const currentFileInputRef = useRef<HTMLInputElement>(null);
+  const previousFileInputRef = useRef<HTMLInputElement>(null);
   const requestInProgress = status === "uploading" || status === "loading" || status === "applying";
 
   useEffect(() => {
@@ -76,6 +79,7 @@ export function ImportPreviewWorkspace() {
     setCurrentFile(file);
     setCurrentContent("");
     setResult(undefined);
+    setApplyArmed(false);
     setError("");
     setUploadProgress(undefined);
 
@@ -84,6 +88,9 @@ export function ImportPreviewWorkspace() {
     }
     if (!validateSelectedFile(file, previousFile)) {
       setCurrentFile(undefined);
+      if (currentFileInputRef.current) {
+        currentFileInputRef.current.value = "";
+      }
       return;
     }
 
@@ -99,6 +106,7 @@ export function ImportPreviewWorkspace() {
     setPreviousFile(file);
     setPreviousContent("");
     setResult(undefined);
+    setApplyArmed(false);
     setError("");
     setUploadProgress(undefined);
 
@@ -107,6 +115,9 @@ export function ImportPreviewWorkspace() {
     }
     if (!validateSelectedFile(file, currentFile)) {
       setPreviousFile(undefined);
+      if (previousFileInputRef.current) {
+        previousFileInputRef.current.value = "";
+      }
       return;
     }
     if (!shouldStageGedcomFiles([file])) {
@@ -138,40 +149,38 @@ export function ImportPreviewWorkspace() {
     setStatus("loading");
     setError("");
     setResult(undefined);
+    setApplyArmed(false);
 
-    let response: Response;
     try {
-      response = await sendImportRequest(false);
+      const response = await sendImportRequest(false);
+
+      if (!response.ok) {
+        if (response.status === 404 || response.status === 409) {
+          resetStagedUploads();
+        }
+        throw new Error(await responseError(response, "GEDCOM preview failed."));
+      }
+
+      const nextResult = await parseImportResponse(response);
+      setResult(nextResult);
+      setRecentPreviews((current) => [
+        {
+          id: nextResult.snapshot.id,
+          sourceName: nextResult.snapshot.sourceName,
+          checksum: nextResult.snapshot.checksum,
+          importedAt: new Date().toISOString(),
+          recordCount: nextResult.snapshot.recordCount,
+          summary: nextResult.snapshot.summary
+        },
+        ...current.filter((preview) => preview.id !== nextResult.snapshot.id)
+      ].slice(0, 8));
     } catch (requestError) {
       setStatus("error");
-      setUploadProgress(undefined);
       setError(errorMessage(requestError));
-      return;
+    } finally {
+      setUploadProgress(undefined);
+      setStatus((current) => (current === "error" ? current : "idle"));
     }
-
-    if (!response.ok) {
-      if (response.status === 404 || response.status === 409) {
-        resetStagedUploads();
-      }
-      setStatus("error");
-      setError(await responseError(response, "GEDCOM preview failed."));
-      return;
-    }
-
-    const nextResult = (await response.json()) as ImportResponse;
-    setResult(nextResult);
-    setRecentPreviews((current) => [
-      {
-        id: nextResult.snapshot.id,
-        sourceName: nextResult.snapshot.sourceName,
-        checksum: nextResult.snapshot.checksum,
-        importedAt: new Date().toISOString(),
-        recordCount: nextResult.snapshot.recordCount,
-        summary: nextResult.snapshot.summary
-      },
-      ...current.filter((preview) => preview.id !== nextResult.snapshot.id)
-    ].slice(0, 8));
-    setStatus("idle");
   }
 
   async function applyImport() {
@@ -182,29 +191,27 @@ export function ImportPreviewWorkspace() {
     setStatus("applying");
     setError("");
 
-    let response: Response;
     try {
-      response = await sendImportRequest(true);
+      const response = await sendImportRequest(true);
+
+      if (!response.ok) {
+        if (response.status === 404 || response.status === 409) {
+          resetStagedUploads();
+        }
+        throw new Error(await responseError(response, "GEDCOM import failed."));
+      }
+
+      setResult(await parseImportResponse(response));
+      setCurrentUpload(undefined);
+      setPreviousUpload(undefined);
+      setApplyArmed(false);
     } catch (requestError) {
       setStatus("error");
-      setUploadProgress(undefined);
       setError(errorMessage(requestError));
-      return;
+    } finally {
+      setUploadProgress(undefined);
+      setStatus((current) => (current === "error" ? current : "idle"));
     }
-
-    if (!response.ok) {
-      if (response.status === 404 || response.status === 409) {
-        resetStagedUploads();
-      }
-      setStatus("error");
-      setError(await responseError(response, "GEDCOM import failed."));
-      return;
-    }
-
-    setResult((await response.json()) as ImportResponse);
-    setCurrentUpload(undefined);
-    setPreviousUpload(undefined);
-    setStatus("idle");
   }
 
   async function sendImportRequest(apply: boolean): Promise<Response> {
@@ -310,11 +317,11 @@ export function ImportPreviewWorkspace() {
         <div className="form-grid">
           <label className="field">
             <span>New GEDCOM</span>
-            <input accept=".ged,.gedcom,text/plain" disabled={requestInProgress} type="file" onChange={(event) => void readCurrentFile(event.target.files?.[0])} />
+            <input accept=".ged,.gedcom,text/plain" disabled={requestInProgress} ref={currentFileInputRef} type="file" onChange={(event) => void readCurrentFile(event.target.files?.[0])} />
           </label>
           <label className="field">
             <span>Previous GEDCOM for diff</span>
-            <input accept=".ged,.gedcom,text/plain" disabled={requestInProgress} type="file" onChange={(event) => void readPreviousFile(event.target.files?.[0])} />
+            <input accept=".ged,.gedcom,text/plain" disabled={requestInProgress} ref={previousFileInputRef} type="file" onChange={(event) => void readPreviousFile(event.target.files?.[0])} />
           </label>
           <label className="field" style={{ gridColumn: "1 / -1" }}>
             <span>Source name</span>
@@ -324,6 +331,7 @@ export function ImportPreviewWorkspace() {
               onChange={(event) => {
                 setSourceName(event.target.value);
                 setResult(undefined);
+                setApplyArmed(false);
               }}
             />
           </label>
@@ -366,9 +374,18 @@ export function ImportPreviewWorkspace() {
                 {result.snapshot.summary.sourceReferences.toLocaleString()} source refs · {result.snapshot.summary.urls.toLocaleString()} URLs · {result.snapshot.summary.ancestryApids.toLocaleString()} Ancestry IDs · {result.snapshot.summary.notes.toLocaleString()} notes
               </p>
             </div>
-            {result.applied ? null : (
-              <button aria-busy={status === "applying"} className="button" disabled={status === "applying"} onClick={applyImport} type="button">
-                {status === "applying" ? "Applying..." : "Apply import"}
+            {result.applied ? null : applyArmed ? (
+              <div className="hero-actions" style={{ marginTop: 0 }}>
+                <button aria-busy={status === "applying"} className="button" disabled={status === "applying"} onClick={applyImport} type="button">
+                  {status === "applying" ? "Applying..." : "Confirm apply - replaces matching records"}
+                </button>
+                <button className="button-secondary" disabled={status === "applying"} onClick={() => setApplyArmed(false)} type="button">
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <button className="button" disabled={requestInProgress} onClick={() => setApplyArmed(true)} type="button">
+                Apply import
               </button>
             )}
             {result.applied ? (
@@ -469,6 +486,16 @@ function readLocalJson<T>(key: string): T | undefined {
     return JSON.parse(value) as T;
   } catch {
     return undefined;
+  }
+}
+
+async function parseImportResponse(response: Response): Promise<ImportResponse> {
+  const text = await response.text();
+
+  try {
+    return JSON.parse(text) as ImportResponse;
+  } catch {
+    throw new Error("The import service returned an unexpected response.");
   }
 }
 

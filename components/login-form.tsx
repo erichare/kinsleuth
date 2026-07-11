@@ -11,28 +11,42 @@ export function LoginForm({ nextPath, authRequired }: { nextPath: string; authRe
     event.preventDefault();
     setStatus("loading");
 
-    const response = await fetch("/api/auth/login", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ password, next: nextPath })
-    });
+    try {
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ password, next: nextPath })
+      });
 
-    if (!response.ok) {
+      if (!response.ok) {
+        setStatus("error");
+        return;
+      }
+
+      const body = (await response.json().catch(() => null)) as { next?: string } | null;
+      window.location.assign(body?.next || "/app");
+    } catch {
       setStatus("error");
-      return;
     }
-
-    const body = (await response.json()) as { next?: string };
-    window.location.assign(body.next || "/app");
   }
 
   async function openWithoutPassword() {
-    await fetch("/api/auth/login", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ next: nextPath })
-    });
-    window.location.assign(nextPath);
+    try {
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ next: nextPath })
+      });
+
+      if (!response.ok) {
+        setStatus("error");
+        return;
+      }
+
+      window.location.assign(nextPath);
+    } catch {
+      setStatus("error");
+    }
   }
 
   if (!authRequired) {
@@ -42,6 +56,11 @@ export function LoginForm({ nextPath, authRequired }: { nextPath: string; authRe
           Open workspace
         </button>
         <Status tone="warning">Password not configured</Status>
+        {status === "error" ? (
+          <span aria-atomic="true" role="alert">
+            <Status tone="danger">Could not open the workspace. Try again.</Status>
+          </span>
+        ) : null}
       </div>
     );
   }
