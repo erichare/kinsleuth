@@ -1,5 +1,39 @@
 import Link from "next/link";
+import { Icons } from "@/components/icons";
 import { PublicShell } from "@/components/public-shell";
+
+const steps = [
+  {
+    title: "Start Postgres and the app",
+    detail: "Copy .env.example to .env, run `docker compose up -d postgres`, then `npm run dev`. The first read seeds a synthetic demo archive.",
+    action: null
+  },
+  {
+    title: "Protect the private workspace",
+    detail: "Set KINSLEUTH_APP_PASSWORD plus a long AUTH_SECRET in .env to require a password for /app pages and private APIs.",
+    action: null
+  },
+  {
+    title: "Name your archive",
+    detail: "Set the archive name and tagline that appear across the workspace and the public site.",
+    action: { href: "/app/settings", label: "Open Settings" }
+  },
+  {
+    title: "Import your GEDCOM",
+    detail: "Preview the diff first — new, changed, and removed records are shown before anything is applied, and a pre-import snapshot is kept.",
+    action: { href: "/app/imports", label: "Open Imports" }
+  },
+  {
+    title: "Connect an AI provider (optional)",
+    detail: "Set AI_BASE_URL and AI_API_KEY for provider-backed analysis. Deterministic structural checks run without any key.",
+    action: { href: "/app/ai", label: "Open AI Analyst" }
+  },
+  {
+    title: "Review before publishing",
+    detail: "Everything imports as private. Use Publishing and Reports to find blockers before making any profile public.",
+    action: { href: "/app/publishing", label: "Open Publishing" }
+  }
+];
 
 export default function SetupPage() {
   return (
@@ -7,53 +41,28 @@ export default function SetupPage() {
       <div className="page-wrap">
         <section className="page-title section">
           <h1>First-run setup</h1>
-          <p>Create the owner account, name the archive, import a GEDCOM, configure privacy defaults, and connect an OpenAI-compatible AI provider.</p>
+          <p>KinSleuth is configured through environment variables and the private workspace — this checklist walks through a fresh installation.</p>
         </section>
-        <section className="grid-2">
-          <div className="panel">
-            <h2>Archive basics</h2>
-            <div className="form-grid">
-              <label className="field">
-                <span>Archive name</span>
-                <input defaultValue="Riemer - Zajicek Archive" />
-              </label>
-              <label className="field">
-                <span>Accent color</span>
-                <input defaultValue="#00634f" />
-              </label>
-              <label className="field">
-                <span>Owner email</span>
-                <input defaultValue="owner@example.com" />
-              </label>
-              <label className="field">
-                <span>Living-person rule</span>
-                <select defaultValue="conservative-100">
-                  <option value="conservative-100">Conservative 100 year rule</option>
-                </select>
-              </label>
-            </div>
-          </div>
-          <div className="panel">
-            <h2>Import and AI</h2>
-            <div className="form-grid" style={{ gridTemplateColumns: "1fr" }}>
-              <label className="field">
-                <span>GEDCOM file</span>
-                <input type="file" />
-              </label>
-              <label className="field">
-                <span>AI base URL</span>
-                <input defaultValue="https://api.openai.com/v1" />
-              </label>
-              <label className="field">
-                <span>Chat model</span>
-                <input defaultValue="gpt-5-mini" />
-              </label>
-            </div>
-            <div className="hero-actions">
-              <Link className="button" href="/app/imports">
-                Continue to imports
-              </Link>
-            </div>
+        <section className="section">
+          <div className="evidence-list">
+            {steps.map((step, index) => (
+              <div className="panel" key={step.title} style={{ display: "flex", justifyContent: "space-between", gap: 16, alignItems: "center" }}>
+                <div>
+                  <strong>
+                    {index + 1}. {step.title}
+                  </strong>
+                  <p className="muted" style={{ margin: "6px 0 0" }}>
+                    {step.detail}
+                  </p>
+                </div>
+                {step.action ? (
+                  <Link className="button-secondary" href={step.action.href} style={{ flexShrink: 0 }}>
+                    {step.action.label}
+                    <Icons.ChevronRight size={16} aria-hidden />
+                  </Link>
+                ) : null}
+              </div>
+            ))}
           </div>
         </section>
       </div>

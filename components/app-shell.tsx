@@ -70,7 +70,7 @@ export function AppShell({
   active = "/app",
   title,
   actions,
-  archiveName = "Riemer - Zajicek"
+  archiveName = "Private archive"
 }: {
   children: React.ReactNode;
   active?: string;
@@ -116,7 +116,7 @@ export function AppShell({
         <div className="app-topbar">
           <div>
             <h1>{title}</h1>
-            <div className="muted">{archiveName} Archive</div>
+            <div className="muted">{archiveName}</div>
           </div>
           {actions ? <div className="app-topbar-actions">{actions}</div> : null}
         </div>

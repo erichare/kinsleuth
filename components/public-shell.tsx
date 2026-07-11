@@ -21,7 +21,7 @@ function PublicLinks({ active, className, label }: { active?: string; className:
   );
 }
 
-export function PublicShell({ children, active }: { children: React.ReactNode; active?: string }) {
+export function PublicShell({ children, active, tagline }: { children: React.ReactNode; active?: string; tagline?: string }) {
   return (
     <div className="public-shell">
       <header className="public-header">
@@ -32,7 +32,7 @@ export function PublicShell({ children, active }: { children: React.ReactNode; a
             </span>
             <span>
               KinSleuth
-              <small>Family history. Openly shared.</small>
+              <small>{tagline || "Family history. Openly shared."}</small>
             </span>
           </Link>
           <PublicLinks active={active} className="nav-links" label="Public navigation" />

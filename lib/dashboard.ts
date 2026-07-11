@@ -98,7 +98,7 @@ function actionFromPublicationBlocker(blocker: PublicationBlocker): DashboardAct
   };
 }
 
-function countSourceReferences(workspace: WorkspaceData): number {
+export function countSourceReferences(workspace: WorkspaceData): number {
   const factSourceCount = workspace.people.reduce((count, person) => count + person.facts.filter((fact) => fact.source?.trim()).length, 0);
   return factSourceCount + workspace.sources.length;
 }

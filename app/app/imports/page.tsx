@@ -10,7 +10,7 @@ export default async function ImportsPage() {
   const workspace = await readWorkspace();
 
   return (
-    <AppShell title="GEDCOM Imports" active="/app/imports">
+    <AppShell title="GEDCOM Imports" active="/app/imports" archiveName={workspace.archiveName}>
       <div className="app-grid">
         <div className="app-card">
           <h2>Applied imports</h2>
@@ -61,38 +61,6 @@ export default async function ImportsPage() {
           </div>
         </aside>
       </div>
-
-      <section className="app-card" style={{ marginTop: 20, marginBottom: 20 }}>
-        <h2>Diff review</h2>
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Status</th>
-              <th>Record</th>
-              <th>Type</th>
-              <th>Change</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>
-                <Status>Added</Status>
-              </td>
-              <td>@I20437801951@</td>
-              <td>INDI</td>
-              <td>New source citation and event note preserved from Ancestry export.</td>
-            </tr>
-            <tr>
-              <td>
-                <Status tone="warning">Changed</Status>
-              </td>
-              <td>@F2545@</td>
-              <td>FAM</td>
-              <td>Relationship xref changed; curated overlay requires review.</td>
-            </tr>
-          </tbody>
-        </table>
-      </section>
 
       <ImportPreviewWorkspace />
     </AppShell>

@@ -13,7 +13,7 @@ export default async function AIPage() {
   const anomalies = findStructuredAnomalies(workspace.people);
 
   return (
-    <AppShell title="AI Analyst" active="/app/ai">
+    <AppShell title="AI Analyst" active="/app/ai" archiveName={workspace.archiveName}>
       <AIAnalystWorkspace
         initialQuestion={initialQuestion}
         cases={workspace.cases}

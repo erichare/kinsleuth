@@ -3,7 +3,7 @@ import Image from "next/image";
 import { Icons } from "@/components/icons";
 import { PublicShell } from "@/components/public-shell";
 import { Status, TableScroll } from "@/components/ui";
-import { archiveStats } from "@/lib/demo-data";
+import { countSourceReferences } from "@/lib/dashboard";
 import { canPublishPerson, publicFactFilter } from "@/lib/privacy";
 import { readWorkspace } from "@/lib/workspace-store";
 
@@ -19,12 +19,12 @@ export default async function HomePage() {
     }));
 
   return (
-    <PublicShell active="/">
+    <PublicShell active="/" tagline={workspace.archiveTagline}>
       <div className="page-wrap">
         <section className="hero">
           <div>
             <span className="eyebrow">Public family archive</span>
-            <h1>Riemer - Zajicek Archive</h1>
+            <h1>{workspace.archiveName}</h1>
             <p>A curated family-history archive for published ancestor profiles, places, stories, and selected citations. Private research, DNA triage, and living-person details stay protected.</p>
             <div className="hero-actions">
               <Link className="button" href="/people">
@@ -105,17 +105,17 @@ export default async function HomePage() {
             <div className="archive-stat-grid">
               <div className="archive-stat">
                 <Icons.Users size={18} aria-hidden />
-                <strong>{archiveStats.people.toLocaleString()}</strong>
+                <strong>{workspace.people.length.toLocaleString()}</strong>
                 <div className="muted">people imported</div>
               </div>
               <div className="archive-stat">
                 <Icons.Database size={18} aria-hidden />
-                <strong>{archiveStats.sources.toLocaleString()}</strong>
-                <div className="muted">sources</div>
+                <strong>{workspace.sources.length.toLocaleString()}</strong>
+                <div className="muted">source documents</div>
               </div>
               <div className="archive-stat">
                 <Icons.BookOpen size={18} aria-hidden />
-                <strong>{archiveStats.citations.toLocaleString()}</strong>
+                <strong>{countSourceReferences(workspace).toLocaleString()}</strong>
                 <div className="muted">citations</div>
               </div>
             </div>

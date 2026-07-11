@@ -26,6 +26,7 @@ export default async function PublishingPage({ searchParams }: { searchParams: P
     <AppShell
       title="Publishing Review"
       active="/app/publishing"
+      archiveName={workspace.archiveName}
       actions={
         <Link className="button-secondary" href="/people">
           <Icons.BookOpen size={16} aria-hidden />
@@ -34,7 +35,7 @@ export default async function PublishingPage({ searchParams }: { searchParams: P
       }
     >
       <div className="metric-row">
-        <Metric label="Publishing score" value={`${review.score}%`} detail="demo readiness" />
+        <Metric label="Publishing score" value={`${review.score}%`} detail="overall readiness" />
         <Metric label="Ready" value={review.summary.ready} detail="safe to publish" />
         <Metric label="Needs review" value={review.summary.needsReview} detail={`${review.summary.warningCount} warnings`} />
         <Metric label="Blocked" value={review.summary.blocked} detail={`${review.summary.blockerCount} blockers`} />
@@ -149,7 +150,7 @@ export default async function PublishingPage({ searchParams }: { searchParams: P
             </tbody>
           </table>
         ) : (
-          <p className="muted">No blocking publication issues found in the current demo set.</p>
+          <p className="muted">No blocking publication issues found in this archive.</p>
         )}
         <div className="table-footer-row">
           <p className="muted">
