@@ -1,12 +1,13 @@
 import Link from "next/link";
 import { LoginForm } from "@/components/login-form";
 import { PublicShell } from "@/components/public-shell";
+import { safeInternalPath } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ next?: string }> }) {
   const params = await searchParams;
-  const nextPath = params.next?.startsWith("/") && !params.next.startsWith("//") ? params.next : "/app";
+  const nextPath = safeInternalPath(params.next);
   const authRequired = Boolean(process.env.KINSLEUTH_APP_PASSWORD);
 
   return (

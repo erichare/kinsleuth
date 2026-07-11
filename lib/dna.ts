@@ -39,10 +39,14 @@ export function scoreDnaMatch(match: DnaMatch): number {
 
 export function createDnaConnectionHypothesis(match: DnaMatch, people: PersonSummary[]): DnaConnectionHypothesis {
   const ranges = plausibleRelationships(match.totalCm);
-  const bestRange = ranges[0] ?? relationshipRanges[relationshipRanges.length - 1];
-  const surnameHits = people.filter((person) => person.surname && match.surnames.includes(person.surname));
+  // When no range matches, the shared cM exceeded every range's ceiling, so
+  // fall back to the closest relationship rather than the most distant one.
+  const bestRange = ranges[0] ?? (match.totalCm > relationshipRanges[0].maxCm ? relationshipRanges[0] : relationshipRanges[relationshipRanges.length - 1]);
+  const matchSurnames = new Set(match.surnames.map((surname) => surname.trim().toLowerCase()).filter(Boolean));
+  const matchPlaces = match.places.map((place) => place.trim().toLowerCase()).filter(Boolean);
+  const surnameHits = people.filter((person) => person.surname && matchSurnames.has(person.surname.trim().toLowerCase()));
   const placeHits = people.filter((person) =>
-    match.places.some((place) => [person.birthPlace, person.deathPlace].filter(Boolean).some((personPlace) => personPlace?.includes(place)))
+    matchPlaces.some((place) => [person.birthPlace, person.deathPlace].filter(Boolean).some((personPlace) => personPlace?.toLowerCase().includes(place)))
   );
   const candidates = unique([...surnameHits, ...placeHits])
     .slice(0, 5)

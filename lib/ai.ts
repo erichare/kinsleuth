@@ -78,10 +78,13 @@ export function findStructuredAnomalies(people: PersonSummary[]): StructuredAnom
   const anomalies: StructuredAnomaly[] = [];
 
   for (const person of people) {
-    if (person.published && person.livingStatus === "living") {
+    if (person.published && person.livingStatus !== "deceased") {
       anomalies.push({
         type: "privacy_risk",
-        title: `${person.displayName} appears published while living`,
+        title:
+          person.livingStatus === "living"
+            ? `${person.displayName} appears published while living`
+            : `${person.displayName} is marked published without confirmed death evidence`,
         severity: "high",
         evidence: [`livingStatus=${person.livingStatus}`, `privacy=${person.privacy}`]
       });

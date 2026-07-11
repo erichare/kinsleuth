@@ -25,6 +25,14 @@ describe("DNA CSV import mapping", () => {
     });
   });
 
+  it("classifies unlinked trees as partial rather than public", () => {
+    const csv = "Name,cM,Tree\nUnlinked Match,120,Unlinked tree\nLinked Match,130,Linked public tree";
+    const result = mapDnaCsvRows(parseCsvRows(csv));
+
+    expect(result.matches[0]).toMatchObject({ displayName: "Unlinked Match", treeStatus: "partial" });
+    expect(result.matches[1]).toMatchObject({ displayName: "Linked Match", treeStatus: "public" });
+  });
+
   it("reports skipped rows without rejecting valid rows", () => {
     const csv = "Name,cM,Tree\nNo cM,,public\nValid Match,61,Public linked tree";
     const result = mapDnaCsvRows(parseCsvRows(csv));
