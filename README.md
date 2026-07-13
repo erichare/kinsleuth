@@ -4,7 +4,7 @@
 
 **Self-hosted genealogy research workspace — a private investigation lab paired with a curated public family archive.**
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-2e7d32.svg)](LICENSE)
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-2e7d32.svg)](LICENSE)
 [![Next.js 16](https://img.shields.io/badge/Next.js-16-black?logo=next.js)](https://nextjs.org)
 [![React 19](https://img.shields.io/badge/React-19-149eca?logo=react&logoColor=white)](https://react.dev)
 [![Postgres + pgvector](https://img.shields.io/badge/Postgres-pgvector-336791?logo=postgresql&logoColor=white)](https://github.com/pgvector/pgvector)
@@ -133,7 +133,7 @@ Compose provisions Postgres with pgvector and MinIO-compatible object storage al
 | `CRON_SECRET` | Bearer token for the daily stale-upload cleanup job |
 | `AI_BASE_URL` / `AI_API_KEY` | OpenAI-compatible provider; deterministic fallback runs without a key |
 | `AI_API_MODE` | `responses` (default) or `chat` |
-| `AI_CHAT_MODEL` / `AI_EMBEDDING_MODEL` | Model names for analysis and pgvector retrieval |
+| `AI_CHAT_MODEL` / `AI_EMBEDDING_MODEL` | Chat model for analysis; the embedding model is reserved for planned pgvector retrieval (not implemented yet) |
 | `APP_BASE_URL` | Base URL of the running app |
 | `S3_*` | Reserved for object-storage-backed source uploads |
 
@@ -201,8 +201,10 @@ KinSleuth is a working vertical slice suited to local/self-hosted beta use — n
 - General source-file uploads still target local disk; wire object storage before production use of file attachments.
 - ANSEL-encoded GEDCOM files are decoded on a best-effort basis (UTF-8, UTF-16, and Windows-1252 are handled properly).
 - Importing two *unrelated* GEDCOM files can collide on xref-derived record ids; curation flags are protected from cross-person leaks, but the second import replaces colliding records. Re-imports of the same tree merge as intended.
-- Background jobs, semantic-index refreshes, and role management are still evolving.
+- There is no GEDCOM export yet — imports are one-way until the exporter ships.
+- Semantic (pgvector) retrieval is planned but not implemented; the embeddings table is provisioned and unused.
+- Background jobs, per-user accounts, and enforced role management are still evolving.
 
 ## License
 
-[MIT](LICENSE)
+KinSleuth is free software licensed under the [GNU Affero General Public License v3.0](LICENSE) (AGPL-3.0-only). You may self-host, modify, and redistribute it under the AGPL's terms; if you run a modified version as a network service, the AGPL requires you to offer its source to users of that service. See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution terms.
