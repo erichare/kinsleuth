@@ -84,7 +84,7 @@ Workspace records live in Postgres. To reset local demo data, use a disposable l
 | `AI_API_KEY` / `OPENAI_API_KEY` | Optional; provider-backed AI runs when present, deterministic fallback runs without it |
 | `AI_API_MODE` | `responses` by default; set `chat` for chat-completions-compatible providers |
 | `AI_CHAT_MODEL` | Chat model name for provider-backed analysis |
-| `AI_EMBEDDING_MODEL` | Embedding model name for pgvector-backed semantic retrieval |
+| `AI_EMBEDDING_MODEL` | Reserved for planned pgvector-backed semantic retrieval; embeddings are not generated or queried yet |
 
 ## Docker Compose
 
@@ -146,4 +146,8 @@ Before publishing real data, review `/app/publishing` and `/app/reports`, then i
 
 ## Current status
 
-KinSleuth is an early vertical slice, not a production genealogy platform. The main workflows are functional enough for local/self-hosted beta exploration, and runtime persistence now uses Postgres. Background jobs, object-storage integration, semantic indexing refreshes, role management, and production deployment hardening are still evolving.
+KinSleuth is an early vertical slice, not a production genealogy platform. The main workflows are functional enough for local/self-hosted beta exploration, and runtime persistence now uses Postgres. Known gaps that are on the roadmap but not yet built: GEDCOM export, semantic (pgvector) retrieval, background job processing, S3/MinIO-backed uploads, enforced role management and per-user accounts, restorable backups, and multi-archive hosting. Treat single-editor use as the supported mode; concurrent editing of the same archive can lose updates.
+
+## License
+
+KinSleuth is free software licensed under the [GNU Affero General Public License v3.0](LICENSE) (AGPL-3.0-only). You may self-host, modify, and redistribute it under the AGPL's terms; if you run a modified version as a network service, the AGPL requires you to offer its source to users of that service. See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution terms.
