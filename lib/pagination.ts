@@ -15,7 +15,9 @@ export type PaginationResult<T> = {
 
 export type SearchParamValue = string | string[] | null | undefined;
 
-export function paginateItems<T>(items: T[], input: PaginationInput, maxPageSize = 500): PaginationResult<T> {
+export const maximumPageSize = 500;
+
+export function paginateItems<T>(items: T[], input: PaginationInput, maxPageSize = maximumPageSize): PaginationResult<T> {
   const pageSize = clampInteger(input.pageSize, 1, maxPageSize);
   const pageCount = Math.max(1, Math.ceil(items.length / pageSize));
   const page = clampInteger(input.page, 1, pageCount);

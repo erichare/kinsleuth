@@ -3,30 +3,26 @@ import Link from "next/link";
 import { Icons } from "@/components/icons";
 import { PublicShell } from "@/components/public-shell";
 import { Confidence, EmptyState, PersonMonogram, Status, TableScroll } from "@/components/ui";
-import type { PersonSummary } from "@/lib/models";
-import { canPublishPerson, publicFactFilter } from "@/lib/privacy";
-import { readWorkspace } from "@/lib/workspace-store";
+import { publicFactFilter } from "@/lib/privacy";
+import { getPublicPersonBySlug, readArchiveBranding } from "@/lib/store/people-queries";
 
 export const dynamic = "force-dynamic";
 
 export default async function PublicPersonPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const workspace = await readWorkspace();
-  const person = workspace.people.find((item) => item.slug === slug && item.published && canPublishPerson(item));
+  const [branding, loaded] = await Promise.all([readArchiveBranding(), getPublicPersonBySlug(slug)]);
 
-  if (!person) {
+  if (!loaded) {
     notFound();
   }
 
+  const { person, publishedRelatives: publicRelatives } = loaded;
   const publicFacts = person.facts.filter(publicFactFilter);
   const publicBirth = publicFacts.find((fact) => isFactType(fact.type, "BIRT", "Birth"));
   const profileConfidence = averageConfidence(publicFacts);
-  const publicRelatives = person.relatives
-    .map((relativeId) => workspace.people.find((item) => item.id === relativeId && item.published && canPublishPerson(item)))
-    .filter((relative): relative is PersonSummary => Boolean(relative));
 
   return (
-    <PublicShell active="/people" tagline={workspace.archiveTagline}>
+    <PublicShell active="/people" tagline={branding.tagline}>
       <div className="page-wrap">
         <div className="profile-page-actions">
           <Link className="button-secondary" href="/people">

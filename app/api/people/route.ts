@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { searchPeoplePage, type PeopleLivingFilter, type PeoplePrivacyFilter, type PeoplePublicationFilter, type PeopleSortKey } from "@/lib/people-search";
+import { type PeopleLivingFilter, type PeoplePrivacyFilter, type PeoplePublicationFilter, type PeopleSortKey } from "@/lib/people-search";
 import { parsePositiveInteger } from "@/lib/pagination";
-import { readWorkspace } from "@/lib/workspace-store";
+import { searchPeoplePageFromDb } from "@/lib/store/people-queries";
 
 export const dynamic = "force-dynamic";
 
@@ -11,12 +11,10 @@ const livingValues = new Set<PeopleLivingFilter>(["all", "living", "deceased", "
 const sortValues = new Set<PeopleSortKey>(["name", "birth", "death", "facts"]);
 
 export async function GET(request: Request) {
-  const workspace = await readWorkspace();
   const url = new URL(request.url);
 
   return NextResponse.json(
-    searchPeoplePage(
-      workspace.people,
+    await searchPeoplePageFromDb(
       {
         query: url.searchParams.get("query") ?? "",
         publication: parseEnum(url.searchParams.get("publication"), publicationValues, "all"),

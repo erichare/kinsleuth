@@ -24,8 +24,13 @@ calling `createCase`, `addCaseTask`, `saveDnaMatch`, etc. Internally each mutato
 3. Writes only the rows it changes with targeted `INSERT ... ON CONFLICT (archive_id, id)
    DO UPDATE` / `UPDATE` / `DELETE` statements.
 
-`readWorkspace()` (full load) still exists for pages and for GEDCOM export; moving
-search/filter/pagination into SQL is a separate, later slice.
+`readWorkspace()` (full load) still exists for pages that genuinely need the whole
+workspace and for GEDCOM export. The hottest read paths use scoped SQL instead:
+people search/filter/sort/pagination and the public people pages run targeted
+queries in `lib/store/people-queries.ts` (accent-insensitive matching via the
+`unaccent` extension, migration 002), with `ensureWorkspaceSeeded` preserving
+first-touch demo seeding. Remaining surfaces (dashboard, reports, sources, DNA)
+move over in later slices.
 
 ## Ordering without renumbering
 

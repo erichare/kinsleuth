@@ -1,16 +1,17 @@
 import { AppShell } from "@/components/app-shell";
 import { PeopleWorkspace } from "@/components/people-workspace";
-import { searchPeoplePage } from "@/lib/people-search";
-import { readWorkspace } from "@/lib/workspace-store";
+import { readArchiveBranding, searchPeoplePageFromDb } from "@/lib/store/people-queries";
 
 export const dynamic = "force-dynamic";
 
 export default async function AppPeoplePage() {
-  const workspace = await readWorkspace();
-  const initialResult = searchPeoplePage(workspace.people, { sort: "name" }, { page: 1, pageSize: 50 });
+  const [branding, initialResult] = await Promise.all([
+    readArchiveBranding(),
+    searchPeoplePageFromDb({ sort: "name" }, { page: 1, pageSize: 50 })
+  ]);
 
   return (
-    <AppShell title="People" active="/app/people" archiveName={workspace.archiveName}>
+    <AppShell title="People" active="/app/people" archiveName={branding.name}>
       <PeopleWorkspace initialResult={initialResult} />
     </AppShell>
   );

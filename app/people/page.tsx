@@ -2,17 +2,16 @@ import Link from "next/link";
 import { Icons } from "@/components/icons";
 import { PublicShell } from "@/components/public-shell";
 import { Confidence, EmptyState, PersonMonogram, Status, TableScroll } from "@/components/ui";
-import { canPublishPerson, publicFactFilter } from "@/lib/privacy";
-import { readWorkspace } from "@/lib/workspace-store";
+import { publicFactFilter } from "@/lib/privacy";
+import { listPublicPeople, readArchiveBranding } from "@/lib/store/people-queries";
 
 export const dynamic = "force-dynamic";
 
 export default async function PeoplePage() {
-  const workspace = await readWorkspace();
-  const publishedPeople = workspace.people.filter((person) => person.published && canPublishPerson(person));
+  const [branding, publishedPeople] = await Promise.all([readArchiveBranding(), listPublicPeople()]);
 
   return (
-    <PublicShell active="/people" tagline={workspace.archiveTagline}>
+    <PublicShell active="/people" tagline={branding.tagline}>
       <div className="page-wrap">
         <section className="page-title section">
           <h1>Published People</h1>

@@ -126,6 +126,21 @@ export async function readWorkspace(options: WorkspaceStoreOptions = {}): Promis
   });
 }
 
+// Guarantees the archive exists (seeding the demo workspace on first touch)
+// without loading it. Scoped SQL readers use this instead of readWorkspace so
+// first-visit behavior stays identical while hot paths skip the full load.
+export async function ensureWorkspaceSeeded(options: WorkspaceStoreOptions = {}): Promise<void> {
+  const archiveId = getArchiveId(options);
+
+  await withTransaction(options, async (client) => {
+    const archive = await client.query<{ id: string }>("SELECT id FROM archives WHERE id = $1", [archiveId]);
+    if (archive.rowCount === 0 && !(await claimAndSeedArchive(client, archiveId))) {
+      // Another transaction is seeding; wait for its commit before returning.
+      await client.query("SELECT id FROM archives WHERE id = $1 FOR SHARE", [archiveId]);
+    }
+  });
+}
+
 export async function writeWorkspace(workspace: WorkspaceData, options: WorkspaceStoreOptions = {}): Promise<WorkspaceData> {
   const archiveId = getArchiveId(options);
   const next = normalizeWorkspaceData({
