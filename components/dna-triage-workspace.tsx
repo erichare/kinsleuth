@@ -1,11 +1,22 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Icons } from "@/components/icons";
-import { filterDnaMatches, paginateDnaMatches, type DnaHelpfulnessFilter, type DnaSideFilter, type DnaSortKey, type DnaStatusFilter, type DnaTreeFilter, type ScoredDnaMatch } from "@/lib/dna-search";
+import type {
+  DnaCaseOption,
+  DnaHelpfulnessFilter,
+  DnaSearchResult,
+  DnaSideFilter,
+  DnaSortKey,
+  DnaStatusFilter,
+  DnaTreeFilter,
+  ScoredDnaMatch
+} from "@/lib/dna-search";
 import type { DnaConnectionHypothesis, DnaMatch, ResearchCase } from "@/lib/models";
 import { Confidence, Metric, Status, TableScroll } from "./ui";
+
+type DnaMatchesResponse = DnaSearchResult & { hypotheses?: DnaConnectionHypothesis[] };
 
 type DnaAnalysisResponse = {
   helpfulnessScore: number;
@@ -34,9 +45,9 @@ type CaseEvidenceResponse = {
 };
 
 type Props = {
-  initialMatches: ScoredDnaMatch[];
+  initialResult: DnaSearchResult;
   initialHypotheses?: DnaConnectionHypothesis[];
-  initialCases: ResearchCase[];
+  initialCases: DnaCaseOption[];
 };
 
 type MatchEditForm = {
@@ -70,15 +81,15 @@ const defaultForm = {
 
 const pageSizeOptions = [10, 25, 50, 100];
 
-export function DnaTriageWorkspace({ initialMatches, initialHypotheses = [], initialCases }: Props) {
-  const [matches, setMatches] = useState(initialMatches);
-  const [cases, setCases] = useState(initialCases);
+export function DnaTriageWorkspace({ initialResult, initialHypotheses = [], initialCases }: Props) {
+  const [result, setResult] = useState(initialResult);
   const [hypotheses, setHypotheses] = useState(() => indexHypotheses(initialHypotheses));
-  const [selectedMatchId, setSelectedMatchId] = useState(initialMatches[0]?.id ?? "");
+  const [selected, setSelected] = useState<ScoredDnaMatch | undefined>(initialResult.items[0]);
   const [form, setForm] = useState(defaultForm);
-  const [editForm, setEditForm] = useState<MatchEditForm>(() => createEditForm(initialMatches[0]));
-  const [linkForm, setLinkForm] = useState<CaseLinkForm>(() => createCaseLinkForm(initialMatches[0], initialCases[0]?.id ?? ""));
+  const [editForm, setEditForm] = useState<MatchEditForm>(() => createEditForm(initialResult.items[0]));
+  const [linkForm, setLinkForm] = useState<CaseLinkForm>(() => createCaseLinkForm(initialResult.items[0], initialCases[0]?.id ?? ""));
   const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<DnaStatusFilter>("all");
   const [sideFilter, setSideFilter] = useState<DnaSideFilter>("all");
   const [treeFilter, setTreeFilter] = useState<DnaTreeFilter>("all");
@@ -86,6 +97,8 @@ export function DnaTriageWorkspace({ initialMatches, initialHypotheses = [], ini
   const [sort, setSort] = useState<DnaSortKey>("helpfulness");
   const [pageSize, setPageSize] = useState(25);
   const [page, setPage] = useState(1);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [fetchError, setFetchError] = useState("");
   const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
   const [error, setError] = useState("");
   const [importFile, setImportFile] = useState<File | null>(null);
@@ -97,29 +110,10 @@ export function DnaTriageWorkspace({ initialMatches, initialHypotheses = [], ini
   const [linkStatus, setLinkStatus] = useState<"idle" | "saving" | "error" | "success">("idle");
   const [linkMessage, setLinkMessage] = useState("");
 
-  const filteredMatches = useMemo(
-    () =>
-      filterDnaMatches(matches, {
-        query,
-        status: statusFilter,
-        side: sideFilter,
-        treeStatus: treeFilter,
-        helpfulness: helpfulnessFilter,
-        sort
-      }),
-    [matches, query, statusFilter, sideFilter, treeFilter, helpfulnessFilter, sort]
-  );
-  const pagination = useMemo(() => paginateDnaMatches(filteredMatches, page, pageSize), [filteredMatches, page, pageSize]);
-  const resultSummary = `Showing ${pagination.start.toLocaleString()}-${pagination.end.toLocaleString()} of ${pagination.total.toLocaleString()}`;
+  const resultSummary = `Showing ${result.start.toLocaleString()}-${result.end.toLocaleString()} of ${result.total.toLocaleString()}`;
   const [announcedResultSummary, setAnnouncedResultSummary] = useState(resultSummary);
-  const selectedMatch = useMemo(
-    () => matches.find((match) => match.id === selectedMatchId) ?? pagination.items[0] ?? matches[0],
-    [matches, pagination.items, selectedMatchId]
-  );
-  const selectedMatchIdRef = useRef(selectedMatch?.id ?? "");
-  const hypothesis = selectedMatch ? hypotheses[selectedMatch.id] ?? createFallbackHypothesis(selectedMatch) : createFallbackHypothesis();
-  const highPriorityCount = useMemo(() => matches.filter((match) => match.triageStatus === "high_priority").length, [matches]);
-  const needsReviewCount = useMemo(() => matches.filter((match) => match.triageStatus === "needs_review").length, [matches]);
+  const selectedMatchIdRef = useRef(initialResult.items[0]?.id ?? "");
+  const hypothesis = selected ? hypotheses[selected.id] ?? createFallbackHypothesis(selected) : createFallbackHypothesis();
 
   useEffect(() => {
     const timeout = window.setTimeout(() => setAnnouncedResultSummary(resultSummary), 400);
@@ -127,22 +121,99 @@ export function DnaTriageWorkspace({ initialMatches, initialHypotheses = [], ini
   }, [resultSummary]);
 
   useEffect(() => {
-    selectedMatchIdRef.current = selectedMatch?.id ?? "";
-  }, [selectedMatch]);
+    const timeout = window.setTimeout(() => setDebouncedQuery(query), 250);
+    return () => window.clearTimeout(timeout);
+  }, [query]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    async function loadMatches() {
+      try {
+        const response = await fetch(
+          buildDnaApiPath({
+            query: debouncedQuery,
+            status: statusFilter,
+            side: sideFilter,
+            treeStatus: treeFilter,
+            helpfulness: helpfulnessFilter,
+            sort,
+            page,
+            pageSize
+          }),
+          { signal: controller.signal }
+        );
+
+        if (!response.ok) {
+          throw new Error("DNA match search failed");
+        }
+
+        const body = (await response.json()) as DnaMatchesResponse;
+        setResult(body);
+        setHypotheses((current) => ({ ...current, ...indexHypotheses(body.hypotheses ?? []) }));
+        // Keep the current selection when it merely paged out of view; refresh
+        // its data when the new page contains it; fall back to the first row
+        // only when nothing is selected (initial load or post-delete).
+        setSelected((current) => {
+          const fresh = current ? body.items.find((item) => item.id === current.id) : undefined;
+          return fresh ?? current ?? body.items[0];
+        });
+        setFetchError("");
+      } catch (requestError) {
+        if (!controller.signal.aborted) {
+          setFetchError(requestError instanceof Error ? requestError.message : "DNA match search failed");
+        }
+      }
+    }
+
+    void loadMatches();
+    return () => controller.abort();
+  }, [debouncedQuery, statusFilter, sideFilter, treeFilter, helpfulnessFilter, sort, page, pageSize, refreshKey]);
+
+  // Explicit row clicks reset the forms in selectMatch (and update the ref
+  // first), so this only reacts to implicit selection changes coming from the
+  // fetch reconciliation above.
+  useEffect(() => {
+    if (selectedMatchIdRef.current === (selected?.id ?? "")) {
+      return;
+    }
+    selectedMatchIdRef.current = selected?.id ?? "";
+    setEditForm(createEditForm(selected));
+    setLinkForm((current) => createCaseLinkForm(selected, current.caseId || initialCases[0]?.id || ""));
+    setEditStatus("idle");
+    setEditMessage("");
+    setLinkStatus("idle");
+    setLinkMessage("");
+  }, [selected, initialCases]);
 
   function resetPaging() {
     setPage(1);
   }
 
+  function refreshMatches() {
+    setRefreshKey((current) => current + 1);
+  }
+
   function selectMatch(match: ScoredDnaMatch) {
     selectedMatchIdRef.current = match.id;
-    setSelectedMatchId(match.id);
+    setSelected(match);
     setEditForm(createEditForm(match));
-    setLinkForm(createCaseLinkForm(match, linkForm.caseId || cases[0]?.id || ""));
+    setLinkForm((current) => createCaseLinkForm(match, current.caseId || initialCases[0]?.id || ""));
     setEditStatus("idle");
     setEditMessage("");
     setLinkStatus("idle");
     setLinkMessage("");
+  }
+
+  function upsertHypotheses(incoming: DnaConnectionHypothesis[]) {
+    if (incoming.length === 0) {
+      return;
+    }
+
+    setHypotheses((current) => ({
+      ...current,
+      ...indexHypotheses(incoming)
+    }));
   }
 
   async function analyzeMatch() {
@@ -177,11 +248,11 @@ export function DnaTriageWorkspace({ initialMatches, initialHypotheses = [], ini
         return;
       }
 
-      const result = (await response.json()) as DnaAnalysisResponse;
-      const analyzedMatch = result.match ?? { ...match, helpfulnessScore: result.helpfulnessScore };
-      upsertMatches([analyzedMatch]);
-      upsertHypotheses([result.hypothesis]);
+      const body = (await response.json()) as DnaAnalysisResponse;
+      const analyzedMatch = body.match ?? { ...match, helpfulnessScore: body.helpfulnessScore };
+      upsertHypotheses([body.hypothesis]);
       selectMatch(analyzedMatch);
+      refreshMatches();
     } catch (caught) {
       setStatus("error");
       setError(toErrorMessage(caught, "DNA analysis failed."));
@@ -219,11 +290,11 @@ export function DnaTriageWorkspace({ initialMatches, initialHypotheses = [], ini
       const importedMatches = body.matches ?? [];
       const skippedCount = body.skipped?.length ?? 0;
 
-      upsertMatches(importedMatches);
       upsertHypotheses(body.hypotheses ?? []);
       if (importedMatches[0]) {
         selectMatch(importedMatches[0]);
       }
+      refreshMatches();
       setImportFile(null);
       if (importFileInputRef.current) {
         importFileInputRef.current.value = "";
@@ -239,11 +310,11 @@ export function DnaTriageWorkspace({ initialMatches, initialHypotheses = [], ini
   }
 
   async function saveSelectedMatch() {
-    if (!selectedMatch) {
+    if (!selected) {
       return;
     }
 
-    const targetMatchId = selectedMatch.id;
+    const targetMatchId = selected.id;
     setEditStatus("saving");
     setEditMessage("");
 
@@ -270,11 +341,12 @@ export function DnaTriageWorkspace({ initialMatches, initialHypotheses = [], ini
         return;
       }
 
-      upsertMatches([body.match]);
       if (body.hypothesis) {
         upsertHypotheses([body.hypothesis]);
       }
+      refreshMatches();
       if (selectedMatchIdRef.current === targetMatchId) {
+        setSelected(body.match);
         setEditForm(createEditForm(body.match));
         setEditStatus("success");
         setEditMessage("Match updated.");
@@ -292,11 +364,11 @@ export function DnaTriageWorkspace({ initialMatches, initialHypotheses = [], ini
   }
 
   async function deleteSelectedMatch() {
-    if (!selectedMatch || !window.confirm(`Delete ${selectedMatch.displayName} from DNA matches?`)) {
+    if (!selected || !window.confirm(`Delete ${selected.displayName} from DNA matches?`)) {
       return;
     }
 
-    const targetMatchId = selectedMatch.id;
+    const targetMatchId = selected.id;
     setEditStatus("deleting");
     setEditMessage("");
 
@@ -314,13 +386,13 @@ export function DnaTriageWorkspace({ initialMatches, initialHypotheses = [], ini
         return;
       }
 
-      setMatches((current) => current.filter((match) => match.id !== targetMatchId));
+      refreshMatches();
       if (selectedMatchIdRef.current === targetMatchId) {
-        const nextSelected = matches.find((match) => match.id !== targetMatchId);
+        const nextSelected = result.items.find((match) => match.id !== targetMatchId);
         selectedMatchIdRef.current = nextSelected?.id ?? "";
-        setSelectedMatchId(nextSelected?.id ?? "");
+        setSelected(nextSelected);
         setEditForm(createEditForm(nextSelected));
-        setLinkForm(createCaseLinkForm(nextSelected, linkForm.caseId || cases[0]?.id || ""));
+        setLinkForm((current) => createCaseLinkForm(nextSelected, current.caseId || initialCases[0]?.id || ""));
         setEditStatus("success");
         setEditMessage("Match deleted.");
       }
@@ -337,13 +409,13 @@ export function DnaTriageWorkspace({ initialMatches, initialHypotheses = [], ini
   }
 
   async function linkSelectedMatchToCase() {
-    if (!selectedMatch || !linkForm.caseId) {
+    if (!selected || !linkForm.caseId) {
       setLinkStatus("error");
       setLinkMessage("Choose a case before linking evidence.");
       return;
     }
 
-    const targetMatchId = selectedMatch.id;
+    const targetMatchId = selected.id;
     setLinkStatus("saving");
     setLinkMessage("");
 
@@ -368,7 +440,6 @@ export function DnaTriageWorkspace({ initialMatches, initialHypotheses = [], ini
         return;
       }
 
-      setCases((current) => current.map((researchCase) => (researchCase.id === body.case?.id ? body.case : researchCase)));
       if (selectedMatchIdRef.current === targetMatchId) {
         setLinkForm({
           caseId: body.case.id,
@@ -391,33 +462,14 @@ export function DnaTriageWorkspace({ initialMatches, initialHypotheses = [], ini
     }
   }
 
-  function upsertMatches(incoming: ScoredDnaMatch[]) {
-    if (incoming.length === 0) {
-      return;
-    }
-
-    setMatches((current) => mergeScoredMatches(incoming, current));
-  }
-
-  function upsertHypotheses(incoming: DnaConnectionHypothesis[]) {
-    if (incoming.length === 0) {
-      return;
-    }
-
-    setHypotheses((current) => ({
-      ...current,
-      ...indexHypotheses(incoming)
-    }));
-  }
-
   return (
     <div className="app-grid">
       <div className="app-card dna-workspace">
         <div className="metric-row dna-metrics">
-          <Metric label="Matches" value={matches.length.toLocaleString()} detail="in workspace" />
-          <Metric label="Current set" value={filteredMatches.length.toLocaleString()} detail={`${pagination.start}-${pagination.end} shown`} />
-          <Metric label="High priority" value={highPriorityCount.toLocaleString()} detail="queue first" />
-          <Metric label="Needs review" value={needsReviewCount.toLocaleString()} detail="not triaged" />
+          <Metric label="Matches" value={result.stats.total.toLocaleString()} detail="in workspace" />
+          <Metric label="Current set" value={result.total.toLocaleString()} detail={`${result.start}-${result.end} shown`} />
+          <Metric label="High priority" value={result.stats.highPriority.toLocaleString()} detail="queue first" />
+          <Metric label="Needs review" value={result.stats.needsReview.toLocaleString()} detail="not triaged" />
         </div>
 
         <div className="people-search-card">
@@ -476,8 +528,9 @@ export function DnaTriageWorkspace({ initialMatches, initialHypotheses = [], ini
               <p aria-atomic="true" aria-live="polite" className="muted" role="status">
                 {announcedResultSummary}
               </p>
+              {fetchError ? <p className="muted">{fetchError}</p> : null}
             </div>
-            <PaginationControls page={pagination.page} pageCount={pagination.pageCount} onPageChange={setPage} />
+            <PaginationControls page={result.page} pageCount={result.pageCount} onPageChange={setPage} />
           </div>
 
           <TableScroll label="Ranked DNA matches">
@@ -494,12 +547,12 @@ export function DnaTriageWorkspace({ initialMatches, initialHypotheses = [], ini
               </tr>
             </thead>
             <tbody>
-              {pagination.items.map((match) => (
-                <tr className={match.id === selectedMatch?.id ? "selected-row" : undefined} key={match.id}>
+              {result.items.map((match) => (
+                <tr className={match.id === selected?.id ? "selected-row" : undefined} key={match.id}>
                   <td>
                     <button
                       aria-controls="dna-match-details"
-                      aria-pressed={match.id === selectedMatch?.id}
+                      aria-pressed={match.id === selected?.id}
                       className="table-link"
                       onClick={() => selectMatch(match)}
                       type="button"
@@ -522,13 +575,13 @@ export function DnaTriageWorkspace({ initialMatches, initialHypotheses = [], ini
             </table>
           </TableScroll>
 
-          {pagination.items.length === 0 ? <p className="muted empty-state">No DNA matches match these filters.</p> : null}
+          {result.items.length === 0 ? <p className="muted empty-state">No DNA matches match these filters.</p> : null}
 
           <div className="table-footer-row">
             <p className="muted">
-              Page {pagination.page.toLocaleString()} of {pagination.pageCount.toLocaleString()}
+              Page {result.page.toLocaleString()} of {result.pageCount.toLocaleString()}
             </p>
-            <PaginationControls page={pagination.page} pageCount={pagination.pageCount} onPageChange={setPage} />
+            <PaginationControls page={result.page} pageCount={result.pageCount} onPageChange={setPage} />
           </div>
         </div>
 
@@ -579,20 +632,20 @@ export function DnaTriageWorkspace({ initialMatches, initialHypotheses = [], ini
             <button aria-busy={status === "loading"} className="button" disabled={status === "loading"} onClick={analyzeMatch} type="button">
               {status === "loading" ? "Analyzing..." : "Analyze match"}
             </button>
-            {status === "error" ? <Status tone="warning">Analysis failed</Status> : selectedMatch ? <Status>Helpfulness {selectedMatch.helpfulnessScore}</Status> : null}
+            {status === "error" ? <Status tone="warning">Analysis failed</Status> : selected ? <Status>Helpfulness {selected.helpfulnessScore}</Status> : null}
           </div>
           {error ? <p aria-atomic="true" className="form-error" role="alert">{error}</p> : null}
         </section>
       </div>
 
       <aside className="app-card" id="dna-match-details">
-        <h2 aria-atomic="true" aria-live="polite">Match: {selectedMatch?.displayName ?? "No match selected"}</h2>
-        {selectedMatch ? (
+        <h2 aria-atomic="true" aria-live="polite">Match: {selected?.displayName ?? "No match selected"}</h2>
+        {selected ? (
           <>
             <div className="hero-actions" style={{ marginTop: 0 }}>
-              <span className="tag">{selectedMatch.totalCm} cM</span>
-              <span className="tag">{selectedMatch.predictedRelationship ?? "unknown relationship"}</span>
-              <span className="tag">{selectedMatch.side} side</span>
+              <span className="tag">{selected.totalCm} cM</span>
+              <span className="tag">{selected.predictedRelationship ?? "unknown relationship"}</span>
+              <span className="tag">{selected.side} side</span>
             </div>
             <div className="hypothesis-panel" style={{ marginTop: 18 }}>
               <h2>AI connection hypothesis</h2>
@@ -620,14 +673,14 @@ export function DnaTriageWorkspace({ initialMatches, initialHypotheses = [], ini
 
             <div aria-busy={linkStatus === "saving"} className="section dna-edit-panel">
               <h2>Link to case</h2>
-              {cases.length > 0 ? (
+              {initialCases.length > 0 ? (
                 <>
                   <div className="form-grid" style={{ gridTemplateColumns: "1fr" }}>
                     <SelectField
                       label="Case"
                       value={linkForm.caseId}
                       onChange={(value) => setLinkForm({ ...linkForm, caseId: value })}
-                      options={cases.map((researchCase) => [researchCase.id, researchCase.title])}
+                      options={initialCases.map((researchCase) => [researchCase.id, researchCase.title])}
                     />
                     <TextField label="Evidence title" value={linkForm.title} onChange={(value) => setLinkForm({ ...linkForm, title: value })} />
                     <label className="field">
@@ -714,9 +767,27 @@ function PaginationControls({ page, pageCount, onPageChange }: { page: number; p
   );
 }
 
-function mergeScoredMatches(incoming: ScoredDnaMatch[], current: ScoredDnaMatch[]): ScoredDnaMatch[] {
-  const incomingIds = new Set(incoming.map((match) => match.id));
-  return [...incoming, ...current.filter((match) => !incomingIds.has(match.id))];
+function buildDnaApiPath(input: {
+  query: string;
+  status: DnaStatusFilter;
+  side: DnaSideFilter;
+  treeStatus: DnaTreeFilter;
+  helpfulness: DnaHelpfulnessFilter;
+  sort: DnaSortKey;
+  page: number;
+  pageSize: number;
+}): string {
+  const params = new URLSearchParams({
+    query: input.query,
+    status: input.status,
+    side: input.side,
+    treeStatus: input.treeStatus,
+    helpfulness: input.helpfulness,
+    sort: input.sort,
+    page: String(input.page),
+    pageSize: String(input.pageSize)
+  });
+  return `/api/dna/matches?${params.toString()}`;
 }
 
 function indexHypotheses(values: DnaConnectionHypothesis[]): Record<string, DnaConnectionHypothesis> {

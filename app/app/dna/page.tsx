@@ -1,17 +1,21 @@
 import { AppShell } from "@/components/app-shell";
 import { DnaTriageWorkspace } from "@/components/dna-triage-workspace";
-import { createWorkspaceDnaHypotheses, readWorkspace, scoreWorkspaceDnaMatches } from "@/lib/workspace-store";
+import { createDnaHypothesesForMatches, listCaseOptions, searchDnaMatchesPageFromDb } from "@/lib/store/dna-queries";
+import { readArchiveBranding } from "@/lib/store/people-queries";
 
 export const dynamic = "force-dynamic";
 
 export default async function DnaPage() {
-  const workspace = await readWorkspace();
-  const scoredDnaMatches = scoreWorkspaceDnaMatches(workspace);
-  const dnaHypotheses = createWorkspaceDnaHypotheses(workspace);
+  const [branding, initialResult, initialCases] = await Promise.all([
+    readArchiveBranding(),
+    searchDnaMatchesPageFromDb({}, { page: 1, pageSize: 25 }),
+    listCaseOptions()
+  ]);
+  const initialHypotheses = await createDnaHypothesesForMatches(initialResult.items);
 
   return (
-    <AppShell title="DNA Match Triage" active="/app/dna" archiveName={workspace.archiveName}>
-      <DnaTriageWorkspace initialCases={workspace.cases} initialMatches={scoredDnaMatches} initialHypotheses={dnaHypotheses} />
+    <AppShell title="DNA Match Triage" active="/app/dna" archiveName={branding.name}>
+      <DnaTriageWorkspace initialCases={initialCases} initialResult={initialResult} initialHypotheses={initialHypotheses} />
     </AppShell>
   );
 }

@@ -1,5 +1,5 @@
 import type { DnaMatch, DnaSide, DnaTreeStatus } from "./models";
-import { paginateItems, type PaginationResult } from "./pagination";
+import { paginateItems, type PaginationInput, type PaginationResult } from "./pagination";
 
 export type ScoredDnaMatch = DnaMatch & { helpfulnessScore: number };
 
@@ -19,6 +19,41 @@ export type DnaMatchFilters = {
 };
 
 export type DnaPaginationResult = PaginationResult<ScoredDnaMatch>;
+
+export type DnaSearchStats = {
+  total: number;
+  highPriority: number;
+  needsReview: number;
+};
+
+export type DnaSearchResult = DnaPaginationResult & { stats: DnaSearchStats };
+
+// The link-to-case panel only renders a case picker, so it gets id/title pairs
+// instead of full ResearchCase objects.
+export type DnaCaseOption = {
+  id: string;
+  title: string;
+};
+
+export const maximumDnaPageSize = 250;
+
+export function searchDnaMatchesPage(
+  matches: ScoredDnaMatch[],
+  filters: DnaMatchFilters = {},
+  pagination: PaginationInput = { page: 1, pageSize: 25 }
+): DnaSearchResult {
+  const filtered = filterDnaMatches(matches, filters);
+  const page = paginateDnaMatches(filtered, pagination.page, pagination.pageSize);
+
+  return {
+    ...page,
+    stats: {
+      total: matches.length,
+      highPriority: matches.filter((match) => match.triageStatus === "high_priority").length,
+      needsReview: matches.filter((match) => match.triageStatus === "needs_review").length
+    }
+  };
+}
 
 export function filterDnaMatches(matches: ScoredDnaMatch[], filters: DnaMatchFilters = {}): ScoredDnaMatch[] {
   const terms = normalizeSearchTerms(filters.query);
@@ -46,7 +81,7 @@ export function filterDnaMatches(matches: ScoredDnaMatch[], filters: DnaMatchFil
 }
 
 export function paginateDnaMatches(matches: ScoredDnaMatch[], page: number, pageSize: number): DnaPaginationResult {
-  return paginateItems(matches, { page, pageSize }, 250);
+  return paginateItems(matches, { page, pageSize }, maximumDnaPageSize);
 }
 
 export function helpfulnessBucket(score: number): "high" | "medium" | "low" {

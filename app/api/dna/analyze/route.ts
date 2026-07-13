@@ -1,13 +1,11 @@
 import { NextResponse } from "next/server";
 import type { DnaMatch } from "@/lib/models";
-import { readWorkspace, saveDnaMatch, scoreWorkspaceDnaMatches } from "@/lib/workspace-store";
+import { saveDnaMatch } from "@/lib/workspace-store";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
-  const workspace = await readWorkspace();
-  return NextResponse.json(scoreWorkspaceDnaMatches(workspace));
-}
+// The old GET here shipped every scored match; paged, filtered reads now live
+// at GET /api/dna/matches.
 
 export async function POST(request: Request) {
   const match = (await request.json()) as DnaMatch;
