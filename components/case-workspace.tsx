@@ -1,18 +1,22 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Icons } from "@/components/icons";
 import {
-  caseEvidenceQueue,
-  searchCasesPage,
   type CaseEvidenceFilter,
   type CasePrivacyFilter,
+  type CaseSearchResult,
   type CaseSortKey,
-  type CaseStatusFilter
+  type CaseStatusFilter,
+  type EvidenceQueueItem
 } from "@/lib/case-search";
-import type { ResearchCase } from "@/lib/models";
 import { Confidence, Metric, Status, TableScroll } from "./ui";
+
+type Props = {
+  initialResult: CaseSearchResult;
+  initialEvidenceQueue: EvidenceQueueItem[];
+};
 
 type CaseDraft = {
   title: string;
@@ -32,25 +36,80 @@ const initialDraft: CaseDraft = {
 
 const pageSizeOptions = [10, 25, 50, 100];
 
-export function CaseWorkspace({ initialCases }: { initialCases: ResearchCase[] }) {
-  const [cases, setCases] = useState(initialCases);
+export function CaseWorkspace({ initialResult, initialEvidenceQueue }: Props) {
   const [draft, setDraft] = useState(initialDraft);
   const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<CaseStatusFilter>("all");
   const [privacy, setPrivacy] = useState<CasePrivacyFilter>("all");
   const [evidence, setEvidence] = useState<CaseEvidenceFilter>("all");
   const [sort, setSort] = useState<CaseSortKey>("status");
   const [pageSize, setPageSize] = useState(25);
   const [page, setPage] = useState(1);
+  const [result, setResult] = useState(initialResult);
+  const [evidenceQueue, setEvidenceQueue] = useState(initialEvidenceQueue);
+  const [searchError, setSearchError] = useState("");
+  // Bumped after a successful case creation so both fetch effects reload.
+  const [refreshNonce, setRefreshNonce] = useState(0);
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [error, setError] = useState("");
-  const result = useMemo(
-    () => searchCasesPage(cases, { query, status: statusFilter, privacy, evidence, sort }, { page, pageSize }),
-    [cases, evidence, page, pageSize, privacy, query, sort, statusFilter]
-  );
   const resultSummary = `Showing ${result.start.toLocaleString()}-${result.end.toLocaleString()} of ${result.total.toLocaleString()}`;
   const [announcedResultSummary, setAnnouncedResultSummary] = useState(resultSummary);
-  const evidenceQueue = useMemo(() => caseEvidenceQueue(cases, 50), [cases]);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => setDebouncedQuery(query), 250);
+    return () => window.clearTimeout(timeout);
+  }, [query]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    async function loadCases() {
+      try {
+        const response = await fetch(buildCasesApiPath({ query: debouncedQuery, status: statusFilter, privacy, evidence, sort, page, pageSize }), {
+          signal: controller.signal
+        });
+
+        if (!response.ok) {
+          throw new Error("Case search failed");
+        }
+
+        setResult((await response.json()) as CaseSearchResult);
+        setSearchError("");
+      } catch (requestError) {
+        if (!controller.signal.aborted) {
+          setSearchError(requestError instanceof Error ? requestError.message : "Case search failed");
+        }
+      }
+    }
+
+    void loadCases();
+    return () => controller.abort();
+  }, [debouncedQuery, statusFilter, privacy, evidence, sort, page, pageSize, refreshNonce]);
+
+  useEffect(() => {
+    // The server rendered the initial queue; only refetch after a mutation.
+    if (refreshNonce === 0) {
+      return;
+    }
+    const controller = new AbortController();
+
+    async function loadEvidenceQueue() {
+      try {
+        const response = await fetch("/api/cases?view=evidence-queue", { signal: controller.signal });
+        if (!response.ok) {
+          throw new Error("Evidence queue refresh failed");
+        }
+        setEvidenceQueue((await response.json()) as EvidenceQueueItem[]);
+      } catch {
+        // The queue keeps its previous contents; the case list error surface
+        // already reports fetch problems.
+      }
+    }
+
+    void loadEvidenceQueue();
+    return () => controller.abort();
+  }, [refreshNonce]);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => setAnnouncedResultSummary(resultSummary), 400);
@@ -98,9 +157,8 @@ export function CaseWorkspace({ initialCases }: { initialCases: ResearchCase[] }
         throw new Error(body?.error ?? "Case creation failed");
       }
 
-      const created = (await response.json()) as ResearchCase;
-      setCases((current) => [created, ...current]);
       setPage(1);
+      setRefreshNonce((current) => current + 1);
       setStatus("success");
     } catch (requestError) {
       setStatus("error");
@@ -241,6 +299,7 @@ export function CaseWorkspace({ initialCases }: { initialCases: ResearchCase[] }
               <p aria-atomic="true" aria-live="polite" className="muted" role="status">
                 {announcedResultSummary}
               </p>
+              {searchError ? <p className="muted">{searchError}</p> : null}
             </div>
             <PaginationControls page={result.page} pageCount={result.pageCount} onPageChange={setPage} />
           </div>
@@ -390,4 +449,25 @@ function SelectField({ label, value, options, onChange }: { label: string; value
       </select>
     </label>
   );
+}
+
+function buildCasesApiPath(input: {
+  query: string;
+  status: CaseStatusFilter;
+  privacy: CasePrivacyFilter;
+  evidence: CaseEvidenceFilter;
+  sort: CaseSortKey;
+  page: number;
+  pageSize: number;
+}): string {
+  const params = new URLSearchParams({
+    query: input.query,
+    status: input.status,
+    privacy: input.privacy,
+    evidence: input.evidence,
+    sort: input.sort,
+    page: String(input.page),
+    pageSize: String(input.pageSize)
+  });
+  return `/api/cases?${params.toString()}`;
 }
