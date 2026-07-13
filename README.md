@@ -25,7 +25,7 @@ Most genealogy tools make you choose between *sharing everything* and *sharing n
 | 🔒 Private workspace (`/app`) | 🌍 Public archive (`/`) |
 | --- | --- |
 | Every imported person, source, DNA match, and research note | Only profiles you explicitly curate and publish |
-| Password-gated pages and APIs | Living, private, and sensitive records withheld automatically |
+| Account-gated pages and APIs (owner-created accounts) | Living, private, and sensitive records withheld automatically |
 | Research cases, task queues, AI analysis runs | Published people, stories, places, and selected citations |
 
 The repository ships with **synthetic fixtures only**. Real GEDCOM exports, DNA match files, and uploads belong in ignored local storage (`data/`, `uploads/`).
@@ -89,7 +89,7 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000). The first read seeds a synthetic demo archive so every screen has data.
 
-> `DATABASE_URL` is required (the `.env.example` default matches the bundled Postgres service). Private `/app` routes are open in local development; set `KINSLEUTH_APP_PASSWORD` plus a long `AUTH_SECRET` to protect them.
+> `DATABASE_URL` is required (the `.env.example` default matches the bundled Postgres service). Private `/app` routes are open in local development; set a long `AUTH_SECRET` and create the owner account at `/setup` to protect them.
 
 ### Full stack via Docker Compose
 
@@ -128,8 +128,7 @@ Compose provisions Postgres with pgvector and MinIO-compatible object storage al
 | `DATABASE_URL` | **Required.** Postgres connection string for workspace storage |
 | `DATABASE_POOL_MAX` | Max connections per instance; use `2` for serverless |
 | `DATABASE_AUTO_MIGRATE` | Applies pending versioned migrations at boot; set `false` in production and run `npm run db:migrate` at deploy time instead |
-| `AUTH_SECRET` | Signs the private-workspace session cookie |
-| `KINSLEUTH_APP_PASSWORD` | Enables password protection for `/app` and private APIs |
+| `AUTH_SECRET` | Secret for account sessions (better-auth); required in production |
 | `KINSLEUTH_ARCHIVE_ID` | Archive id; defaults to `archive-default` |
 | `BLOB_READ_WRITE_TOKEN` | Private Vercel Blob store for staging large GEDCOM uploads |
 | `CRON_SECRET` | Bearer token for the daily stale-upload cleanup job |
@@ -186,7 +185,7 @@ Deployments are release-driven: publishing a stable GitHub Release runs `.github
 
 Required GitHub Actions secrets: `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`.
 
-Required Vercel production environment: `DATABASE_URL` (Supabase transaction pooler on port `6543` with `sslmode=require` — KinSleuth upgrades known Supabase pooler connections to `verify-full` with the bundled root CA), `DATABASE_POOL_MAX=2`, `DATABASE_AUTO_MIGRATE=false`, `AUTH_SECRET`, `KINSLEUTH_APP_PASSWORD`, `BLOB_READ_WRITE_TOKEN`, and `CRON_SECRET`.
+Required Vercel production environment: `DATABASE_URL` (Supabase transaction pooler on port `6543` with `sslmode=require` — KinSleuth upgrades known Supabase pooler connections to `verify-full` with the bundled root CA), `DATABASE_POOL_MAX=2`, `DATABASE_AUTO_MIGRATE=false`, `AUTH_SECRET`, `BLOB_READ_WRITE_TOKEN`, and `CRON_SECRET`.
 
 ## Project map
 

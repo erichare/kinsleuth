@@ -1,6 +1,10 @@
 import Link from "next/link";
 import { Icons } from "@/components/icons";
 import { PublicShell } from "@/components/public-shell";
+import { SetupForm } from "@/components/setup-form";
+import { countUsers } from "@/lib/auth-session";
+
+export const dynamic = "force-dynamic";
 
 const steps = [
   {
@@ -10,7 +14,7 @@ const steps = [
   },
   {
     title: "Protect the private workspace",
-    detail: "Set KINSLEUTH_APP_PASSWORD plus a long AUTH_SECRET in .env to require a password for /app pages and private APIs.",
+    detail: "Set a long AUTH_SECRET in .env, then create the owner account above. Private pages and APIs require a signed-in account from then on.",
     action: null
   },
   {
@@ -35,7 +39,9 @@ const steps = [
   }
 ];
 
-export default function SetupPage() {
+export default async function SetupPage() {
+  const existingUsers = await countUsers().catch(() => null);
+
   return (
     <PublicShell>
       <div className="page-wrap">
@@ -43,6 +49,27 @@ export default function SetupPage() {
           <h1>First-run setup</h1>
           <p>KinSleuth is configured through environment variables and the private workspace — this checklist walks through a fresh installation.</p>
         </section>
+        {existingUsers === 0 ? (
+          <section className="section" style={{ maxWidth: 520 }}>
+            <div className="panel">
+              <h2 style={{ marginTop: 0 }}>Create the owner account</h2>
+              <p className="muted">
+                The first account owns this archive. Open sign-up closes once it exists; additional members will arrive by invitation.
+              </p>
+              <SetupForm />
+            </div>
+          </section>
+        ) : existingUsers !== null ? (
+          <section className="section" style={{ maxWidth: 520 }}>
+            <div className="panel">
+              <h2 style={{ marginTop: 0 }}>Owner account exists</h2>
+              <p className="muted">This workspace is already set up.</p>
+              <Link className="button-secondary" href="/login">
+                Sign in
+              </Link>
+            </div>
+          </section>
+        ) : null}
         <section className="section">
           <div className="evidence-list">
             {steps.map((step, index) => (

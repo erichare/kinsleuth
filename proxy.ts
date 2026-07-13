@@ -1,17 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
-import { sessionCookieName, verifySessionToken } from "@/lib/session";
+import { getSessionContext } from "@/lib/auth-session";
+import { ensureDatabaseSchema } from "@/lib/db";
 
 const protectedPagePrefixes = ["/app"];
 const protectedApiPrefixes = ["/api/ai", "/api/cases", "/api/dna", "/api/exports", "/api/imports", "/api/people", "/api/publishing", "/api/reports", "/api/settings", "/api/sources", "/api/uploads"];
 
+// Next 16's proxy runs on the Node runtime, so full database-backed session
+// validation stays centralized here. Refresh Set-Cookie headers from session
+// renewal cannot be forwarded through NextResponse.next(); renewals happen on
+// route-handler traffic instead (see lib/auth.ts).
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const protectsApi = protectedApiPrefixes.some((prefix) => pathname.startsWith(prefix));
   const protectsPage = protectedPagePrefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
-  const password = process.env.KINSLEUTH_APP_PASSWORD;
-  const authSecret = process.env.AUTH_SECRET;
 
-  if (!password || !authSecret) {
+  if (!process.env.AUTH_SECRET) {
     if (process.env.NODE_ENV === "production") {
       const message = "Private workspace authentication is not configured";
       return protectsApi
@@ -19,6 +22,8 @@ export async function proxy(request: NextRequest) {
         : new NextResponse(message, { status: 503 });
     }
 
+    // Local development stays open until auth is configured, matching the
+    // previous password-gate behavior; lib/auth-session.ts mirrors this.
     return NextResponse.next();
   }
 
@@ -26,8 +31,14 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const isAuthenticated = await verifySessionToken(request.cookies.get(sessionCookieName)?.value, authSecret);
-  if (isAuthenticated) {
+  // Gate on archive MEMBERSHIP, not merely session existence: an
+  // authenticated account with no membership (e.g. an open-signup account, or
+  // one created by racing first-run setup) must not reach private data.
+  // getSessionContext resolves session -> membership and returns null for
+  // both anonymous callers and membership-less accounts.
+  await ensureDatabaseSchema();
+  const context = await getSessionContext(request.headers);
+  if (context) {
     return NextResponse.next();
   }
 

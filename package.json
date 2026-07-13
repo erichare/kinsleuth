@@ -19,6 +19,8 @@
   "dependencies": {
     "@next/env": "^16.0.0",
     "@vercel/blob": "^2.6.1",
+    "better-auth": "^1.6.23",
+    "jose": "^6.1.0",
     "lucide-react": "^0.468.0",
     "next": "^16.0.0",
     "pg": "^8.22.0",

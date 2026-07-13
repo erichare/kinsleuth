@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { runAIAnalysis } from "@/lib/ai";
+import { getSessionContext } from "@/lib/auth-session";
 import { createWorkspaceDnaHypotheses, readWorkspace, saveAIAnalysisRun } from "@/lib/workspace-store";
 
 export const dynamic = "force-dynamic";
 
 const analyzeSchema = z.object({
-  role: z.enum(["owner", "admin", "editor", "contributor", "viewer"]).optional(),
   question: z.string().trim().min(1).max(1200),
   caseId: z.string().trim().optional()
 });
@@ -19,11 +19,19 @@ export async function POST(request: Request) {
 
   const body = parsed.data;
 
+  // Whole-tree analysis ships private workspace context to an external
+  // provider; the caller's role comes from their session membership, never
+  // from the request body.
+  const sessionContext = await getSessionContext(request.headers);
+  if (!sessionContext) {
+    return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+  }
+
   try {
     const workspace = await readWorkspace();
     const linkedCaseId = body.caseId && workspace.cases.some((researchCase) => researchCase.id === body.caseId) ? body.caseId : undefined;
     const result = await runAIAnalysis({
-      role: body.role ?? "viewer",
+      role: sessionContext.role,
       question: body.question,
       selectedCaseId: linkedCaseId,
       people: workspace.people,

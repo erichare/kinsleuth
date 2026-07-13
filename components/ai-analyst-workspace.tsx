@@ -75,7 +75,7 @@ export function AIAnalystWorkspace({ initialQuestion, cases, initialRuns, anomal
       const response = await fetch("/api/ai/analyze", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ role: "owner", question: trimmedQuestion, caseId: selectedCaseId || undefined })
+        body: JSON.stringify({ question: trimmedQuestion, caseId: selectedCaseId || undefined })
       });
       const body = await response.json();
 

@@ -1,89 +1,64 @@
 "use client";
 
 import { useState } from "react";
+import { authClient } from "@/lib/auth-client";
 import { Status } from "./ui";
 
-export function LoginForm({ nextPath, authRequired }: { nextPath: string; authRequired: boolean }) {
+export function LoginForm({ nextPath }: { nextPath: string }) {
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
+  const [message, setMessage] = useState("Invalid email or password");
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setStatus("loading");
 
     try {
-      const response = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ password, next: nextPath })
-      });
-
-      if (!response.ok) {
+      const result = await authClient.signIn.email({ email, password });
+      if (result.error) {
+        setMessage(result.error.message || "Invalid email or password");
         setStatus("error");
         return;
       }
 
-      const body = (await response.json().catch(() => null)) as { next?: string } | null;
-      window.location.assign(body?.next || "/app");
+      window.location.assign(nextPath || "/app");
     } catch {
+      setMessage("Could not sign in. Try again.");
       setStatus("error");
     }
-  }
-
-  async function openWithoutPassword() {
-    try {
-      const response = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ next: nextPath })
-      });
-
-      if (!response.ok) {
-        setStatus("error");
-        return;
-      }
-
-      window.location.assign(nextPath);
-    } catch {
-      setStatus("error");
-    }
-  }
-
-  if (!authRequired) {
-    return (
-      <div className="hero-actions">
-        <button className="button" onClick={() => void openWithoutPassword()}>
-          Open workspace
-        </button>
-        <Status tone="warning">Password not configured</Status>
-        {status === "error" ? (
-          <span aria-atomic="true" role="alert">
-            <Status tone="danger">Could not open the workspace. Try again.</Status>
-          </span>
-        ) : null}
-      </div>
-    );
   }
 
   return (
     <form aria-busy={status === "loading"} className="form-grid" style={{ gridTemplateColumns: "1fr" }} onSubmit={submit}>
+      <label className="field">
+        <span>Email</span>
+        <input
+          autoComplete="email"
+          required
+          type="email"
+          value={email}
+          onChange={(event) => setEmail(event.target.value)}
+        />
+      </label>
       <label className="field">
         <span>Password</span>
         <input
           aria-describedby={status === "error" ? "login-password-error" : undefined}
           aria-invalid={status === "error"}
           autoComplete="current-password"
+          required
           type="password"
           value={password}
           onChange={(event) => setPassword(event.target.value)}
         />
       </label>
       <button aria-busy={status === "loading"} className="button" disabled={status === "loading"} type="submit">
-        {status === "loading" ? "Opening..." : "Open workspace"}
+        {status === "loading" ? "Signing in..." : "Sign in"}
       </button>
       {status === "error" ? (
         <span aria-atomic="true" id="login-password-error" role="alert">
-          <Status tone="warning">Invalid password</Status>
+          <Status tone="warning">{message}</Status>
         </span>
       ) : null}
     </form>

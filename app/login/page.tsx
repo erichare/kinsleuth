@@ -8,7 +8,6 @@ export const dynamic = "force-dynamic";
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ next?: string }> }) {
   const params = await searchParams;
   const nextPath = safeInternalPath(params.next);
-  const authRequired = Boolean(process.env.KINSLEUTH_APP_PASSWORD);
 
   return (
     <PublicShell>
@@ -16,8 +15,8 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
         <section className="section" style={{ maxWidth: 520, margin: "40px auto" }}>
           <div className="panel">
             <h1 style={{ marginTop: 0 }}>Private workspace</h1>
-            <p className="muted">Enter the local workspace password to open private research tools, DNA matches, source uploads, and investigations.</p>
-            <LoginForm nextPath={nextPath} authRequired={authRequired} />
+            <p className="muted">Sign in to open private research tools, DNA matches, source uploads, and investigations.</p>
+            <LoginForm nextPath={nextPath} />
             <div className="hero-actions">
               <Link className="button-secondary" href="/setup">
                 First-run setup
