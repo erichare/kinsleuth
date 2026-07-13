@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { parsePositiveInteger } from "@/lib/pagination";
-import { searchSourcesPage, type SourceLinkFilter, type SourcePrivacyFilter, type SourceSortKey } from "@/lib/source-search";
-import { readWorkspace } from "@/lib/workspace-store";
+import { type SourceLinkFilter, type SourcePrivacyFilter, type SourceSortKey } from "@/lib/source-search";
+import { searchSourcesPageFromDb } from "@/lib/store/source-queries";
 
 export const dynamic = "force-dynamic";
 
@@ -10,14 +10,10 @@ const linkValues = new Set<SourceLinkFilter>(["all", "linked", "unlinked", "pers
 const sortValues = new Set<SourceSortKey>(["created", "title", "confidence"]);
 
 export async function GET(request: Request) {
-  const workspace = await readWorkspace();
   const url = new URL(request.url);
 
   return NextResponse.json(
-    searchSourcesPage(
-      workspace.sources,
-      workspace.people,
-      workspace.cases,
+    await searchSourcesPageFromDb(
       {
         query: url.searchParams.get("query") ?? "",
         privacy: parseEnum(url.searchParams.get("privacy"), privacyValues, "all"),
