@@ -2,7 +2,7 @@
 
 Status: Reviewed execution blueprint<br>
 Prepared: 2026-07-13<br>
-Planning base: `main` at `63c9e27`<br>
+Planning base: `main` at `71570de`<br>
 Source roadmap: [`docs/production-readiness.md`](../docs/production-readiness.md) / [PR #21](https://github.com/erichare/kinresolve/pull/21)<br>
 Selected brand: **Kin Resolve** (`kinresolve.com`), owner-approved and pending formal clearance
 
@@ -13,9 +13,11 @@ Current execution update (2026-07-13):
   ownership of the domain; it does not replace formal name/trademark clearance.
 - The independent marketing site is implemented under `site/`, with a protected preview
   in the isolated `kinresolve-marketing` Vercel project. Static-export checks and live
-  route probes pass; Cloudflare DNS remains unchanged pending owner approval.
-- Public launch remains gated on preview approval, a working beta contact route, domain
-  cutover/rollback checks, and formal clearance.
+  route probes pass; the owner approved the preview.
+- Cloudflare Email Routing for `beta@kinresolve.com` is active and delivery-tested.
+  Web-traffic DNS remains unchanged.
+- Public launch remains gated on production deployment, web-domain cutover/rollback
+  checks, and formal clearance.
 
 ## Objective
 
@@ -1208,3 +1210,6 @@ This plan should change when evidence changes, but not invisibly.
   the GitHub repository and local checkout were renamed to Kin Resolve, and the independent
   marketing-site foundation began under `site/`. Updated the PR #21 link to the renamed
   repository. Formal brand clearance and the public-launch gates remain open.
+- 2026-07-13: The owner approved the marketing preview and successfully tested
+  `beta@kinresolve.com` delivery through Cloudflare Email Routing. Activated the
+  no-storage email intake while preserving web DNS as a separate rollback slice.

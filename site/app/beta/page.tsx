@@ -1,6 +1,7 @@
 import { BetaForm } from "@/components/beta-form";
 import { PageHero } from "@/components/page-hero";
 import { pageMetadata } from "@/lib/metadata";
+import { site } from "@/lib/site";
 
 export const metadata = pageMetadata({
   title: "Private beta",
@@ -35,7 +36,7 @@ export default function BetaPage() {
 
       <section className="section surface-section" id="apply">
         <div className="shell application-grid">
-          <div className="application-intro"><span className="eyebrow">Beta interest</span><h2>Tell us about the work you want to test.</h2><p>The proposed intake opens an email application rather than storing submissions on the marketing site. Delivery stays disabled in this preview until the beta mailbox is verified.</p><div className="application-boundary"><strong>Please do not submit</strong><span>GEDCOM files, DNA results, names of living people, source images, credentials, or private family details.</span></div></div>
+          <div className="application-intro"><span className="eyebrow">Beta interest</span><h2>Tell us about the work you want to test.</h2><p>{site.betaIntakeReady ? `The intake opens a prepared email addressed to ${site.betaEmail}. The marketing site does not store your submission.` : "The proposed intake opens an email application rather than storing submissions on the marketing site. Delivery stays disabled until the beta mailbox is verified."}</p><div className="application-boundary"><strong>Please do not submit</strong><span>GEDCOM files, DNA results, names of living people, source images, credentials, or private family details.</span></div></div>
           <BetaForm />
         </div>
       </section>

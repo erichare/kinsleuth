@@ -43,13 +43,13 @@ for (const file of htmlFiles) {
   }
 }
 
-const requiredRoutes = ["index.html", "product/index.html", "method/index.html", "privacy/index.html", "open-source/index.html", "about/index.html", "beta/index.html", "manifest.webmanifest", "robots.txt", "sitemap.xml"];
+const requiredRoutes = ["index.html", "product/index.html", "method/index.html", "privacy/index.html", "open-source/index.html", "about/index.html", "beta/index.html", "icon.png", "manifest.webmanifest", "robots.txt", "sitemap.xml"];
 for (const route of requiredRoutes) {
   if (!existsSync(join(outputRoot, route))) problems.push(`Missing required export: ${route}`);
 }
 
 const home = readFileSync(join(outputRoot, "index.html"), "utf8");
-for (const metadata of ["og:image", "twitter:image", "canonical"]) {
+for (const metadata of ["og:image", "twitter:image", "canonical", "rel=\"icon\""]) {
   if (!home.includes(metadata)) problems.push(`Homepage is missing ${metadata} metadata.`);
 }
 
@@ -75,9 +75,21 @@ const beta = readFileSync(join(outputRoot, "beta/index.html"), "utf8");
 if (!beta.includes(`action="mailto:beta@kinresolve.com`)) {
   problems.push("Beta application is missing its configured mailto destination.");
 }
-if (!beta.includes("Email routing pending")) {
-  problems.push("Beta submission is not visibly gated while email routing is inactive.");
+const submitButton = beta.match(/<button([^>]*)>(Open email application|Email routing pending)<\/button>/);
+if (!submitButton) {
+  problems.push("Beta submission does not expose exactly one recognized intake state.");
+} else {
+  const [, attributes, label] = submitButton;
+  const disabled = /\bdisabled(?:=""|(?=\s|$))/.test(attributes);
+  if (label === "Open email application" && disabled) {
+    problems.push("Active beta submission is unexpectedly disabled.");
+  }
+  if (label === "Email routing pending" && !disabled) {
+    problems.push("Inactive beta submission is not disabled.");
+  }
 }
+const manifest = readFileSync(join(outputRoot, "manifest.webmanifest"), "utf8");
+if (!manifest.includes('"src":"/icon.png"')) problems.push("Manifest is missing the generated favicon.");
 if (existsSync(join(outputRoot, "api"))) {
   problems.push("Static marketing export unexpectedly contains an API surface.");
 }

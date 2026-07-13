@@ -61,9 +61,10 @@ with engineering. Nothing here is code.
    review; complete that review before a broad launch or permanent print investment.
 2. **Domain registered.** `kinresolve.com` was registered through Cloudflare on
    2026-07-13. Keep registrar recovery access under founder control.
-3. **Approve the independent marketing preview before DNS cutover.** The intended
-   split is `kinresolve.com` for marketing and `app.kinresolve.com` for the hosted
-   product. Activate beta email routing and confirm rollback ownership first.
+3. **Marketing preview and beta contact route approved.** The intended split is
+   `kinresolve.com` for marketing and `app.kinresolve.com` for the hosted product.
+   `beta@kinresolve.com` routing is active and delivery-tested; preserve its mail DNS
+   records during the separate web-domain cutover and confirm rollback ownership first.
 
 ### B. Accounts to create (I'll wire each in once they exist) 🤝
 4. **Vercel** production project + **Supabase** production database (or your chosen
@@ -201,9 +202,10 @@ Ghost/Plausible shape.
 a separate project so public copy and design can ship without coupling to the product
 runtime or release cadence.
 
-**Your steps for the site** 🧑: approve the private preview and later authorize the
-Cloudflare DNS change. **Engineering steps** 🤖: build and validate the pages, keep
-claims aligned with current code, publish a preview, then wire the approved domain.
+**Your remaining step for the site** 🧑: authorize the Cloudflare web-DNS change after
+the production target is verified. The preview and beta mailbox are approved and tested.
+**Engineering steps** 🤖: verify the active-intake preview, publish the production
+artifact, then wire the approved domain without disturbing mail records.
 Pricing is intentionally absent until it is decided. Per-tenant public-archive routing
 still depends on tenancy (4.4).
 
@@ -243,8 +245,8 @@ conflict-detection pieces (enough to demonstrate the GPS wedge).
 
 - 🤖 **Engineering:** start the RBAC sweep (4.1) and the
   object-storage adapter (5.A) — the two things blocking OSS 1.0.
-- 🧑 **You, this week:** approve the marketing preview, form the entity + contact privacy
-  counsel (§3.C.9–10), and apply for FamilySearch API access (§3.D.12). Those three
-  have the longest lead times and gate later arcs.
+- 🧑 **You, this week:** authorize the marketing web-DNS cutover after production
+  verification, form the entity + contact privacy counsel (§3.C.9–10), and apply for
+  FamilySearch API access (§3.D.12). Those items gate later arcs.
 - 🤝 **When ready:** create the Stripe, email, Sentry, and AI-provider accounts (§3.B)
   and hand me the keys/DSNs; each unlocks a specific slice above.

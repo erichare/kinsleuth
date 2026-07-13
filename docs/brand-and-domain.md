@@ -25,12 +25,12 @@ The intended public routing is:
 
 | Host | Purpose | Status |
 | --- | --- | --- |
-| `kinresolve.com` | Public marketing site | Protected Vercel preview ready; DNS unchanged |
-| `www.kinresolve.com` | Redirect to the apex domain | Configure after preview approval |
+| `kinresolve.com` | Public marketing site | Protected Vercel preview ready; email routing active; web DNS unchanged |
+| `www.kinresolve.com` | Redirect to the apex domain | Configure during production cutover |
 | `app.kinresolve.com` | Hosted product | Later production-readiness slice |
 | `kinsleuth.vercel.app` | Existing product deployment | Retain until a replacement is deployed and verified |
 
-DNS must not be changed until the marketing preview is approved, the beta contact route works, and rollback ownership is clear. The initial preview uses an isolated `kinresolve-marketing` Vercel project and cannot affect the existing product deployment.
+The marketing preview is approved and `beta@kinresolve.com` delivery was tested successfully on 2026-07-13. Web DNS must remain unchanged until the production artifact, Vercel apex/`www` configuration, and rollback ownership are ready. Verify real-host routing and TLS immediately after cutover; remove the new web records if either check fails. The preview uses an isolated `kinresolve-marketing` Vercel project and cannot affect the existing product deployment.
 
 ## Public claims contract
 
@@ -77,5 +77,5 @@ New display copy should use **Kin Resolve**. New repository links should use `er
 - The founder retains Cloudflare registrar and DNS recovery access.
 - Vercel deploy access and GitHub repository administration must remain available to at least one recovery owner.
 - Secrets stay in the deployment provider or GitHub Actions; never in source or this document.
-- The private-beta mailbox or form destination must be activated and tested before the apex domain is pointed at the site.
+- The private-beta mailbox is active and tested; preserve its Cloudflare MX, SPF, and DKIM records during web-domain cutover.
 - Any public demo must use synthetic records only.

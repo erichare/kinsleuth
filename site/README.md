@@ -22,7 +22,7 @@ The site is linked to the isolated Vercel project `kinresolve-marketing`; it doe
 - The workflow uses `VERCEL_TOKEN` and `VERCEL_ORG_ID` secrets plus the `MARKETING_VERCEL_PROJECT_ID` repository variable.
 - Cloudflare DNS is intentionally outside the workflow. Pointing `kinresolve.com` at Vercel requires explicit owner approval after preview and contact-route checks.
 
-The beta form exposes the proposed email application and a copy fallback, but sending is deliberately disabled while `beta@kinresolve.com` has no verified route. Activate and test that mailbox, then flip `betaIntakeReady` in `lib/site.ts` before a public domain cutover. The marketing site does not store submissions.
+The beta form opens a prepared email to `beta@kinresolve.com` and offers a copy fallback. Cloudflare Email Routing was activated and delivery-tested on 2026-07-13. `betaIntakeReady` in `lib/site.ts` remains the explicit intake kill switch. The marketing site does not store submissions.
 
 ## Content boundaries
 

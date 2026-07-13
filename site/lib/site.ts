@@ -6,7 +6,7 @@ export const site = {
     "A private genealogy research workspace for source-backed cases, GEDCOM records, DNA match triage, AI-assisted analysis, and deliberate publishing.",
   github: "https://github.com/erichare/kinresolve",
   betaEmail: "beta@kinresolve.com",
-  betaIntakeReady: false
+  betaIntakeReady: true
 } as const;
 
 export const navigation = [

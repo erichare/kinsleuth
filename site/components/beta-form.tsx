@@ -144,7 +144,9 @@ export function BetaForm() {
             ? "The browser could not copy the application. Select the form text manually or try a secure browser context."
             : status === "routing-pending"
               ? "Email routing is not active yet."
-              : "Email routing is not active in this protected preview. You can review and copy the application format; sending stays disabled until the mailbox is verified."}
+              : site.betaIntakeReady
+                ? `Submitting opens your email application with the completed form addressed to ${site.betaEmail}. Nothing is stored on this site.`
+                : "Email routing is not active in this protected preview. You can review and copy the application format; sending stays disabled until the mailbox is verified."}
       </p>
     </form>
   );
