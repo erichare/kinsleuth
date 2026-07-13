@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { closeDatabasePools, query } from "@/lib/db";
 import type { DnaMatch } from "@/lib/models";
-import { addCaseTask, createCase, deleteDnaMatch, linkDnaMatchToCase, readWorkspace, saveAIAnalysisRun, saveDnaMatch, saveDnaMatches, saveSourceDocument, updateCaseTask, updateDnaMatch, updatePersonCuration } from "@/lib/workspace-store";
+import { addCaseTask, createCase, deleteDnaMatch, linkDnaMatchToCase, readWorkspace, saveAIAnalysisRun, saveDnaMatch, saveDnaMatches, saveSourceDocument, updateArchiveBranding, updateCaseTask, updateDnaMatch, updatePersonCuration } from "@/lib/workspace-store";
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
 const describeIfDatabase = databaseUrl ? describe : describe.skip;
@@ -342,6 +342,42 @@ describeIfDatabase("workspace store", () => {
       linkedPersonId: "p-elizabeth-riemer",
       transcript: "Baptism entry transcript."
     });
+  });
+
+  it("keeps archives isolated when ids repeat across archives", async () => {
+    // Regression: ids repeat across archives by design (GEDCOM xrefs, fixed
+    // demo-seed ids such as p-elizabeth-riemer). With global primary keys the
+    // second archive's seed failed with a duplicate-key error on people_pkey.
+    const otherOptions = { ...storeOptions, archiveId: `test-${randomUUID()}` };
+
+    try {
+      const first = await readWorkspace(storeOptions);
+      const second = await readWorkspace(otherOptions);
+
+      expect(first.people.some((person) => person.id === "p-elizabeth-riemer")).toBe(true);
+      expect(second.people.some((person) => person.id === "p-elizabeth-riemer")).toBe(true);
+
+      await updateArchiveBranding({ name: "Renamed Test Archive", tagline: "Second archive only" }, otherOptions);
+      await createCase(
+        {
+          id: "case-isolated",
+          title: "Isolated case",
+          question: "Does this stay in one archive?"
+        },
+        otherOptions
+      );
+
+      const renamed = await readWorkspace(otherOptions);
+      const untouched = await readWorkspace(storeOptions);
+
+      expect(renamed.archiveName).toBe("Renamed Test Archive");
+      expect(renamed.cases.some((item) => item.id === "case-isolated")).toBe(true);
+      expect(untouched.archiveName).toBe("Riemer - Zajicek Archive");
+      expect(untouched.cases.some((item) => item.id === "case-isolated")).toBe(false);
+      expect(untouched.people.some((person) => person.id === "p-elizabeth-riemer")).toBe(true);
+    } finally {
+      await query("DELETE FROM archives WHERE id = $1", [otherOptions.archiveId], { databaseUrl });
+    }
   });
 
   it("updates person curation settings", async () => {

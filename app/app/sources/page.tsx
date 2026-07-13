@@ -9,7 +9,7 @@ export default async function SourcesPage() {
   const workspace = await readWorkspace();
 
   return (
-    <AppShell title="Sources" active="/app/sources">
+    <AppShell title="Sources" active="/app/sources" archiveName={workspace.archiveName}>
       <SourceWorkspace
         caseOptions={buildCaseLinkOptions(workspace.cases)}
         initialPersonOptions={buildPersonLinkOptions(workspace.people, workspace.sources)}

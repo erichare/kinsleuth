@@ -1,4 +1,5 @@
 import { AppShell } from "@/components/app-shell";
+import { ArchiveBrandingForm } from "@/components/archive-branding-form";
 import { Status } from "@/components/ui";
 import { getRuntimeStatus } from "@/lib/runtime-status";
 
@@ -6,30 +7,15 @@ export const dynamic = "force-dynamic";
 
 export default async function SettingsPage() {
   const runtime = await getRuntimeStatus();
+  const archiveName = runtime.database.archiveName || "Private archive";
 
   return (
-    <AppShell title="Settings" active="/app/settings">
+    <AppShell title="Settings" active="/app/settings" archiveName={archiveName}>
       <div className="app-grid">
         <div className="app-card">
           <h2>Archive branding</h2>
-          <div className="form-grid">
-            <label className="field">
-              <span>Archive name</span>
-              <input defaultValue="Riemer - Zajicek Archive" />
-            </label>
-            <label className="field">
-              <span>Tagline</span>
-              <input defaultValue="A free and open archive of curated family history." />
-            </label>
-            <label className="field">
-              <span>Accent color</span>
-              <input defaultValue="#00634f" />
-            </label>
-            <label className="field">
-              <span>Public root</span>
-              <input defaultValue="/" />
-            </label>
-          </div>
+          <p className="muted">The name and tagline appear across the private workspace and the public archive.</p>
+          <ArchiveBrandingForm initialName={runtime.database.archiveName} initialTagline={runtime.database.archiveTagline} />
         </div>
         <aside className="app-card">
           <h2>AI provider</h2>

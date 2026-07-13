@@ -1,4 +1,4 @@
-import { parseGedcom, type GedcomRecord } from "./parser";
+import { parseGedcom } from "./parser";
 import type { ImportSummary } from "../models";
 
 export type ImportSnapshot = {
@@ -45,13 +45,14 @@ export function createImportSnapshot(sourceName: string, content: string): Impor
 }
 
 export function diffImportSnapshots(previous: ImportSnapshot, next: ImportSnapshot): ImportDiff {
-  const previousByKey = new Map(previous.records.map((record) => [recordKey(record), record]));
-  const nextByKey = new Map(next.records.map((record) => [recordKey(record), record]));
+  const previousKeys = buildRecordKeys(previous.records);
+  const nextKeys = buildRecordKeys(next.records);
+  const previousByKey = new Map(previous.records.map((record, index) => [previousKeys[index], record]));
+  const nextKeySet = new Set(nextKeys);
   const records: ImportDiff["records"] = [];
 
-  for (const nextRecord of next.records) {
-    const key = recordKey(nextRecord);
-    const previousRecord = previousByKey.get(key);
+  for (const [index, nextRecord] of next.records.entries()) {
+    const previousRecord = previousByKey.get(nextKeys[index]);
     if (!previousRecord) {
       records.push({ xref: nextRecord.xref, type: nextRecord.type, status: "added" });
     } else if (previousRecord.checksum !== nextRecord.checksum) {
@@ -61,9 +62,8 @@ export function diffImportSnapshots(previous: ImportSnapshot, next: ImportSnapsh
     }
   }
 
-  for (const previousRecord of previous.records) {
-    const key = recordKey(previousRecord);
-    if (!nextByKey.has(key)) {
+  for (const [index, previousRecord] of previous.records.entries()) {
+    if (!nextKeySet.has(previousKeys[index])) {
       records.push({ xref: previousRecord.xref, type: previousRecord.type, status: "deleted" });
     }
   }
@@ -77,8 +77,17 @@ export function diffImportSnapshots(previous: ImportSnapshot, next: ImportSnapsh
   };
 }
 
-function recordKey(record: Pick<GedcomRecord, "xref" | "type">): string {
-  return record.xref ?? `${record.type}:no-xref`;
+function buildRecordKeys(records: ImportSnapshot["records"]): string[] {
+  // Records without an xref (HEAD, TRLR, stray notes) and duplicated xrefs must not collapse into a
+  // single map entry, so each repeated base key gets a stable occurrence suffix in document order.
+  const occurrences = new Map<string, number>();
+
+  return records.map((record) => {
+    const baseKey = record.xref ?? `${record.type}:no-xref`;
+    const occurrence = occurrences.get(baseKey) ?? 0;
+    occurrences.set(baseKey, occurrence + 1);
+    return occurrence === 0 ? baseKey : `${baseKey}#${occurrence}`;
+  });
 }
 
 export function stableHash(value: string): string {

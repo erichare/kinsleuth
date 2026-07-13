@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createSessionToken, sessionCookieName, sessionMaxAgeSeconds } from "@/lib/session";
+import { createSessionToken, safeInternalPath, sessionCookieName, sessionMaxAgeSeconds } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -17,7 +17,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid password" }, { status: 401 });
   }
 
-  const response = NextResponse.json({ ok: true, next: safeNextPath(body.next) });
+  const response = NextResponse.json({ ok: true, next: safeInternalPath(body.next) });
   response.cookies.set({
     name: sessionCookieName,
     value: await createSessionToken(authSecret || "kinsleuth-dev-secret"),
@@ -28,11 +28,4 @@ export async function POST(request: Request) {
     maxAge: sessionMaxAgeSeconds
   });
   return response;
-}
-
-function safeNextPath(next: string | undefined): string {
-  if (!next?.startsWith("/") || next.startsWith("//")) {
-    return "/app";
-  }
-  return next;
 }

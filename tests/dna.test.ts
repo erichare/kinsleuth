@@ -27,5 +27,20 @@ describe("DNA triage", () => {
     expect(hypothesis.evidence.length).toBeGreaterThan(3);
     expect(hypothesis.uncertainty.length).toBeGreaterThan(1);
   });
+
+  it("falls back to the closest relationship when shared cM exceeds every range", () => {
+    const hypothesis = createDnaConnectionHypothesis({ ...demoDnaMatches[0], totalCm: 3800 }, demoPeople);
+
+    expect(hypothesis.likelyGeneration).toBe("direct parent-child");
+  });
+
+  it("matches surnames and places case-insensitively", () => {
+    const hypothesis = createDnaConnectionHypothesis(
+      { ...demoDnaMatches[0], surnames: ["RIEMER"], places: ["chicago"] },
+      demoPeople
+    );
+
+    expect(hypothesis.candidateCommonAncestors).toContain("Elizabeth Katherine Riemer");
+  });
 });
 

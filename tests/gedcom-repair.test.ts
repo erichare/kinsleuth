@@ -46,6 +46,7 @@ function makeWorkspace(overrides: Partial<WorkspaceData>): WorkspaceData {
   return {
     version: "0.17.0",
     archiveName: "Test Archive",
+    archiveTagline: "",
     people: [],
     cases: [],
     sources: [],

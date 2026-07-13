@@ -16,7 +16,7 @@ export const demoPeople: PersonSummary[] = [
     livingStatus: "deceased",
     privacy: "public",
     published: true,
-    relatives: ["Frank Riemer", "Mary Ann Zajicek", "William Henry Fletcher"],
+    relatives: ["p-mary-zajicek", "p-william-fletcher"],
     notes: "Published synthetic profile used to demonstrate KinSleuth's person workspace.",
     facts: [
       {
@@ -69,7 +69,7 @@ export const demoPeople: PersonSummary[] = [
     livingStatus: "deceased",
     privacy: "private",
     published: false,
-    relatives: ["Elizabeth Katherine Riemer"],
+    relatives: ["p-elizabeth-riemer"],
     facts: [
       {
         id: "fact-5",
@@ -93,7 +93,7 @@ export const demoPeople: PersonSummary[] = [
     livingStatus: "deceased",
     privacy: "private",
     published: false,
-    relatives: ["Elizabeth Katherine Riemer"],
+    relatives: ["p-elizabeth-riemer"],
     facts: [
       {
         id: "fact-6",

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { sessionCookieName, verifySessionToken } from "@/lib/session";
 
 const protectedPagePrefixes = ["/app"];
-const protectedApiPrefixes = ["/api/ai", "/api/cases", "/api/dna", "/api/imports", "/api/people", "/api/publishing", "/api/reports", "/api/sources", "/api/uploads"];
+const protectedApiPrefixes = ["/api/ai", "/api/cases", "/api/dna", "/api/imports", "/api/people", "/api/publishing", "/api/reports", "/api/settings", "/api/sources", "/api/uploads"];
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -43,5 +43,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/app/:path*", "/api/ai/:path*", "/api/cases/:path*", "/api/dna/:path*", "/api/imports/:path*", "/api/people/:path*", "/api/publishing/:path*", "/api/reports/:path*", "/api/sources/:path*", "/api/uploads/:path*"]
+  matcher: ["/app/:path*", "/api/ai/:path*", "/api/cases/:path*", "/api/dna/:path*", "/api/imports/:path*", "/api/people/:path*", "/api/publishing/:path*", "/api/reports/:path*", "/api/settings/:path*", "/api/sources/:path*", "/api/uploads/:path*"]
 };

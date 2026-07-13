@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Icons } from "@/components/icons";
 import { filterDnaMatches, paginateDnaMatches, type DnaHelpfulnessFilter, type DnaSideFilter, type DnaSortKey, type DnaStatusFilter, type DnaTreeFilter, type ScoredDnaMatch } from "@/lib/dna-search";
 import type { DnaConnectionHypothesis, DnaMatch, ResearchCase } from "@/lib/models";
@@ -89,6 +89,7 @@ export function DnaTriageWorkspace({ initialMatches, initialHypotheses = [], ini
   const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
   const [error, setError] = useState("");
   const [importFile, setImportFile] = useState<File | null>(null);
+  const importFileInputRef = useRef<HTMLInputElement>(null);
   const [importStatus, setImportStatus] = useState<"idle" | "loading" | "error" | "success">("idle");
   const [importMessage, setImportMessage] = useState("");
   const [editStatus, setEditStatus] = useState<"idle" | "saving" | "deleting" | "error" | "success">("idle");
@@ -115,6 +116,7 @@ export function DnaTriageWorkspace({ initialMatches, initialHypotheses = [], ini
     () => matches.find((match) => match.id === selectedMatchId) ?? pagination.items[0] ?? matches[0],
     [matches, pagination.items, selectedMatchId]
   );
+  const selectedMatchIdRef = useRef(selectedMatch?.id ?? "");
   const hypothesis = selectedMatch ? hypotheses[selectedMatch.id] ?? createFallbackHypothesis(selectedMatch) : createFallbackHypothesis();
   const highPriorityCount = useMemo(() => matches.filter((match) => match.triageStatus === "high_priority").length, [matches]);
   const needsReviewCount = useMemo(() => matches.filter((match) => match.triageStatus === "needs_review").length, [matches]);
@@ -124,11 +126,16 @@ export function DnaTriageWorkspace({ initialMatches, initialHypotheses = [], ini
     return () => window.clearTimeout(timeout);
   }, [resultSummary]);
 
+  useEffect(() => {
+    selectedMatchIdRef.current = selectedMatch?.id ?? "";
+  }, [selectedMatch]);
+
   function resetPaging() {
     setPage(1);
   }
 
   function selectMatch(match: ScoredDnaMatch) {
+    selectedMatchIdRef.current = match.id;
     setSelectedMatchId(match.id);
     setEditForm(createEditForm(match));
     setLinkForm(createCaseLinkForm(match, linkForm.caseId || cases[0]?.id || ""));
@@ -143,7 +150,7 @@ export function DnaTriageWorkspace({ initialMatches, initialHypotheses = [], ini
     setError("");
 
     const match: DnaMatch = {
-      id: `dna-${form.displayName.toLowerCase().replace(/[^a-z0-9]+/g, "-") || "match"}`,
+      id: `dna-${form.displayName.toLowerCase().replace(/[^a-z0-9]+/g, "-") || "match"}-${crypto.randomUUID().slice(0, 8)}`,
       displayName: form.displayName,
       totalCm: Number(form.totalCm),
       longestSegmentCm: form.longestSegmentCm ? Number(form.longestSegmentCm) : undefined,
@@ -157,24 +164,30 @@ export function DnaTriageWorkspace({ initialMatches, initialHypotheses = [], ini
       triageStatus: "needs_review"
     };
 
-    const response = await fetch("/api/dna/analyze", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(match)
-    });
+    try {
+      const response = await fetch("/api/dna/analyze", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(match)
+      });
 
-    if (!response.ok) {
+      if (!response.ok) {
+        setStatus("error");
+        setError((await response.text().catch(() => "")) || "DNA analysis failed.");
+        return;
+      }
+
+      const result = (await response.json()) as DnaAnalysisResponse;
+      const analyzedMatch = result.match ?? { ...match, helpfulnessScore: result.helpfulnessScore };
+      upsertMatches([analyzedMatch]);
+      upsertHypotheses([result.hypothesis]);
+      selectMatch(analyzedMatch);
+    } catch (caught) {
       setStatus("error");
-      setError((await response.text()) || "DNA analysis failed.");
-      return;
+      setError(toErrorMessage(caught, "DNA analysis failed."));
+    } finally {
+      setStatus((current) => (current === "loading" ? "idle" : current));
     }
-
-    const result = (await response.json()) as DnaAnalysisResponse;
-    const analyzedMatch = result.match ?? { ...match, helpfulnessScore: result.helpfulnessScore };
-    upsertMatches([analyzedMatch]);
-    upsertHypotheses([result.hypothesis]);
-    selectMatch(analyzedMatch);
-    setStatus("idle");
   }
 
   async function importCsv() {
@@ -190,28 +203,39 @@ export function DnaTriageWorkspace({ initialMatches, initialHypotheses = [], ini
     const formData = new FormData();
     formData.set("file", importFile);
 
-    const response = await fetch("/api/dna/import", {
-      method: "POST",
-      body: formData
-    });
-    const body = (await response.json()) as Partial<DnaImportResponse> & { error?: string };
+    try {
+      const response = await fetch("/api/dna/import", {
+        method: "POST",
+        body: formData
+      });
+      const body = (await response.json().catch(() => null)) as (Partial<DnaImportResponse> & { error?: string }) | null;
 
-    if (!response.ok) {
+      if (!response.ok || !body) {
+        setImportStatus("error");
+        setImportMessage(body?.error ?? "DNA CSV import failed.");
+        return;
+      }
+
+      const importedMatches = body.matches ?? [];
+      const skippedCount = body.skipped?.length ?? 0;
+
+      upsertMatches(importedMatches);
+      upsertHypotheses(body.hypotheses ?? []);
+      if (importedMatches[0]) {
+        selectMatch(importedMatches[0]);
+      }
+      setImportFile(null);
+      if (importFileInputRef.current) {
+        importFileInputRef.current.value = "";
+      }
+      setImportStatus("success");
+      setImportMessage(`${body.imported ?? importedMatches.length} imported${skippedCount ? `, ${skippedCount} skipped` : ""}.`);
+    } catch (caught) {
       setImportStatus("error");
-      setImportMessage(body.error ?? "DNA CSV import failed.");
-      return;
+      setImportMessage(toErrorMessage(caught, "DNA CSV import failed."));
+    } finally {
+      setImportStatus((current) => (current === "loading" ? "idle" : current));
     }
-
-    const importedMatches = body.matches ?? [];
-    const skippedCount = body.skipped?.length ?? 0;
-
-    upsertMatches(importedMatches);
-    upsertHypotheses(body.hypotheses ?? []);
-    if (importedMatches[0]) {
-      selectMatch(importedMatches[0]);
-    }
-    setImportStatus("success");
-    setImportMessage(`${body.imported ?? importedMatches.length} imported${skippedCount ? `, ${skippedCount} skipped` : ""}.`);
   }
 
   async function saveSelectedMatch() {
@@ -219,36 +243,52 @@ export function DnaTriageWorkspace({ initialMatches, initialHypotheses = [], ini
       return;
     }
 
+    const targetMatchId = selectedMatch.id;
     setEditStatus("saving");
     setEditMessage("");
 
-    const response = await fetch(`/api/dna/${encodeURIComponent(selectedMatch.id)}`, {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        side: editForm.side,
-        treeStatus: editForm.treeStatus,
-        triageStatus: editForm.triageStatus,
-        predictedRelationship: editForm.predictedRelationship,
-        ancestryUrl: editForm.ancestryUrl || undefined,
-        notes: editForm.notes
-      })
-    });
-    const body = (await response.json()) as Partial<DnaUpdateResponse> & { error?: string };
+    try {
+      const response = await fetch(`/api/dna/${encodeURIComponent(targetMatchId)}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          side: editForm.side,
+          treeStatus: editForm.treeStatus,
+          triageStatus: editForm.triageStatus,
+          predictedRelationship: editForm.predictedRelationship,
+          ancestryUrl: editForm.ancestryUrl || undefined,
+          notes: editForm.notes
+        })
+      });
+      const body = (await response.json().catch(() => null)) as (Partial<DnaUpdateResponse> & { error?: string }) | null;
 
-    if (!response.ok || !body.match) {
-      setEditStatus("error");
-      setEditMessage(body.error ?? "Could not update match.");
-      return;
-    }
+      if (!response.ok || !body?.match) {
+        if (selectedMatchIdRef.current === targetMatchId) {
+          setEditStatus("error");
+          setEditMessage(body?.error ?? "Could not update match.");
+        }
+        return;
+      }
 
-    upsertMatches([body.match]);
-    if (body.hypothesis) {
-      upsertHypotheses([body.hypothesis]);
+      upsertMatches([body.match]);
+      if (body.hypothesis) {
+        upsertHypotheses([body.hypothesis]);
+      }
+      if (selectedMatchIdRef.current === targetMatchId) {
+        setEditForm(createEditForm(body.match));
+        setEditStatus("success");
+        setEditMessage("Match updated.");
+      }
+    } catch (caught) {
+      if (selectedMatchIdRef.current === targetMatchId) {
+        setEditStatus("error");
+        setEditMessage(toErrorMessage(caught, "Could not update match."));
+      }
+    } finally {
+      if (selectedMatchIdRef.current === targetMatchId) {
+        setEditStatus((current) => (current === "saving" ? "idle" : current));
+      }
     }
-    setEditForm(createEditForm(body.match));
-    setEditStatus("success");
-    setEditMessage("Match updated.");
   }
 
   async function deleteSelectedMatch() {
@@ -256,28 +296,44 @@ export function DnaTriageWorkspace({ initialMatches, initialHypotheses = [], ini
       return;
     }
 
+    const targetMatchId = selectedMatch.id;
     setEditStatus("deleting");
     setEditMessage("");
 
-    const response = await fetch(`/api/dna/${encodeURIComponent(selectedMatch.id)}`, {
-      method: "DELETE"
-    });
+    try {
+      const response = await fetch(`/api/dna/${encodeURIComponent(targetMatchId)}`, {
+        method: "DELETE"
+      });
 
-    if (!response.ok) {
-      const body = (await response.json()) as { error?: string };
-      setEditStatus("error");
-      setEditMessage(body.error ?? "Could not delete match.");
-      return;
+      if (!response.ok) {
+        const body = (await response.json().catch(() => null)) as { error?: string } | null;
+        if (selectedMatchIdRef.current === targetMatchId) {
+          setEditStatus("error");
+          setEditMessage(body?.error ?? "Could not delete match.");
+        }
+        return;
+      }
+
+      setMatches((current) => current.filter((match) => match.id !== targetMatchId));
+      if (selectedMatchIdRef.current === targetMatchId) {
+        const nextSelected = matches.find((match) => match.id !== targetMatchId);
+        selectedMatchIdRef.current = nextSelected?.id ?? "";
+        setSelectedMatchId(nextSelected?.id ?? "");
+        setEditForm(createEditForm(nextSelected));
+        setLinkForm(createCaseLinkForm(nextSelected, linkForm.caseId || cases[0]?.id || ""));
+        setEditStatus("success");
+        setEditMessage("Match deleted.");
+      }
+    } catch (caught) {
+      if (selectedMatchIdRef.current === targetMatchId) {
+        setEditStatus("error");
+        setEditMessage(toErrorMessage(caught, "Could not delete match."));
+      }
+    } finally {
+      if (selectedMatchIdRef.current === targetMatchId) {
+        setEditStatus((current) => (current === "deleting" ? "idle" : current));
+      }
     }
-
-    const nextMatches = matches.filter((match) => match.id !== selectedMatch.id);
-    const nextSelected = nextMatches[0];
-    setMatches(nextMatches);
-    setSelectedMatchId(nextSelected?.id ?? "");
-    setEditForm(createEditForm(nextSelected));
-    setLinkForm(createCaseLinkForm(nextSelected, linkForm.caseId || cases[0]?.id || ""));
-    setEditStatus("success");
-    setEditMessage("Match deleted.");
   }
 
   async function linkSelectedMatchToCase() {
@@ -287,36 +343,52 @@ export function DnaTriageWorkspace({ initialMatches, initialHypotheses = [], ini
       return;
     }
 
+    const targetMatchId = selectedMatch.id;
     setLinkStatus("saving");
     setLinkMessage("");
 
-    const response = await fetch(`/api/cases/${encodeURIComponent(linkForm.caseId)}/evidence`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        linkedDnaMatchId: selectedMatch.id,
-        title: linkForm.title,
-        summary: linkForm.summary,
-        confidence: Number(linkForm.confidence)
-      })
-    });
-    const body = (await response.json()) as Partial<CaseEvidenceResponse> & { error?: string };
+    try {
+      const response = await fetch(`/api/cases/${encodeURIComponent(linkForm.caseId)}/evidence`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          linkedDnaMatchId: targetMatchId,
+          title: linkForm.title,
+          summary: linkForm.summary,
+          confidence: Number(linkForm.confidence)
+        })
+      });
+      const body = (await response.json().catch(() => null)) as (Partial<CaseEvidenceResponse> & { error?: string }) | null;
 
-    if (!response.ok || !body.case || !body.evidence) {
-      setLinkStatus("error");
-      setLinkMessage(body.error ?? "Could not link DNA evidence.");
-      return;
+      if (!response.ok || !body?.case || !body.evidence) {
+        if (selectedMatchIdRef.current === targetMatchId) {
+          setLinkStatus("error");
+          setLinkMessage(body?.error ?? "Could not link DNA evidence.");
+        }
+        return;
+      }
+
+      setCases((current) => current.map((researchCase) => (researchCase.id === body.case?.id ? body.case : researchCase)));
+      if (selectedMatchIdRef.current === targetMatchId) {
+        setLinkForm({
+          caseId: body.case.id,
+          title: body.evidence.title,
+          summary: body.evidence.summary,
+          confidence: String(body.evidence.confidence)
+        });
+        setLinkStatus("success");
+        setLinkMessage(body.created ? "DNA evidence added to case." : "Existing DNA evidence updated.");
+      }
+    } catch (caught) {
+      if (selectedMatchIdRef.current === targetMatchId) {
+        setLinkStatus("error");
+        setLinkMessage(toErrorMessage(caught, "Could not link DNA evidence."));
+      }
+    } finally {
+      if (selectedMatchIdRef.current === targetMatchId) {
+        setLinkStatus((current) => (current === "saving" ? "idle" : current));
+      }
     }
-
-    setCases((current) => current.map((researchCase) => (researchCase.id === body.case?.id ? body.case : researchCase)));
-    setLinkForm({
-      caseId: body.case.id,
-      title: body.evidence.title,
-      summary: body.evidence.summary,
-      confidence: String(body.evidence.confidence)
-    });
-    setLinkStatus("success");
-    setLinkMessage(body.created ? "DNA evidence added to case." : "Existing DNA evidence updated.");
   }
 
   function upsertMatches(incoming: ScoredDnaMatch[]) {
@@ -465,7 +537,7 @@ export function DnaTriageWorkspace({ initialMatches, initialHypotheses = [], ini
           <div className="form-grid">
             <label className="field">
               <span>CSV file</span>
-              <input accept=".csv,text/csv" type="file" onChange={(event) => setImportFile(event.target.files?.[0] ?? null)} />
+              <input accept=".csv,text/csv" ref={importFileInputRef} type="file" onChange={(event) => setImportFile(event.target.files?.[0] ?? null)} />
             </label>
             <label className="field">
               <span>Expected columns</span>
@@ -490,8 +562,8 @@ export function DnaTriageWorkspace({ initialMatches, initialHypotheses = [], ini
           <h2>Analyze a match</h2>
           <div className="form-grid">
             <TextField label="Match name" value={form.displayName} onChange={(value) => setForm({ ...form, displayName: value })} />
-            <TextField label="Total cM" value={form.totalCm} onChange={(value) => setForm({ ...form, totalCm: value })} />
-            <TextField label="Longest segment cM" value={form.longestSegmentCm} onChange={(value) => setForm({ ...form, longestSegmentCm: value })} />
+            <TextField inputMode="decimal" label="Total cM" min={0} step={0.1} type="number" value={form.totalCm} onChange={(value) => setForm({ ...form, totalCm: value })} />
+            <TextField inputMode="decimal" label="Longest segment cM" min={0} step={0.1} type="number" value={form.longestSegmentCm} onChange={(value) => setForm({ ...form, longestSegmentCm: value })} />
             <TextField label="Predicted relationship" value={form.predictedRelationship} onChange={(value) => setForm({ ...form, predictedRelationship: value })} />
             <SelectField label="Side" value={form.side} onChange={(value) => setForm({ ...form, side: value })} options={["maternal", "paternal", "both", "unknown"]} />
             <SelectField label="Tree status" value={form.treeStatus} onChange={(value) => setForm({ ...form, treeStatus: value })} options={["public", "partial", "private", "none", "unknown"]} />
@@ -562,7 +634,7 @@ export function DnaTriageWorkspace({ initialMatches, initialHypotheses = [], ini
                       <span>Evidence summary</span>
                       <textarea value={linkForm.summary} onChange={(event) => setLinkForm({ ...linkForm, summary: event.target.value })} />
                     </label>
-                    <TextField label="Confidence" value={linkForm.confidence} onChange={(value) => setLinkForm({ ...linkForm, confidence: value })} />
+                    <TextField inputMode="decimal" label="Confidence" max={1} min={0} step={0.05} type="number" value={linkForm.confidence} onChange={(value) => setLinkForm({ ...linkForm, confidence: value })} />
                   </div>
                   <div className="hero-actions">
                     <button aria-busy={linkStatus === "saving"} className="button" disabled={linkStatus === "saving"} onClick={linkSelectedMatchToCase} type="button">
@@ -677,11 +749,29 @@ function createFallbackHypothesis(match?: ScoredDnaMatch): DnaConnectionHypothes
   };
 }
 
-function TextField({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+function TextField({
+  label,
+  value,
+  onChange,
+  type = "text",
+  inputMode,
+  min,
+  max,
+  step
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  type?: string;
+  inputMode?: "decimal";
+  min?: number;
+  max?: number;
+  step?: number;
+}) {
   return (
     <label className="field">
       <span>{label}</span>
-      <input value={value} onChange={(event) => onChange(event.target.value)} />
+      <input inputMode={inputMode} max={max} min={min} step={step} type={type} value={value} onChange={(event) => onChange(event.target.value)} />
     </label>
   );
 }
@@ -719,6 +809,10 @@ function statusTone(status: DnaMatch["triageStatus"]): "ok" | "warning" | "priva
 
 function formatOption(value: string): string {
   return value.replace(/_/g, " ");
+}
+
+function toErrorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error && error.message ? error.message : fallback;
 }
 
 function createCaseLinkForm(match: ScoredDnaMatch | undefined, caseId: string): CaseLinkForm {

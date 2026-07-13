@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { createImportSnapshot, diffImportSnapshots } from "@/lib/gedcom/importer";
 
@@ -19,6 +20,40 @@ describe("import snapshots", () => {
     expect(diff.added).toBe(1);
     expect(diff.deleted).toBe(1);
     expect(diff.unchanged).toBe(2);
+  });
+
+  it("reports zero changes for byte-identical files with duplicated records", () => {
+    const fixture = readFileSync("fixtures/synthetic-family.ged", "utf8");
+    const duplicated = `${fixture}\n${fixture}`;
+    const previous = createImportSnapshot("previous.ged", duplicated);
+    const next = createImportSnapshot("next.ged", duplicated);
+    const diff = diffImportSnapshots(previous, next);
+
+    expect(diff.added).toBe(0);
+    expect(diff.changed).toBe(0);
+    expect(diff.deleted).toBe(0);
+    expect(diff.unchanged).toBe(previous.records.length);
+  });
+
+  it("does not invent changes for records without xrefs in byte-identical files", () => {
+    const content = "0 HEAD\n0 NOTE first stray note\n0 NOTE second stray note\n0 TRLR";
+    const diff = diffImportSnapshots(createImportSnapshot("previous.ged", content), createImportSnapshot("next.ged", content));
+
+    expect(diff.added).toBe(0);
+    expect(diff.changed).toBe(0);
+    expect(diff.deleted).toBe(0);
+    expect(diff.unchanged).toBe(4);
+  });
+
+  it("tracks duplicated xrefs by occurrence instead of collapsing them", () => {
+    const previous = createImportSnapshot("previous.ged", "0 @I1@ INDI\n1 NAME First /Copy/\n0 @I1@ INDI\n1 NAME Second /Copy/");
+    const next = createImportSnapshot("next.ged", "0 @I1@ INDI\n1 NAME First /Copy/");
+    const diff = diffImportSnapshots(previous, next);
+
+    expect(diff.added).toBe(0);
+    expect(diff.changed).toBe(0);
+    expect(diff.unchanged).toBe(1);
+    expect(diff.deleted).toBe(1);
   });
 
   it("previews a GEDCOM larger than the Vercel request limit", () => {

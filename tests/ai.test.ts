@@ -24,6 +24,18 @@ describe("AI analysis", () => {
     expect(anomalies.some((anomaly) => anomaly.type === "date_conflict")).toBe(true);
   });
 
+  it("flags published people without confirmed death evidence as privacy risks", () => {
+    const anomalies = findStructuredAnomalies([
+      {
+        ...demoPeople[0],
+        published: true,
+        livingStatus: "unknown"
+      }
+    ]);
+
+    expect(anomalies.some((anomaly) => anomaly.type === "privacy_risk")).toBe(true);
+  });
+
   it("requires owner/admin role for whole-tree analysis", async () => {
     await expect(
       runAIAnalysis({

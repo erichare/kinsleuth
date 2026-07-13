@@ -81,6 +81,38 @@ describe("GEDCOM import route", () => {
     expect(blobMocks.get).not.toHaveBeenCalled();
   });
 
+  it("decodes a UTF-16LE multipart upload using its byte-order mark", async () => {
+    const gedcom = "0 HEAD\n1 CHAR UNICODE\n0 @I1@ INDI\n1 NAME José /Müller/\n0 TRLR";
+    const bytes = Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(gedcom, "utf16le")]);
+    const formData = new FormData();
+    formData.append("file", new File([bytes], "utf16-family.ged", { type: "text/plain" }));
+
+    const response = await POST(new Request("https://kinsleuth.example/api/imports", { method: "POST", body: formData }));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.snapshot.recordCount).toBe(3);
+    expect(body.snapshot.summary.individuals).toBe(1);
+    expect(body.warnings).toEqual([]);
+  });
+
+  it("surfaces an approximate-support warning for staged ANSEL uploads", async () => {
+    const gedcom = "0 HEAD\n1 CHAR ANSEL\n0 @I1@ INDI\n1 NAME Test /Person/\n0 TRLR";
+    mockStagedContent(gedcom);
+
+    const response = await POST(importRequest({
+      sourceName: "family.ged",
+      currentUpload: { pathname, etag: "etag-1", size: Buffer.byteLength(gedcom) },
+      apply: false
+    }));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.snapshot.recordCount).toBe(3);
+    expect(body.warnings).toHaveLength(1);
+    expect(body.warnings[0]).toMatch(/ANSEL/);
+  });
+
   it("rejects staged references that exceed the combined memory envelope", async () => {
     const response = await POST(importRequest({
       sourceName: "family.ged",

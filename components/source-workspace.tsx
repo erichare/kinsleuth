@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Icons } from "@/components/icons";
 import { type PeopleSearchResult } from "@/lib/people-search";
 import {
@@ -50,9 +50,11 @@ export function SourceWorkspace({ initialResult, initialPersonOptions, caseOptio
   const [personQuery, setPersonQuery] = useState("");
   const [debouncedPersonQuery, setDebouncedPersonQuery] = useState("");
   const [searchedPersonOptions, setSearchedPersonOptions] = useState<PersonLinkOption[]>([]);
-  const [status, setStatus] = useState<"idle" | "saving" | "error">("idle");
+  const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [error, setError] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [searchError, setSearchError] = useState("");
+  const [lookupError, setLookupError] = useState("");
   const [isSearching, setIsSearching] = useState(false);
 
   const sourceTypeOptions = useMemo(() => {
@@ -134,9 +136,10 @@ export function SourceWorkspace({ initialResult, initialPersonOptions, caseOptio
             detail: [person.birthDate, person.birthPlace].filter(Boolean).join(" · ") || person.slug
           }))
         );
+        setLookupError("");
       } catch (requestError) {
         if (!controller.signal.aborted) {
-          setError(requestError instanceof Error ? requestError.message : "Person lookup failed");
+          setLookupError(requestError instanceof Error ? requestError.message : "Person lookup failed");
         }
       }
     }
@@ -147,6 +150,11 @@ export function SourceWorkspace({ initialResult, initialPersonOptions, caseOptio
 
   function resetPaging() {
     setPage(1);
+  }
+
+  function updateForm(patch: Partial<typeof initialForm>) {
+    setForm((current) => ({ ...current, ...patch }));
+    setStatus((current) => (current === "saved" ? "idle" : current));
   }
 
   async function saveSource() {
@@ -161,22 +169,31 @@ export function SourceWorkspace({ initialResult, initialPersonOptions, caseOptio
       formData.set("file", file);
     }
 
-    const response = await fetch("/api/uploads", {
-      method: "POST",
-      body: formData
-    });
+    try {
+      const response = await fetch("/api/uploads", {
+        method: "POST",
+        body: formData
+      });
 
-    if (!response.ok) {
+      if (!response.ok) {
+        const body = await response.text().catch(() => "");
+        throw new Error(body || "Upload failed");
+      }
+
+      setForm(initialForm);
+      setFile(null);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+      setPage(1);
+      setRefreshKey((current) => current + 1);
+      setStatus("saved");
+    } catch (requestError) {
       setStatus("error");
-      setError(await response.text());
-      return;
+      setError(requestError instanceof Error ? requestError.message : "Upload failed");
+    } finally {
+      setStatus((current) => (current === "saving" ? "idle" : current));
     }
-
-    setForm(initialForm);
-    setFile(null);
-    setPage(1);
-    setRefreshKey((current) => current + 1);
-    setStatus("idle");
   }
 
   return (
@@ -353,33 +370,46 @@ export function SourceWorkspace({ initialResult, initialPersonOptions, caseOptio
         <aside aria-busy={status === "saving"} className="app-card">
           <h2>Add source</h2>
           <div className="form-grid" style={{ gridTemplateColumns: "1fr" }}>
-            <Field label="Title" value={form.title} onChange={(value) => setForm({ ...form, title: value })} />
-            <Field label="Type" value={form.sourceType} onChange={(value) => setForm({ ...form, sourceType: value })} />
-            <Field label="Repository" value={form.repository} onChange={(value) => setForm({ ...form, repository: value })} />
-            <Field label="Citation date" value={form.citationDate} onChange={(value) => setForm({ ...form, citationDate: value })} />
+            <Field label="Title" value={form.title} onChange={(value) => updateForm({ title: value })} />
+            <Field label="Type" value={form.sourceType} onChange={(value) => updateForm({ sourceType: value })} />
+            <Field label="Repository" value={form.repository} onChange={(value) => updateForm({ repository: value })} />
+            <Field label="Citation date" value={form.citationDate} onChange={(value) => updateForm({ citationDate: value })} />
             <Field label="Find linked person" value={personQuery} onChange={setPersonQuery} />
-            <SelectField label="Linked person" value={form.linkedPersonId} onChange={(value) => setForm({ ...form, linkedPersonId: value })} options={[["", "Unlinked"], ...visiblePersonOptions.map((person) => [person.id, `${person.displayName} - ${person.detail}`] as [string, string])]} />
-            <SelectField label="Linked case" value={form.linkedCaseId} onChange={(value) => setForm({ ...form, linkedCaseId: value })} options={[["", "Unlinked"], ...caseOptions.map((researchCase) => [researchCase.id, researchCase.title] as [string, string])]} />
+            {lookupError ? <p aria-atomic="true" className="form-error" role="alert">{lookupError}</p> : null}
+            <SelectField label="Linked person" value={form.linkedPersonId} onChange={(value) => updateForm({ linkedPersonId: value })} options={[["", "Unlinked"], ...visiblePersonOptions.map((person) => [person.id, `${person.displayName} - ${person.detail}`] as [string, string])]} />
+            <SelectField label="Linked case" value={form.linkedCaseId} onChange={(value) => updateForm({ linkedCaseId: value })} options={[["", "Unlinked"], ...caseOptions.map((researchCase) => [researchCase.id, researchCase.title] as [string, string])]} />
             <SelectField
               label="Privacy"
               value={form.privacy}
-              onChange={(value) => setForm({ ...form, privacy: value })}
+              onChange={(value) => updateForm({ privacy: value })}
               options={[
                 ["private", "Private"],
                 ["sensitive", "Sensitive"],
                 ["public", "Public"]
               ]}
             />
-            <Field label="Confidence 0-1" value={form.confidence} onChange={(value) => setForm({ ...form, confidence: value })} />
+            <Field inputMode="decimal" label="Confidence 0-1" max={1} min={0} step={0.05} type="number" value={form.confidence} onChange={(value) => updateForm({ confidence: value })} />
             <label className="field">
               <span>File</span>
-              <input type="file" onChange={(event) => setFile(event.target.files?.[0] ?? null)} />
+              <input
+                ref={fileInputRef}
+                type="file"
+                onChange={(event) => {
+                  setFile(event.target.files?.[0] ?? null);
+                  setStatus((current) => (current === "saved" ? "idle" : current));
+                }}
+              />
             </label>
-            <TextArea label="Transcript" value={form.transcript} onChange={(value) => setForm({ ...form, transcript: value })} />
-            <TextArea label="Notes" value={form.notes} onChange={(value) => setForm({ ...form, notes: value })} />
+            <TextArea label="Transcript" value={form.transcript} onChange={(value) => updateForm({ transcript: value })} />
+            <TextArea label="Notes" value={form.notes} onChange={(value) => updateForm({ notes: value })} />
             <button aria-busy={status === "saving"} className="button" disabled={status === "saving"} onClick={saveSource} type="button">
               {status === "saving" ? "Saving..." : "Save source"}
             </button>
+            {status === "saved" ? (
+              <div aria-atomic="true" role="status">
+                <Status>Source saved</Status>
+              </div>
+            ) : null}
             {status === "error" || error ? (
               <div aria-atomic="true" role="alert">
                 {status === "error" ? <Status tone="warning">Upload failed</Status> : null}
@@ -428,11 +458,29 @@ function PaginationControls({ page, pageCount, onPageChange }: { page: number; p
   );
 }
 
-function Field({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+function Field({
+  label,
+  value,
+  onChange,
+  type = "text",
+  inputMode,
+  min,
+  max,
+  step
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  type?: string;
+  inputMode?: "decimal";
+  min?: number;
+  max?: number;
+  step?: number;
+}) {
   return (
     <label className="field">
       <span>{label}</span>
-      <input value={value} onChange={(event) => onChange(event.target.value)} />
+      <input inputMode={inputMode} max={max} min={min} step={step} type={type} value={value} onChange={(event) => onChange(event.target.value)} />
     </label>
   );
 }

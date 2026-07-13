@@ -33,8 +33,10 @@ CREATE TABLE IF NOT EXISTS users (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
+-- Archive-scoped tables key rows by (archive_id, id): ids derive from GEDCOM
+-- xrefs and seed fixtures, so the same id legitimately repeats across archives.
 CREATE TABLE IF NOT EXISTS people (
-  id text PRIMARY KEY,
+  id text NOT NULL,
   archive_id text NOT NULL REFERENCES archives(id) ON DELETE CASCADE,
   slug text NOT NULL,
   display_name text NOT NULL,
@@ -53,13 +55,14 @@ CREATE TABLE IF NOT EXISTS people (
   confidence numeric(4,3) NOT NULL DEFAULT 0.500,
   sort_order integer NOT NULL DEFAULT 0,
   created_at timestamptz NOT NULL DEFAULT now(),
-  updated_at timestamptz NOT NULL DEFAULT now()
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (archive_id, id)
 );
 
 CREATE TABLE IF NOT EXISTS person_facts (
-  id text PRIMARY KEY,
+  id text NOT NULL,
   archive_id text NOT NULL REFERENCES archives(id) ON DELETE CASCADE,
-  person_id text NOT NULL REFERENCES people(id) ON DELETE CASCADE,
+  person_id text NOT NULL,
   fact_type text NOT NULL,
   date_text text,
   place_text text,
@@ -67,11 +70,13 @@ CREATE TABLE IF NOT EXISTS person_facts (
   source_text text,
   privacy text CHECK (privacy IN ('public', 'private', 'sensitive') OR privacy IS NULL),
   confidence numeric(4,3) NOT NULL DEFAULT 0.500,
-  sort_order integer NOT NULL DEFAULT 0
+  sort_order integer NOT NULL DEFAULT 0,
+  PRIMARY KEY (archive_id, id),
+  CONSTRAINT person_facts_archive_person_fkey FOREIGN KEY (archive_id, person_id) REFERENCES people (archive_id, id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS import_snapshots (
-  id text PRIMARY KEY,
+  id text NOT NULL,
   archive_id text NOT NULL REFERENCES archives(id) ON DELETE CASCADE,
   source_name text NOT NULL,
   checksum text NOT NULL,
@@ -83,22 +88,24 @@ CREATE TABLE IF NOT EXISTS import_snapshots (
   backup_id text,
   applied_at timestamptz NOT NULL DEFAULT now(),
   sort_order integer NOT NULL DEFAULT 0,
-  created_at timestamptz NOT NULL DEFAULT now()
+  created_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (archive_id, id)
 );
 
 CREATE TABLE IF NOT EXISTS raw_records (
-  id text PRIMARY KEY,
+  id text NOT NULL,
   archive_id text NOT NULL REFERENCES archives(id) ON DELETE CASCADE,
   import_id text NOT NULL,
   xref text,
   record_type text NOT NULL,
   raw_text text NOT NULL,
   checksum text NOT NULL,
-  sort_order integer NOT NULL DEFAULT 0
+  sort_order integer NOT NULL DEFAULT 0,
+  PRIMARY KEY (archive_id, id)
 );
 
 CREATE TABLE IF NOT EXISTS workspace_backups (
-  id text PRIMARY KEY,
+  id text NOT NULL,
   archive_id text NOT NULL REFERENCES archives(id) ON DELETE CASCADE,
   created_at timestamptz NOT NULL DEFAULT now(),
   reason text NOT NULL,
@@ -110,11 +117,12 @@ CREATE TABLE IF NOT EXISTS workspace_backups (
   import_count integer NOT NULL DEFAULT 0,
   raw_record_count integer NOT NULL DEFAULT 0,
   snapshot jsonb NOT NULL DEFAULT '{}'::jsonb,
-  sort_order integer NOT NULL DEFAULT 0
+  sort_order integer NOT NULL DEFAULT 0,
+  PRIMARY KEY (archive_id, id)
 );
 
 CREATE TABLE IF NOT EXISTS sources (
-  id text PRIMARY KEY,
+  id text NOT NULL,
   archive_id text NOT NULL REFERENCES archives(id) ON DELETE CASCADE,
   title text NOT NULL,
   source_type text NOT NULL DEFAULT 'Document',
@@ -135,11 +143,12 @@ CREATE TABLE IF NOT EXISTS sources (
   privacy text NOT NULL DEFAULT 'private' CHECK (privacy IN ('public', 'private', 'sensitive')),
   confidence numeric(4,3) NOT NULL DEFAULT 0.500,
   sort_order integer NOT NULL DEFAULT 0,
-  created_at timestamptz NOT NULL DEFAULT now()
+  created_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (archive_id, id)
 );
 
 CREATE TABLE IF NOT EXISTS research_cases (
-  id text PRIMARY KEY,
+  id text NOT NULL,
   archive_id text NOT NULL REFERENCES archives(id) ON DELETE CASCADE,
   title text NOT NULL,
   question text NOT NULL,
@@ -148,23 +157,26 @@ CREATE TABLE IF NOT EXISTS research_cases (
   privacy text NOT NULL DEFAULT 'private' CHECK (privacy IN ('public', 'private', 'sensitive')),
   sort_order integer NOT NULL DEFAULT 0,
   created_at timestamptz NOT NULL DEFAULT now(),
-  updated_at timestamptz NOT NULL DEFAULT now()
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (archive_id, id)
 );
 
 CREATE TABLE IF NOT EXISTS hypotheses (
-  id text PRIMARY KEY,
+  id text NOT NULL,
   archive_id text NOT NULL REFERENCES archives(id) ON DELETE CASCADE,
-  case_id text NOT NULL REFERENCES research_cases(id) ON DELETE CASCADE,
+  case_id text NOT NULL,
   statement text NOT NULL,
   confidence numeric(4,3) NOT NULL DEFAULT 0.500,
   status text NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'supported', 'weakened', 'rejected')),
-  sort_order integer NOT NULL DEFAULT 0
+  sort_order integer NOT NULL DEFAULT 0,
+  PRIMARY KEY (archive_id, id),
+  CONSTRAINT hypotheses_archive_case_fkey FOREIGN KEY (archive_id, case_id) REFERENCES research_cases (archive_id, id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS evidence_items (
-  id text PRIMARY KEY,
+  id text NOT NULL,
   archive_id text NOT NULL REFERENCES archives(id) ON DELETE CASCADE,
-  case_id text NOT NULL REFERENCES research_cases(id) ON DELETE CASCADE,
+  case_id text NOT NULL,
   title text NOT NULL,
   evidence_type text NOT NULL,
   summary text NOT NULL,
@@ -173,23 +185,27 @@ CREATE TABLE IF NOT EXISTS evidence_items (
   linked_dna_match_id text,
   source_id text,
   sort_order integer NOT NULL DEFAULT 0,
-  created_at timestamptz NOT NULL DEFAULT now()
+  created_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (archive_id, id),
+  CONSTRAINT evidence_items_archive_case_fkey FOREIGN KEY (archive_id, case_id) REFERENCES research_cases (archive_id, id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS tasks (
-  id text PRIMARY KEY,
+  id text NOT NULL,
   archive_id text NOT NULL REFERENCES archives(id) ON DELETE CASCADE,
-  case_id text NOT NULL REFERENCES research_cases(id) ON DELETE CASCADE,
+  case_id text NOT NULL,
   title text NOT NULL,
   status text NOT NULL DEFAULT 'todo' CHECK (status IN ('todo', 'doing', 'done')),
   due_at timestamptz,
   assignee_id text,
   sort_order integer NOT NULL DEFAULT 0,
-  created_at timestamptz NOT NULL DEFAULT now()
+  created_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (archive_id, id),
+  CONSTRAINT tasks_archive_case_fkey FOREIGN KEY (archive_id, case_id) REFERENCES research_cases (archive_id, id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS dna_matches (
-  id text PRIMARY KEY,
+  id text NOT NULL,
   archive_id text NOT NULL REFERENCES archives(id) ON DELETE CASCADE,
   display_name text NOT NULL,
   total_cm numeric(8,2) NOT NULL,
@@ -206,13 +222,14 @@ CREATE TABLE IF NOT EXISTS dna_matches (
   triage_status text NOT NULL DEFAULT 'needs_review' CHECK (triage_status IN ('needs_review', 'triaged', 'ignored', 'high_priority')),
   sort_order integer NOT NULL DEFAULT 0,
   created_at timestamptz NOT NULL DEFAULT now(),
-  updated_at timestamptz NOT NULL DEFAULT now()
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (archive_id, id)
 );
 
 CREATE TABLE IF NOT EXISTS dna_hypotheses (
-  id text PRIMARY KEY,
+  id text NOT NULL,
   archive_id text NOT NULL REFERENCES archives(id) ON DELETE CASCADE,
-  dna_match_id text NOT NULL REFERENCES dna_matches(id) ON DELETE CASCADE,
+  dna_match_id text NOT NULL,
   likely_branch text NOT NULL,
   likely_generation text NOT NULL,
   geography text[] NOT NULL DEFAULT '{}',
@@ -221,21 +238,24 @@ CREATE TABLE IF NOT EXISTS dna_hypotheses (
   explanation text NOT NULL,
   evidence jsonb NOT NULL DEFAULT '[]'::jsonb,
   uncertainty jsonb NOT NULL DEFAULT '[]'::jsonb,
-  created_at timestamptz NOT NULL DEFAULT now()
+  created_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (archive_id, id),
+  CONSTRAINT dna_hypotheses_archive_match_fkey FOREIGN KEY (archive_id, dna_match_id) REFERENCES dna_matches (archive_id, id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS embeddings (
-  id text PRIMARY KEY,
+  id text NOT NULL,
   archive_id text NOT NULL REFERENCES archives(id) ON DELETE CASCADE,
   entity_type text NOT NULL,
   entity_id text NOT NULL,
   content text NOT NULL,
   embedding extensions.vector(1536),
-  created_at timestamptz NOT NULL DEFAULT now()
+  created_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (archive_id, id)
 );
 
 CREATE TABLE IF NOT EXISTS ai_runs (
-  id text PRIMARY KEY,
+  id text NOT NULL,
   archive_id text NOT NULL REFERENCES archives(id) ON DELETE CASCADE,
   requested_by text,
   run_type text NOT NULL DEFAULT 'analysis',
@@ -256,7 +276,8 @@ CREATE TABLE IF NOT EXISTS ai_runs (
   error text,
   sort_order integer NOT NULL DEFAULT 0,
   created_at timestamptz NOT NULL DEFAULT now(),
-  completed_at timestamptz
+  completed_at timestamptz,
+  PRIMARY KEY (archive_id, id)
 );
 
 CREATE INDEX IF NOT EXISTS people_archive_name_idx ON people (archive_id, surname, given_name);
@@ -317,3 +338,84 @@ $$;
 
 REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA public FROM PUBLIC;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC;
+
+-- ---------------------------------------------------------------------------
+-- Upgrade: convert legacy global primary keys to per-archive composite keys.
+--
+-- The CREATE TABLE IF NOT EXISTS statements above only shape brand-new
+-- databases. Databases bootstrapped before multi-archive support still carry
+-- `PRIMARY KEY (id)` on the archive-scoped tables, which makes ids collide
+-- across archives (person ids derive from GEDCOM xrefs and the demo seed uses
+-- fixed ids). The block below detects the legacy single-column keys and
+-- rewrites them to (archive_id, id); once the composite keys exist every step
+-- is a no-op, so this file remains a single idempotent bootstrap.
+-- ---------------------------------------------------------------------------
+DO $$
+DECLARE
+  archive_scoped_table text;
+  legacy_constraint record;
+  composite_fk record;
+BEGIN
+  -- 1. Drop legacy single-column foreign keys first: the parent primary keys
+  --    they depend on cannot be dropped while these still exist.
+  FOR legacy_constraint IN
+    SELECT child.conname, child.conrelid::regclass AS child_table
+    FROM pg_constraint child
+    WHERE child.contype = 'f'
+      AND array_length(child.conkey, 1) = 1
+      AND (child.conrelid, child.confrelid) IN (
+        ('person_facts'::regclass, 'people'::regclass),
+        ('hypotheses'::regclass, 'research_cases'::regclass),
+        ('evidence_items'::regclass, 'research_cases'::regclass),
+        ('tasks'::regclass, 'research_cases'::regclass),
+        ('dna_hypotheses'::regclass, 'dna_matches'::regclass)
+      )
+  LOOP
+    EXECUTE format('ALTER TABLE %s DROP CONSTRAINT %I', legacy_constraint.child_table, legacy_constraint.conname);
+  END LOOP;
+
+  -- 2. Replace each remaining single-column primary key with (archive_id, id).
+  FOREACH archive_scoped_table IN ARRAY ARRAY[
+    'people', 'person_facts', 'import_snapshots', 'raw_records', 'workspace_backups',
+    'sources', 'research_cases', 'hypotheses', 'evidence_items', 'tasks',
+    'dna_matches', 'dna_hypotheses', 'embeddings', 'ai_runs'
+  ]
+  LOOP
+    FOR legacy_constraint IN
+      SELECT pk.conname
+      FROM pg_constraint pk
+      WHERE pk.conrelid = archive_scoped_table::regclass
+        AND pk.contype = 'p'
+        AND array_length(pk.conkey, 1) = 1
+    LOOP
+      EXECUTE format('ALTER TABLE %I DROP CONSTRAINT %I', archive_scoped_table, legacy_constraint.conname);
+      EXECUTE format('ALTER TABLE %I ADD PRIMARY KEY (archive_id, id)', archive_scoped_table);
+    END LOOP;
+  END LOOP;
+
+  -- 3. Recreate the child links as composite foreign keys. The names match the
+  --    constraints declared in the CREATE TABLE statements above, so freshly
+  --    bootstrapped databases skip this step.
+  FOR composite_fk IN
+    SELECT fk.conname, fk.child_table, fk.child_column, fk.parent_table
+    FROM (VALUES
+      ('person_facts_archive_person_fkey', 'person_facts', 'person_id', 'people'),
+      ('hypotheses_archive_case_fkey', 'hypotheses', 'case_id', 'research_cases'),
+      ('evidence_items_archive_case_fkey', 'evidence_items', 'case_id', 'research_cases'),
+      ('tasks_archive_case_fkey', 'tasks', 'case_id', 'research_cases'),
+      ('dna_hypotheses_archive_match_fkey', 'dna_hypotheses', 'dna_match_id', 'dna_matches')
+    ) AS fk(conname, child_table, child_column, parent_table)
+    WHERE NOT EXISTS (
+      SELECT 1
+      FROM pg_constraint existing
+      WHERE existing.conname = fk.conname
+        AND existing.conrelid = fk.child_table::regclass
+    )
+  LOOP
+    EXECUTE format(
+      'ALTER TABLE %I ADD CONSTRAINT %I FOREIGN KEY (archive_id, %I) REFERENCES %I (archive_id, id) ON DELETE CASCADE',
+      composite_fk.child_table, composite_fk.conname, composite_fk.child_column, composite_fk.parent_table
+    );
+  END LOOP;
+END
+$$;

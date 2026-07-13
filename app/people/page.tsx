@@ -12,7 +12,7 @@ export default async function PeoplePage() {
   const publishedPeople = workspace.people.filter((person) => person.published && canPublishPerson(person));
 
   return (
-    <PublicShell active="/people">
+    <PublicShell active="/people" tagline={workspace.archiveTagline}>
       <div className="page-wrap">
         <section className="page-title section">
           <h1>Published People</h1>

@@ -17,7 +17,7 @@ export default async function CaseDetailPage({ params }: { params: Promise<{ id:
   }
 
   return (
-    <AppShell title={researchCase.title} active="/app/cases">
+    <AppShell title={researchCase.title} active="/app/cases" archiveName={workspace.archiveName}>
       <section className="app-grid">
         <div className="app-card">
           <h2>{researchCase.question}</h2>

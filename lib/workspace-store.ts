@@ -27,6 +27,7 @@ export type ScoredDnaMatch = DnaMatch & { helpfulnessScore: number };
 export type WorkspaceData = {
   version: "0.17.0";
   archiveName: string;
+  archiveTagline: string;
   people: PersonSummary[];
   cases: ResearchCase[];
   sources: SourceDocument[];
@@ -44,6 +45,8 @@ export type WorkspaceStoreOptions = DatabaseOptions & {
 
 const defaultArchiveId = "archive-default";
 const bulkInsertBatchSize = 2_000;
+// Full pre-import snapshots are large; retain only the most recent ones.
+const retainedBackupCount = 10;
 
 export function getArchiveId(options: WorkspaceStoreOptions = {}): string {
   return options.archiveId ?? process.env.KINSLEUTH_ARCHIVE_ID ?? defaultArchiveId;
@@ -53,6 +56,7 @@ export function createSeedWorkspace(now = new Date()): WorkspaceData {
   return {
     version: "0.17.0",
     archiveName: "Riemer - Zajicek Archive",
+    archiveTagline: "Family history. Openly shared.",
     people: demoPeople,
     cases: demoCases,
     sources: [
@@ -108,12 +112,65 @@ export async function writeWorkspace(workspace: WorkspaceData, options: Workspac
   return next;
 }
 
+// Runs a read-transform-write cycle inside ONE transaction with the archive
+// row locked, so concurrent mutations serialize instead of losing updates
+// (writeWorkspace persists the whole workspace, so an unlocked read-modify-write
+// would silently drop whichever concurrent write commits first).
+async function mutateWorkspace<T>(
+  options: WorkspaceStoreOptions,
+  transform: (workspace: WorkspaceData) => {
+    workspace: WorkspaceData;
+    result: T;
+    afterPersist?: (client: PoolClient) => Promise<void>;
+  }
+): Promise<T> {
+  const archiveId = getArchiveId(options);
+
+  return withTransaction(options, async (client) => {
+    const archive = await client.query<{ id: string }>("SELECT id FROM archives WHERE id = $1 FOR UPDATE", [archiveId]);
+    const workspace = archive.rowCount === 0 ? createSeedWorkspace() : await loadWorkspace(client, archiveId);
+    const { workspace: next, result, afterPersist } = transform(workspace);
+    await persistWorkspace(client, archiveId, normalizeWorkspaceData({ ...next, updatedAt: new Date().toISOString() }));
+    if (afterPersist) {
+      await afterPersist(client);
+    }
+    return result;
+  });
+}
+
+export type ArchiveBranding = {
+  name: string;
+  tagline: string;
+};
+
+export async function updateArchiveBranding(input: ArchiveBranding, options: WorkspaceStoreOptions = {}): Promise<ArchiveBranding> {
+  const archiveId = getArchiveId(options);
+  const name = input.name.trim();
+  const tagline = input.tagline.trim();
+
+  if (!name) {
+    throw new Error("archive name is required");
+  }
+
+  return withTransaction(options, async (client) => {
+    const existing = await client.query<{ id: string }>("SELECT id FROM archives WHERE id = $1 FOR UPDATE", [archiveId]);
+
+    if (existing.rowCount === 0) {
+      const seed = createSeedWorkspace();
+      await persistWorkspace(client, archiveId, { ...seed, archiveName: name, archiveTagline: tagline });
+      return { name, tagline };
+    }
+
+    await client.query("UPDATE archives SET name = $2, tagline = $3, updated_at = now() WHERE id = $1", [archiveId, name, tagline]);
+    return { name, tagline };
+  });
+}
+
 export async function createCase(input: Partial<ResearchCase>, options: WorkspaceStoreOptions = {}): Promise<ResearchCase> {
   if (!input.title?.trim() || !input.question?.trim()) {
     throw new Error("title and question are required");
   }
 
-  const workspace = await readWorkspace(options);
   const created: ResearchCase = {
     id: input.id ?? `case-${randomUUID()}`,
     title: input.title.trim(),
@@ -139,8 +196,10 @@ export async function createCase(input: Partial<ResearchCase>, options: Workspac
     tasks: input.tasks ?? []
   };
 
-  await writeWorkspace({ ...workspace, cases: [created, ...workspace.cases.filter((item) => item.id !== created.id)] }, options);
-  return created;
+  return mutateWorkspace(options, (workspace) => ({
+    workspace: { ...workspace, cases: [created, ...workspace.cases.filter((item) => item.id !== created.id)] },
+    result: created
+  }));
 }
 
 export async function addCaseTask(
@@ -152,31 +211,31 @@ export async function addCaseTask(
     throw new Error("task title is required");
   }
 
-  const workspace = await readWorkspace(options);
-  const researchCase = workspace.cases.find((item) => item.id === caseId);
-  if (!researchCase) {
-    throw new Error("case not found");
-  }
-
   const task: ResearchCase["tasks"][number] = {
     id: input.id ?? `task-${randomUUID()}`,
     title: input.title.trim(),
     status: input.status ?? "todo"
   };
-  const updatedCase: ResearchCase = {
-    ...researchCase,
-    tasks: [task, ...researchCase.tasks.filter((item) => item.id !== task.id)]
-  };
 
-  await writeWorkspace(
-    {
-      ...workspace,
-      cases: workspace.cases.map((item) => (item.id === caseId ? updatedCase : item))
-    },
-    options
-  );
+  return mutateWorkspace(options, (workspace) => {
+    const researchCase = workspace.cases.find((item) => item.id === caseId);
+    if (!researchCase) {
+      throw new Error("case not found");
+    }
 
-  return { case: updatedCase, task };
+    const updatedCase: ResearchCase = {
+      ...researchCase,
+      tasks: [task, ...researchCase.tasks.filter((item) => item.id !== task.id)]
+    };
+
+    return {
+      workspace: {
+        ...workspace,
+        cases: workspace.cases.map((item) => (item.id === caseId ? updatedCase : item))
+      },
+      result: { case: updatedCase, task }
+    };
+  });
 }
 
 export async function updateCaseTask(
@@ -185,36 +244,35 @@ export async function updateCaseTask(
   input: { title?: string; status?: ResearchCase["tasks"][number]["status"] },
   options: WorkspaceStoreOptions = {}
 ): Promise<{ case: ResearchCase; task: ResearchCase["tasks"][number] }> {
-  const workspace = await readWorkspace(options);
-  const researchCase = workspace.cases.find((item) => item.id === caseId);
-  if (!researchCase) {
-    throw new Error("case not found");
-  }
+  return mutateWorkspace(options, (workspace) => {
+    const researchCase = workspace.cases.find((item) => item.id === caseId);
+    if (!researchCase) {
+      throw new Error("case not found");
+    }
 
-  const currentTask = researchCase.tasks.find((task) => task.id === taskId);
-  if (!currentTask) {
-    throw new Error("task not found");
-  }
+    const currentTask = researchCase.tasks.find((task) => task.id === taskId);
+    if (!currentTask) {
+      throw new Error("task not found");
+    }
 
-  const task: ResearchCase["tasks"][number] = {
-    ...currentTask,
-    title: input.title?.trim() || currentTask.title,
-    status: input.status ?? currentTask.status
-  };
-  const updatedCase: ResearchCase = {
-    ...researchCase,
-    tasks: researchCase.tasks.map((item) => (item.id === taskId ? task : item))
-  };
+    const task: ResearchCase["tasks"][number] = {
+      ...currentTask,
+      title: input.title?.trim() || currentTask.title,
+      status: input.status ?? currentTask.status
+    };
+    const updatedCase: ResearchCase = {
+      ...researchCase,
+      tasks: researchCase.tasks.map((item) => (item.id === taskId ? task : item))
+    };
 
-  await writeWorkspace(
-    {
-      ...workspace,
-      cases: workspace.cases.map((item) => (item.id === caseId ? updatedCase : item))
-    },
-    options
-  );
-
-  return { case: updatedCase, task };
+    return {
+      workspace: {
+        ...workspace,
+        cases: workspace.cases.map((item) => (item.id === caseId ? updatedCase : item))
+      },
+      result: { case: updatedCase, task }
+    };
+  });
 }
 
 export async function saveAIAnalysisRun(
@@ -225,7 +283,6 @@ export async function saveAIAnalysisRun(
     throw new Error("analysis question is required");
   }
 
-  const workspace = await readWorkspace(options);
   const run: AIAnalysisRun = normalizeAIAnalysisRun({
     ...input,
     id: input.id ?? `ai-${randomUUID()}`,
@@ -238,15 +295,13 @@ export async function saveAIAnalysisRun(
     completedAt: input.completedAt ?? new Date().toISOString()
   });
 
-  await writeWorkspace(
-    {
+  return mutateWorkspace(options, (workspace) => ({
+    workspace: {
       ...workspace,
       aiRuns: [run, ...workspace.aiRuns.filter((item) => item.id !== run.id)].slice(0, 25)
     },
-    options
-  );
-
-  return run;
+    result: run
+  }));
 }
 
 export async function saveDnaMatch(match: DnaMatch, options: WorkspaceStoreOptions = {}): Promise<{
@@ -254,19 +309,18 @@ export async function saveDnaMatch(match: DnaMatch, options: WorkspaceStoreOptio
   hypothesis: DnaConnectionHypothesis;
   match: ScoredDnaMatch;
 }> {
-  const workspace = await readWorkspace(options);
   const normalized = normalizeDnaMatch(match);
   const helpfulnessScore = scoreDnaMatch(normalized);
   const triaged = autoPrioritizeDnaMatch(normalized, helpfulnessScore);
-  const hypothesis = createDnaConnectionHypothesis(triaged, workspace.people);
 
-  await writeWorkspace({ ...workspace, dnaMatches: [triaged, ...workspace.dnaMatches.filter((item) => item.id !== triaged.id)] }, options);
-
-  return {
-    helpfulnessScore,
-    hypothesis,
-    match: { ...triaged, helpfulnessScore }
-  };
+  return mutateWorkspace(options, (workspace) => ({
+    workspace: { ...workspace, dnaMatches: [triaged, ...workspace.dnaMatches.filter((item) => item.id !== triaged.id)] },
+    result: {
+      helpfulnessScore,
+      hypothesis: createDnaConnectionHypothesis(triaged, workspace.people),
+      match: { ...triaged, helpfulnessScore }
+    }
+  }));
 }
 
 export async function saveDnaMatches(matches: DnaMatch[], options: WorkspaceStoreOptions = {}): Promise<Array<{
@@ -274,32 +328,31 @@ export async function saveDnaMatches(matches: DnaMatch[], options: WorkspaceStor
   hypothesis: DnaConnectionHypothesis;
   match: ScoredDnaMatch;
 }>> {
-  const workspace = await readWorkspace(options);
-  const results = matches.map((match) => {
-    const normalized = normalizeDnaMatch(match);
-    const helpfulnessScore = scoreDnaMatch(normalized);
-    const triaged = autoPrioritizeDnaMatch(normalized, helpfulnessScore);
+  return mutateWorkspace(options, (workspace) => {
+    const results = matches.map((match) => {
+      const normalized = normalizeDnaMatch(match);
+      const helpfulnessScore = scoreDnaMatch(normalized);
+      const triaged = autoPrioritizeDnaMatch(normalized, helpfulnessScore);
+
+      return {
+        helpfulnessScore,
+        hypothesis: createDnaConnectionHypothesis(triaged, workspace.people),
+        match: { ...triaged, helpfulnessScore }
+      };
+    });
+    const importedIds = new Set(results.map((result) => result.match.id));
 
     return {
-      helpfulnessScore,
-      hypothesis: createDnaConnectionHypothesis(triaged, workspace.people),
-      match: { ...triaged, helpfulnessScore }
+      workspace: {
+        ...workspace,
+        dnaMatches: [
+          ...results.map((result) => removeDnaScore(result.match)),
+          ...workspace.dnaMatches.filter((item) => !importedIds.has(item.id))
+        ]
+      },
+      result: results
     };
   });
-  const importedIds = new Set(results.map((result) => result.match.id));
-
-  await writeWorkspace(
-    {
-      ...workspace,
-      dnaMatches: [
-        ...results.map((result) => removeDnaScore(result.match)),
-        ...workspace.dnaMatches.filter((item) => !importedIds.has(item.id))
-      ]
-    },
-    options
-  );
-
-  return results;
 }
 
 export async function updateDnaMatch(matchId: string, input: Partial<DnaMatch>, options: WorkspaceStoreOptions = {}): Promise<{
@@ -307,53 +360,50 @@ export async function updateDnaMatch(matchId: string, input: Partial<DnaMatch>, 
   hypothesis: DnaConnectionHypothesis;
   match: ScoredDnaMatch;
 }> {
-  const workspace = await readWorkspace(options);
-  const current = workspace.dnaMatches.find((match) => match.id === matchId);
-  if (!current) {
-    throw new Error("DNA match not found");
-  }
+  return mutateWorkspace(options, (workspace) => {
+    const current = workspace.dnaMatches.find((match) => match.id === matchId);
+    if (!current) {
+      throw new Error("DNA match not found");
+    }
 
-  const updated = normalizeDnaMatch({
-    ...current,
-    ...input,
-    id: current.id,
-    displayName: input.displayName ?? current.displayName,
-    totalCm: input.totalCm ?? current.totalCm
+    const updated = normalizeDnaMatch({
+      ...current,
+      ...input,
+      id: current.id,
+      displayName: input.displayName ?? current.displayName,
+      totalCm: input.totalCm ?? current.totalCm
+    });
+    const helpfulnessScore = scoreDnaMatch(updated);
+
+    return {
+      workspace: {
+        ...workspace,
+        dnaMatches: workspace.dnaMatches.map((match) => (match.id === matchId ? updated : match))
+      },
+      result: {
+        helpfulnessScore,
+        hypothesis: createDnaConnectionHypothesis(updated, workspace.people),
+        match: { ...updated, helpfulnessScore }
+      }
+    };
   });
-  const helpfulnessScore = scoreDnaMatch(updated);
-  const hypothesis = createDnaConnectionHypothesis(updated, workspace.people);
-
-  await writeWorkspace(
-    {
-      ...workspace,
-      dnaMatches: workspace.dnaMatches.map((match) => (match.id === matchId ? updated : match))
-    },
-    options
-  );
-
-  return {
-    helpfulnessScore,
-    hypothesis,
-    match: { ...updated, helpfulnessScore }
-  };
 }
 
 export async function deleteDnaMatch(matchId: string, options: WorkspaceStoreOptions = {}): Promise<{ deleted: string }> {
-  const workspace = await readWorkspace(options);
-  const exists = workspace.dnaMatches.some((match) => match.id === matchId);
-  if (!exists) {
-    throw new Error("DNA match not found");
-  }
+  return mutateWorkspace(options, (workspace) => {
+    const exists = workspace.dnaMatches.some((match) => match.id === matchId);
+    if (!exists) {
+      throw new Error("DNA match not found");
+    }
 
-  await writeWorkspace(
-    {
-      ...workspace,
-      dnaMatches: workspace.dnaMatches.filter((match) => match.id !== matchId)
-    },
-    options
-  );
-
-  return { deleted: matchId };
+    return {
+      workspace: {
+        ...workspace,
+        dnaMatches: workspace.dnaMatches.filter((match) => match.id !== matchId)
+      },
+      result: { deleted: matchId }
+    };
+  });
 }
 
 export async function linkDnaMatchToCase(
@@ -367,48 +417,47 @@ export async function linkDnaMatchToCase(
   match: ScoredDnaMatch;
   created: boolean;
 }> {
-  const workspace = await readWorkspace(options);
-  const researchCase = workspace.cases.find((item) => item.id === caseId);
-  if (!researchCase) {
-    throw new Error("Case not found");
-  }
+  return mutateWorkspace(options, (workspace) => {
+    const researchCase = workspace.cases.find((item) => item.id === caseId);
+    if (!researchCase) {
+      throw new Error("Case not found");
+    }
 
-  const match = workspace.dnaMatches.find((item) => item.id === matchId);
-  if (!match) {
-    throw new Error("DNA match not found");
-  }
+    const match = workspace.dnaMatches.find((item) => item.id === matchId);
+    if (!match) {
+      throw new Error("DNA match not found");
+    }
 
-  const helpfulnessScore = scoreDnaMatch(match);
-  const existingEvidence = researchCase.evidence.find((item) => item.linkedDnaMatchId === matchId);
-  const evidence: ResearchCase["evidence"][number] = {
-    id: existingEvidence?.id ?? `ev-dna-${match.id.replace(/[^a-zA-Z0-9_-]+/g, "-")}-${randomUUID().slice(0, 8)}`,
-    title: input.title?.trim() || `${match.displayName} DNA match`,
-    type: "DNA",
-    summary: input.summary?.trim() || createDnaEvidenceSummary(match, helpfulnessScore),
-    confidence: normalizeConfidence(input.confidence ?? Math.max(0.25, Math.min(0.95, helpfulnessScore / 100))),
-    linkedDnaMatchId: match.id
-  };
-  const updatedCase: ResearchCase = {
-    ...researchCase,
-    evidence: existingEvidence
-      ? researchCase.evidence.map((item) => (item.id === existingEvidence.id ? evidence : item))
-      : [evidence, ...researchCase.evidence]
-  };
+    const helpfulnessScore = scoreDnaMatch(match);
+    const existingEvidence = researchCase.evidence.find((item) => item.linkedDnaMatchId === matchId);
+    const evidence: ResearchCase["evidence"][number] = {
+      id: existingEvidence?.id ?? `ev-dna-${match.id.replace(/[^a-zA-Z0-9_-]+/g, "-")}-${randomUUID().slice(0, 8)}`,
+      title: input.title?.trim() || `${match.displayName} DNA match`,
+      type: "DNA",
+      summary: input.summary?.trim() || createDnaEvidenceSummary(match, helpfulnessScore),
+      confidence: normalizeConfidence(input.confidence ?? Math.max(0.25, Math.min(0.95, helpfulnessScore / 100))),
+      linkedDnaMatchId: match.id
+    };
+    const updatedCase: ResearchCase = {
+      ...researchCase,
+      evidence: existingEvidence
+        ? researchCase.evidence.map((item) => (item.id === existingEvidence.id ? evidence : item))
+        : [evidence, ...researchCase.evidence]
+    };
 
-  await writeWorkspace(
-    {
-      ...workspace,
-      cases: workspace.cases.map((item) => (item.id === caseId ? updatedCase : item))
-    },
-    options
-  );
-
-  return {
-    case: updatedCase,
-    evidence,
-    match: { ...match, helpfulnessScore },
-    created: !existingEvidence
-  };
+    return {
+      workspace: {
+        ...workspace,
+        cases: workspace.cases.map((item) => (item.id === caseId ? updatedCase : item))
+      },
+      result: {
+        case: updatedCase,
+        evidence,
+        match: { ...match, helpfulnessScore },
+        created: !existingEvidence
+      }
+    };
+  });
 }
 
 export async function saveSourceDocument(input: Partial<SourceDocument>, options: WorkspaceStoreOptions = {}): Promise<SourceDocument> {
@@ -416,7 +465,6 @@ export async function saveSourceDocument(input: Partial<SourceDocument>, options
     throw new Error("title is required");
   }
 
-  const workspace = await readWorkspace(options);
   const created: SourceDocument = {
     id: input.id ?? `src-${randomUUID()}`,
     title: input.title.trim(),
@@ -440,8 +488,10 @@ export async function saveSourceDocument(input: Partial<SourceDocument>, options
     createdAt: input.createdAt ?? new Date().toISOString()
   };
 
-  await writeWorkspace({ ...workspace, sources: [created, ...workspace.sources.filter((item) => item.id !== created.id)] }, options);
-  return created;
+  return mutateWorkspace(options, (workspace) => ({
+    workspace: { ...workspace, sources: [created, ...workspace.sources.filter((item) => item.id !== created.id)] },
+    result: created
+  }));
 }
 
 export async function updatePersonCuration(
@@ -449,27 +499,27 @@ export async function updatePersonCuration(
   input: { published?: boolean; privacy?: PrivacyLevel; livingStatus?: PersonSummary["livingStatus"] },
   options: WorkspaceStoreOptions = {}
 ): Promise<PersonSummary> {
-  const workspace = await readWorkspace(options);
-  const person = workspace.people.find((item) => item.id === personId);
-  if (!person) {
-    throw new Error("person not found");
-  }
+  return mutateWorkspace(options, (workspace) => {
+    const person = workspace.people.find((item) => item.id === personId);
+    if (!person) {
+      throw new Error("person not found");
+    }
 
-  const updated: PersonSummary = {
-    ...person,
-    published: input.published ?? person.published,
-    privacy: input.privacy ?? person.privacy,
-    livingStatus: input.livingStatus ?? person.livingStatus
-  };
+    const updated: PersonSummary = {
+      ...person,
+      published: input.published ?? person.published,
+      privacy: input.privacy ?? person.privacy,
+      livingStatus: input.livingStatus ?? person.livingStatus
+    };
 
-  await writeWorkspace(
-    {
-      ...workspace,
-      people: workspace.people.map((item) => (item.id === personId ? updated : item))
-    },
-    options
-  );
-  return updated;
+    return {
+      workspace: {
+        ...workspace,
+        people: workspace.people.map((item) => (item.id === personId ? updated : item))
+      },
+      result: updated
+    };
+  });
 }
 
 export async function applyGedcomImport(
@@ -499,38 +549,48 @@ export async function applyPreparedGedcomImport(
   sourcesImported: number;
   rawRecordCount: number;
 }> {
-  const workspace = await readWorkspace(options);
-  const backup = createWorkspaceBackup(workspace, `Before applying ${prepared.snapshot.sourceName}`);
-  const importedPeople = mergeImportedPeople(workspace.people, prepared.people);
-  const importedSources = mergeById(workspace.sources, prepared.sources);
-  const rawRecords = [
-    ...prepared.rawRecords,
-    ...workspace.rawRecords.filter((record) => record.importId !== prepared.snapshot.id)
-  ];
-  const appliedImport: AppliedGedcomImport = {
-    ...prepared.appliedImport,
-    backupId: backup.id
-  };
+  const archiveId = getArchiveId(options);
 
-  await writeWorkspace(
-    {
-      ...workspace,
-      people: importedPeople,
-      sources: importedSources,
-      rawRecords,
-      imports: [appliedImport, ...workspace.imports.filter((item) => item.id !== appliedImport.id)],
-      backups: [backup, ...workspace.backups.filter((item) => item.id !== backup.id)]
-    },
-    options
-  );
+  return mutateWorkspace(options, (workspace) => {
+    const backup = createWorkspaceBackup(workspace, `Before applying ${prepared.snapshot.sourceName}`);
+    const importedPeople = mergeImportedPeople(workspace.people, prepared.people);
+    const importedSources = mergeById(workspace.sources, prepared.sources);
+    const rawRecords = [
+      ...prepared.rawRecords,
+      ...workspace.rawRecords.filter((record) => record.importId !== prepared.snapshot.id)
+    ];
+    const appliedImport: AppliedGedcomImport = {
+      ...prepared.appliedImport,
+      backupId: backup.id
+    };
 
-  return {
-    import: appliedImport,
-    backup,
-    peopleImported: prepared.people.length,
-    sourcesImported: prepared.sources.length,
-    rawRecordCount: prepared.rawRecords.length
-  };
+    return {
+      workspace: {
+        ...workspace,
+        people: importedPeople,
+        sources: importedSources,
+        rawRecords,
+        imports: [appliedImport, ...workspace.imports.filter((item) => item.id !== appliedImport.id)],
+        backups: [backup, ...workspace.backups.filter((item) => item.id !== backup.id)].slice(0, retainedBackupCount)
+      },
+      result: {
+        import: appliedImport,
+        backup,
+        peopleImported: prepared.people.length,
+        sourcesImported: prepared.sources.length,
+        rawRecordCount: prepared.rawRecords.length
+      },
+      // Store the pre-import workspace as the backup payload after the upsert
+      // above creates the row; persistWorkspace never overwrites snapshots.
+      afterPersist: async (client) => {
+        await client.query("UPDATE workspace_backups SET snapshot = $3::jsonb WHERE archive_id = $1 AND id = $2", [
+          archiveId,
+          backup.id,
+          JSON.stringify(workspace)
+        ]);
+      }
+    };
+  });
 }
 
 export type GedcomRelationshipRepairResult = {
@@ -654,7 +714,7 @@ export function createWorkspaceDnaHypotheses(workspace: Pick<WorkspaceData, "peo
 }
 
 async function loadWorkspace(client: PoolClient, archiveId: string): Promise<WorkspaceData> {
-  const archiveResult = await client.query<{ name: string; updated_at: Date }>("SELECT name, updated_at FROM archives WHERE id = $1", [archiveId]);
+  const archiveResult = await client.query<{ name: string; tagline: string; updated_at: Date }>("SELECT name, tagline, updated_at FROM archives WHERE id = $1", [archiveId]);
   const archive = archiveResult.rows[0];
   if (!archive) {
     throw new Error("archive not found");
@@ -680,6 +740,7 @@ async function loadWorkspace(client: PoolClient, archiveId: string): Promise<Wor
 
   return normalizeWorkspaceData({
     archiveName: archive.name,
+    archiveTagline: archive.tagline,
     people: peopleResult.rows.map((row) => ({
       id: row.id,
       slug: row.slug,
@@ -736,9 +797,9 @@ async function persistWorkspace(client: PoolClient, archiveId: string, workspace
 
   await client.query(
     `INSERT INTO archives (id, name, tagline, slug, updated_at)
-     VALUES ($1, $2, '', $3, $4)
-     ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, updated_at = EXCLUDED.updated_at`,
-    [archiveId, normalized.archiveName, slugifyArchive(`${normalized.archiveName}-${archiveId}`), normalized.updatedAt]
+     VALUES ($1, $2, $3, $4, $5)
+     ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, tagline = EXCLUDED.tagline, updated_at = EXCLUDED.updated_at`,
+    [archiveId, normalized.archiveName, normalized.archiveTagline, slugifyArchive(`${normalized.archiveName}-${archiveId}`), normalized.updatedAt]
   );
 
   await client.query("DELETE FROM ai_runs WHERE archive_id = $1", [archiveId]);
@@ -751,7 +812,12 @@ async function persistWorkspace(client: PoolClient, archiveId: string, workspace
   await client.query("DELETE FROM sources WHERE archive_id = $1", [archiveId]);
   await client.query("DELETE FROM raw_records WHERE archive_id = $1", [archiveId]);
   await client.query("DELETE FROM import_snapshots WHERE archive_id = $1", [archiveId]);
-  await client.query("DELETE FROM workspace_backups WHERE archive_id = $1", [archiveId]);
+  // Backups are upserted (not wholesale rewritten) so the snapshot column,
+  // written once at backup time, survives full-workspace persists.
+  await client.query("DELETE FROM workspace_backups WHERE archive_id = $1 AND NOT (id = ANY($2))", [
+    archiveId,
+    normalized.backups.map((backup) => backup.id)
+  ]);
   await client.query("DELETE FROM person_facts WHERE archive_id = $1", [archiveId]);
   await client.query("DELETE FROM people WHERE archive_id = $1", [archiveId]);
 
@@ -915,7 +981,17 @@ async function persistWorkspace(client: PoolClient, archiveId: string, workspace
       `INSERT INTO workspace_backups (
         id, archive_id, created_at, reason, storage_key, people_count, sources_count,
         cases_count, dna_match_count, import_count, raw_record_count, snapshot, sort_order
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, '{}'::jsonb, $12)`,
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, '{}'::jsonb, $12)
+      ON CONFLICT (archive_id, id) DO UPDATE SET
+        reason = EXCLUDED.reason,
+        storage_key = EXCLUDED.storage_key,
+        people_count = EXCLUDED.people_count,
+        sources_count = EXCLUDED.sources_count,
+        cases_count = EXCLUDED.cases_count,
+        dna_match_count = EXCLUDED.dna_match_count,
+        import_count = EXCLUDED.import_count,
+        raw_record_count = EXCLUDED.raw_record_count,
+        sort_order = EXCLUDED.sort_order`,
       [
         backup.id,
         archiveId,
@@ -1235,6 +1311,7 @@ function normalizeWorkspaceData(value: Partial<WorkspaceData>): WorkspaceData {
   return {
     version: "0.17.0",
     archiveName: value.archiveName || "Riemer - Zajicek Archive",
+    archiveTagline: value.archiveTagline ?? "",
     people: Array.isArray(value.people) ? value.people : [],
     cases: Array.isArray(value.cases) ? value.cases : [],
     sources: Array.isArray(value.sources) ? value.sources : [],
@@ -1339,7 +1416,11 @@ function mergeImportedPeople(existing: PersonSummary[], imported: PersonSummary[
   const importedIds = new Set(imported.map((person) => person.id));
   const mergedImported = imported.map((person) => {
     const current = existingById.get(person.id);
-    return current
+    // GEDCOM xrefs are only unique within one file, so an id collision can be
+    // a different person from an unrelated import. Only carry curation flags
+    // forward when the incoming record plausibly is the same person —
+    // otherwise inheriting published/privacy could expose a living stranger.
+    return current && isSameImportedPerson(current, person)
       ? {
           ...person,
           privacy: current.privacy,
@@ -1349,6 +1430,24 @@ function mergeImportedPeople(existing: PersonSummary[], imported: PersonSummary[
       : person;
   });
   return [...mergedImported, ...existing.filter((person) => !importedIds.has(person.id))];
+}
+
+function isSameImportedPerson(existing: PersonSummary, imported: PersonSummary): boolean {
+  const existingName = normalizePersonName(existing.displayName);
+  const importedName = normalizePersonName(imported.displayName);
+  if (!existingName || !importedName || existingName !== importedName) {
+    return false;
+  }
+
+  if (existing.birthDate && imported.birthDate && existing.birthDate.trim() !== imported.birthDate.trim()) {
+    return false;
+  }
+
+  return true;
+}
+
+function normalizePersonName(name: string): string {
+  return name.toLowerCase().replace(/\s+/g, " ").trim();
 }
 
 function mergeById<T extends { id: string }>(existing: T[], imported: T[]): T[] {

@@ -39,4 +39,14 @@ describe("private workspace proxy", () => {
     expect(response.status).toBe(401);
     await expect(response.json()).resolves.toEqual({ error: "Authentication required" });
   });
+
+  it("protects the settings API", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("KINSLEUTH_APP_PASSWORD", "private-password");
+    vi.stubEnv("AUTH_SECRET", "a-long-production-secret");
+
+    const response = await proxy(new NextRequest("https://kinsleuth.example/api/settings/archive"));
+
+    expect(response.status).toBe(401);
+  });
 });

@@ -72,6 +72,11 @@ export function getPool(options: DatabaseOptions = {}): Pool {
     connectionTimeoutMillis: 10_000,
     idleTimeoutMillis: 10_000
   });
+  // Without a listener, an idle client's backend error is an unhandled 'error'
+  // event that crashes the process; the pool already discards the broken client.
+  pool.on("error", (error) => {
+    console.error("Postgres pool idle-client error", error);
+  });
   pools.set(connectionString, pool);
   return pool;
 }
@@ -92,6 +97,14 @@ export async function ensureDatabaseSchema(options: DatabaseOptions = {}): Promi
     const sql = await readFile(migrationPath, "utf8");
     await getPool(options).query(sql);
   })();
+
+  // Drop a failed migration from the cache so a transient outage does not
+  // permanently reject every later query until the process restarts.
+  promise.catch(() => {
+    if (schemaPromises.get(databaseUrl) === promise) {
+      schemaPromises.delete(databaseUrl);
+    }
+  });
 
   schemaPromises.set(databaseUrl, promise);
   return promise;

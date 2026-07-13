@@ -28,7 +28,10 @@ export type ParsedGedcom = {
 const eventTags = new Set(["BIRT", "DEAT", "BURI", "CHR", "CENS", "MARR", "DIV", "RESI", "EVEN", "OCCU"]);
 
 export function parseGedcomLine(raw: string, index: number): GedcomLine {
-  const match = raw.match(/^(\d+)(?:\s+(@[^@]+@))?\s+([A-Za-z0-9_]+)(?:\s+(.*))?$/);
+  // Level, xref, and tag delimiters tolerate repeated whitespace (lenient reader behavior), but per
+  // GEDCOM 5.5.1 the tag is separated from its value by exactly one delimiter character; any further
+  // whitespace is part of the value (significant for CONC/CONT continuations).
+  const match = raw.match(/^[ \t]*(\d+)(?:[ \t]+(@[^@]+@))?[ \t]+([A-Za-z0-9_]+)(?:[ \t](.*))?$/);
   if (!match) {
     const excerpt = raw.length > 160 ? `${raw.slice(0, 157)}...` : raw;
     throw new Error(`Invalid GEDCOM line ${index + 1}: ${excerpt}`);
@@ -46,11 +49,13 @@ export function parseGedcomLine(raw: string, index: number): GedcomLine {
 
 export function parseGedcom(content: string): ParsedGedcom {
   const lines = content
+    .replace(/^\uFEFF/, "")
     .replace(/\r\n/g, "\n")
     .replace(/\r/g, "\n")
     .split("\n")
-    .filter((line) => line.length > 0)
-    .map(parseGedcomLine);
+    .map((line, index) => ({ line, index }))
+    .filter(({ line }) => line.trim().length > 0)
+    .map(({ line, index }) => parseGedcomLine(line, index));
 
   const roots: GedcomNode[] = [];
   const stack: GedcomNode[] = [];
@@ -111,7 +116,8 @@ export function textWithContinuations(node?: GedcomNode): string | undefined {
     }
   }
 
-  return text.trim() || undefined;
+  // Whitespace inside CONC/CONT continuations is significant, so only trim to test for emptiness.
+  return text.trim() ? text : undefined;
 }
 
 export function summarizeGedcom(records: GedcomRecord[]): ImportSummary {
