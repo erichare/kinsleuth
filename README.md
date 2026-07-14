@@ -109,6 +109,7 @@ Compose provisions Postgres with pgvector and a MinIO service alongside the app.
 | `/` | Public archive landing page |
 | `/people`, `/people/[slug]` | Published people and profiles |
 | `/stories`, `/places` | Synthetic demo stories and the public place index |
+| `/challenge` | Static, fictional research-instincts challenge with browser-local progress |
 | `/app` | Investigation dashboard |
 | `/app/people` | Search, filter, and curate people |
 | `/app/cases` | Research cases, evidence, hypotheses, and task queues |

@@ -1,4 +1,5 @@
 import Image from "next/image";
+import Link from "next/link";
 import { Icons } from "@/components/icons";
 import { PublicShell } from "@/components/public-shell";
 
@@ -49,6 +50,16 @@ export default function StoriesPage() {
               </div>
             </article>
           ))}
+        </section>
+        <section className="challenge-story-cta" aria-labelledby="challenge-story-title">
+          <div>
+            <span className="card-kicker">Ready to investigate?</span>
+            <h2 id="challenge-story-title">Test your genealogical skills</h2>
+            <p>Put the Hartwell–Mercer clues together across five fictional mini-cases and earn a score out of 500.</p>
+          </div>
+          <Link className="button" href="/challenge">
+            Start the challenge
+          </Link>
         </section>
       </div>
     </PublicShell>

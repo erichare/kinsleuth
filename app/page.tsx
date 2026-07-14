@@ -43,6 +43,9 @@ export default async function HomePage() {
                 View Demo Stories
               </Link>
             </div>
+            <Link className="challenge-easter-egg-link" href="/challenge">
+              Think like a researcher: test your genealogical skills →
+            </Link>
           </div>
           <figure className="map-panel surface-featured">
             <Image
