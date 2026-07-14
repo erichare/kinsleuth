@@ -54,6 +54,18 @@ describe("product CI workflow contract", () => {
 });
 
 describe("stable release workflow contract", () => {
+  it("proves release provenance before running tag-controlled code or exposing secrets", async () => {
+    const contents = await workflow("vercel-release.yml");
+    const provenance = contents.indexOf("Verify release provenance before running repository code");
+
+    expect(provenance).toBeGreaterThan(0);
+    expect(provenance).toBeLessThan(contents.indexOf("npm ci"));
+    expect(provenance).toBeLessThan(contents.indexOf("vercel@56.1.0 pull"));
+    expect(contents).toContain("refs/tags/${RELEASE_TAG}^{commit}");
+    expect(contents).toContain("HEAD^{commit}");
+    expect(contents).toContain("git merge-base --is-ancestor");
+  });
+
   it("validates actual production values and the released revision", async () => {
     const contents = await workflow("vercel-release.yml");
 

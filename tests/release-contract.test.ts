@@ -138,6 +138,22 @@ describe("stable release contract", () => {
       expect(message).toMatch(/CRON_SECRET.*placeholder/i);
       expect(message).not.toContain(marker);
     }
+
+    try {
+      validateReleaseContract(
+        validInput({
+          productionEnvironment: {
+            ...validInput().productionEnvironment,
+            AUTH_SECRET: `${" ".repeat(32)}${marker}`
+          }
+        })
+      );
+      throw new Error("Expected whitespace-prefixed placeholder validation to fail.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      expect(message).toMatch(/AUTH_SECRET.*placeholder/i);
+      expect(message).not.toContain(marker);
+    }
   });
 
   it("loads and parses the expected pulled environment and project files", async () => {

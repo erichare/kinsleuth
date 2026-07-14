@@ -41,6 +41,7 @@ describe("runtime status", () => {
 
     const status = await getRuntimeStatus();
 
+    expect(status.product).toBe("KinSleuth");
     expect(status.database).toMatchObject({
       configured: false,
       connected: false,
