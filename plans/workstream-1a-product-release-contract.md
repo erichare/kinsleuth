@@ -1,8 +1,8 @@
 # Workstream 1A execution plan: product release contract
 
-Status: In execution  
-Prepared: 2026-07-13  
-Planning base: `origin/main` at `8c5d52031f126b4206ba51dd8118d5476b907ab2`  
+Status: In execution
+Prepared: 2026-07-13
+Planning base: `origin/main` at `8c5d52031f126b4206ba51dd8118d5476b907ab2`
 Roadmap slice: `1A — ci: enforce full pull-request coverage and truthful release contracts`
 
 ## Objective

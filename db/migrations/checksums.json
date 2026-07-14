@@ -4,7 +4,7 @@
     "001_initial.sql": "9023c8a546dcab04a1fb01ae37cd81c2819025e1251a3b9c95df08dea3617c40",
     "002_search_unaccent.sql": "fddf9f9a8fc3a439debf91a1262c82bb128a4dcbcd7047cbabf4a6ecf4c1c550",
     "003_auth_accounts.sql": "9d57f0a55d5043da0154ec947bf411408d825f87034e38e4033b84c5c5bd5e1f",
-    "004_archive_scoped_keys.sql": "0e1f7ef7b6bceb78e19d1656e650f70a9b4393326f06adadc254c764e4d4cb32"
+    "004_archive_scoped_keys.sql": "9bb20294dfc508a5eea038ca4a644f9c03c969a444897d22e4adc323b277df51"
   },
   "releaseAnchors": {
     "v0.17.4": {

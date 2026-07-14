@@ -9,6 +9,9 @@ const migrationFilePattern = /^\d+_[a-z0-9_-]+\.sql$/i;
 const checksumPattern = /^[a-f0-9]{64}$/;
 
 export const V0174_INITIAL_SHA256 = "9023c8a546dcab04a1fb01ae37cd81c2819025e1251a3b9c95df08dea3617c40";
+const defaultTrustedReleaseAnchors = {
+  "v0.17.4": { "001_initial.sql": V0174_INITIAL_SHA256 }
+} as const;
 
 export type MigrationChecksumManifest = {
   schemaVersion: 1;
@@ -19,6 +22,7 @@ export type MigrationChecksumManifest = {
 type VerifyMigrationHistoryOptions = {
   repositoryRoot: string;
   readReleaseFile?: (tag: string, repositoryPath: string) => Promise<Buffer>;
+  trustedReleaseAnchors?: Record<string, Record<string, string>>;
 };
 
 type MigrationHistoryReport = {
@@ -103,6 +107,17 @@ export async function verifyMigrationHistory(options: VerifyMigrationHistoryOpti
   const manifest = parseManifest(await readFile(manifestPath, "utf8"));
   const migrationFiles = (await readdir(migrationsDirectory)).filter((name) => migrationFilePattern.test(name)).sort();
   const recordedFiles = Object.keys(manifest.files).sort();
+  const trustedReleaseAnchors = options.trustedReleaseAnchors ?? defaultTrustedReleaseAnchors;
+
+  const migrationNumbers = new Map<number, string>();
+  for (const fileName of migrationFiles) {
+    const number = Number.parseInt(fileName.match(migrationFilePattern)![0], 10);
+    const existing = migrationNumbers.get(number);
+    if (existing) {
+      throw new Error(`Duplicate migration number ${number}: ${existing} and ${fileName} cannot be ordered.`);
+    }
+    migrationNumbers.set(number, fileName);
+  }
 
   for (const fileName of migrationFiles) {
     if (!(fileName in manifest.files)) {
@@ -126,11 +141,22 @@ export async function verifyMigrationHistory(options: VerifyMigrationHistoryOpti
     }
   }
 
-  const v0174Initial = manifest.releaseAnchors["v0.17.4"]?.["001_initial.sql"];
-  if (v0174Initial !== undefined && v0174Initial !== V0174_INITIAL_SHA256) {
-    throw new Error(
-      `Release anchor v0.17.4/001_initial.sql must remain ${V0174_INITIAL_SHA256}; received ${v0174Initial}.`
-    );
+  for (const [tag, trustedFiles] of Object.entries(trustedReleaseAnchors)) {
+    for (const [fileName, trustedChecksum] of Object.entries(trustedFiles)) {
+      const anchoredChecksum = manifest.releaseAnchors[tag]?.[fileName];
+      if (anchoredChecksum === undefined) {
+        throw new Error(`Required release anchor ${tag}/${fileName} is missing from db/migrations/checksums.json.`);
+      }
+      if (anchoredChecksum !== trustedChecksum) {
+        throw new Error(`Release anchor ${tag}/${fileName} must remain ${trustedChecksum}; received ${anchoredChecksum}.`);
+      }
+      if (manifest.files[fileName] !== trustedChecksum) {
+        throw new Error(
+          `Checked-in ${fileName} must remain byte-identical to ${tag} at ${trustedChecksum}; ` +
+            `the manifest records ${manifest.files[fileName] ?? "no checksum"}.`
+        );
+      }
+    }
   }
 
   const readReleaseFile = options.readReleaseFile ??

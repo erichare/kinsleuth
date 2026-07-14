@@ -36,8 +36,9 @@ schema reference), not its CLI — migrations stay reviewable and self-hosters r
 
 ## Model
 
-- **Users** are global (better-auth `user` table). The stub `users` table from 001,
-  never referenced by code, is dropped.
+- **Users** are global (better-auth `user` table). The stub `users` table from 001 is
+  preserved as `legacy_users` for operator review because it cannot be converted into
+  credential-bearing better-auth accounts.
 - **Memberships** map user → archive → role (`owner | admin | editor | contributor |
   viewer`, the roles `lib/rbac.ts` already defines). Single-archive deployments have
   one archive; the schema is multi-archive-ready like everything else.
@@ -56,7 +57,7 @@ schema reference), not its CLI — migrations stay reviewable and self-hosters r
 ## Phasing
 
 1. **This slice — identity core**: better-auth integration, migration 003 (auth
-   tables + memberships, drop stub users), first-run setup flow, login/logout
+   tables + memberships, preserve stub users as `legacy_users`), first-run setup flow, login/logout
    replacement, proxy rewired to real sessions (Next 16 `proxy.ts` runs on the
    Node runtime, so full session validation stays centralized), session-derived
    role for the AI route, auth-endpoint rate limiting.

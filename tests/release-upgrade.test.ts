@@ -8,9 +8,9 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 import { V0174_INITIAL_SHA256 } from "@/lib/migration-history";
 import { runPendingMigrations } from "@/lib/migrations";
 import { replacePersonFacts, upsertCaseRow, upsertPeopleRows, upsertTaskRow } from "@/lib/store/rows";
+import { validateReleaseUpgradeDatabase } from "@/lib/test-database-contract";
 
 const releaseDatabaseUrl = process.env.TEST_RELEASE_UPGRADE_DATABASE_URL;
-const allowedDatabaseHosts = new Set(["localhost", "127.0.0.1", "[::1]", "postgres", "release-postgres"]);
 const archiveScopedTables = [
   "people",
   "person_facts",
@@ -27,27 +27,6 @@ const archiveScopedTables = [
   "embeddings",
   "ai_runs"
 ] as const;
-
-function databaseIdentity(connectionString: string): string {
-  const url = new URL(connectionString);
-  return `${url.protocol}//${url.username}@${url.hostname.toLowerCase()}:${url.port || "5432"}${url.pathname}`;
-}
-
-function assertDedicatedReleaseDatabase(connectionString: string): void {
-  const hostname = new URL(connectionString).hostname.toLowerCase();
-  if (!allowedDatabaseHosts.has(hostname)) {
-    throw new Error(
-      "TEST_RELEASE_UPGRADE_DATABASE_URL must use localhost or the dedicated CI PostgreSQL service; remote databases are refused."
-    );
-  }
-  const releaseIdentity = databaseIdentity(connectionString);
-  for (const name of ["TEST_DATABASE_URL", "DATABASE_URL"] as const) {
-    const other = process.env[name];
-    if (other && databaseIdentity(other) === releaseIdentity) {
-      throw new Error(`TEST_RELEASE_UPGRADE_DATABASE_URL must not identify the same database as ${name}.`);
-    }
-  }
-}
 
 function historicalInitialSql(): string {
   const contents = execFileSync("git", ["show", "v0.17.4:db/migrations/001_initial.sql"], {
@@ -373,22 +352,33 @@ describe.skipIf(!releaseDatabaseUrl)("v0.17.4 release upgrade", () => {
   let pool: Pool;
   let scratchDatabaseName: string;
   let scratchDatabaseUrl: string;
+  let scratchInitialized = false;
 
   beforeAll(() => {
-    assertDedicatedReleaseDatabase(releaseDatabaseUrl!);
+    validateReleaseUpgradeDatabase({
+      releaseDatabaseUrl,
+      testDatabaseUrl: process.env.TEST_DATABASE_URL,
+      databaseUrl: process.env.DATABASE_URL
+    });
     controlPool = new Pool({ connectionString: releaseDatabaseUrl, max: 2 });
   });
 
   beforeEach(async () => {
+    scratchInitialized = false;
     const scratch = await createScratchDatabase(controlPool, releaseDatabaseUrl!, "scenario", trackedDatabases);
     scratchDatabaseName = scratch.name;
     scratchDatabaseUrl = scratch.url;
     pool = scratch.pool;
+    scratchInitialized = true;
   });
 
   afterEach(async () => {
+    if (!scratchInitialized) {
+      return;
+    }
     await pool.end();
     await dropScratchDatabase(controlPool, scratchDatabaseName, trackedDatabases);
+    scratchInitialized = false;
   });
 
   afterAll(async () => {

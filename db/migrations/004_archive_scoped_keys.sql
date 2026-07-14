@@ -118,6 +118,7 @@ BEGIN
         JOIN pg_catalog.pg_attribute attribute
           ON attribute.attrelid = index_record.indrelid
           AND attribute.attnum = index_column.attnum
+        WHERE index_column.position <= index_record.indnkeyatts
         ORDER BY index_column.position
       ) IN (ARRAY['id']::text[], ARRAY['archive_id', 'id']::text[]);
     IF matching_count <> 0 THEN
