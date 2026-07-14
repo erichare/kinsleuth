@@ -380,8 +380,8 @@ const mercerMarchCase: ResearchInstinctsCase =
         points: 40,
         pickCount: 1,
         options: [
-          { id: "same-person", label: "Samuel Mercer and Samuel March are probably the same person." },
-          { id: "different-people", label: "They must be two different people because the surnames differ." },
+          { id: "different-people", label: "The records are more consistent with two closely connected men at 14 Dock than with one man using two surnames." },
+          { id: "same-person", label: "The records strongly support one man using Mercer and March, although the reason for the second surname remains unresolved." },
           { id: "not-sure", label: "I’m not sure yet." }
         ],
         answerOptionIds: ["same-person"],
@@ -393,10 +393,10 @@ const mercerMarchCase: ResearchInstinctsCase =
         points: 40,
         pickCount: 2,
         options: [
-          { id: "signature-match", label: "The passenger-declaration and 1909 marriage signatures share an unusual final stroke." },
-          { id: "maeve-letter", label: "Maeve’s 1906 letter says Samuel practiced signing both surnames." },
-          { id: "age-conflict", label: "The passenger-declaration traveler is about the expected age." },
-          { id: "route-wording", label: "Both records can be associated with the Northstar Cove–Lantern Bay route." },
+          { id: "signature-match", label: "The self-signed passenger and marriage records share a distinctive flattened S and unusually tall final stroke." },
+          { id: "age-conflict", label: "The 1907 and 1909 ages fit the same birth year once the reporting dates are considered." },
+          { id: "route-wording", label: "Certificate 418 and the Northstar–Lantern route connect the two 1907 migration entries to one journey." },
+          { id: "maeve-letter", label: "Maeve’s pre-departure letter independently places both surnames in Samuel’s own handwriting." },
           { id: "not-sure", label: "I’m not sure which clues matter most." }
         ],
         answerOptionIds: ["signature-match", "maeve-letter"],
@@ -404,16 +404,16 @@ const mercerMarchCase: ResearchInstinctsCase =
       },
       {
         id: "caution",
-        prompt: "What caution belongs in the research log?",
+        prompt: "Which statement best separates identity from alias status?",
         points: 20,
         pickCount: 1,
         options: [
-          { id: "corroborate-alias", label: "A surname variation is not proof by itself; seek another record that explicitly joins the names." },
-          { id: "ignore-conflicts", label: "Once signatures match, age and route details no longer need to be recorded." },
+          { id: "ignore-conflicts", label: "The matching signatures and Maeve’s letter settle both identity and alias status; only the directory duplication and canvass timing remain unresolved." },
+          { id: "corroborate-alias", label: "The records strongly support one identity, but they do not establish March’s legal status or explain when and why Samuel used it." },
           { id: "not-sure", label: "I’m not sure what to flag." }
         ],
         answerOptionIds: ["corroborate-alias"],
-        explanation: "Identity work should preserve discrepancies and state the remaining uncertainty. A matching signature is powerful, but the alias conclusion still benefits from explicit corroboration."
+        explanation: "Identity evidence can support one person without establishing the legal or social status of March. Preserve the directory duplication and keep when, why, and under what authority Samuel used the surname open."
       }
     ]
   };

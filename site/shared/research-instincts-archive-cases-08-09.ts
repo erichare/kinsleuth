@@ -244,9 +244,9 @@ export const blueTinTimelineCase: ResearchInstinctsCase = {
       points: 40,
       pickCount: 1,
       options: [
-        { id: "amalia-assembled", label: "Amalia probably began the documented collection in January 1922; the key and violet thread joined later." },
-        { id: "samuel-1907", label: "Samuel assembled the finished tin in 1907 because the oldest notice is his." },
-        { id: "tobias-1984", label: "Tobias assembled it in 1984 because his is the first complete inventory." },
+        { id: "samuel-1907", label: "Samuel probably started a collection before 1922, and Amalia transferred his earlier group of keepsakes into the blue tin." },
+        { id: "tobias-1984", label: "Tobias may have assembled the surviving five-object collection shortly before his 1984 inventory, using the older papers as inherited material." },
+        { id: "amalia-assembled", label: "Amalia probably began the documented collection in January 1922; later additions changed its contents before Tobias’s inventory." },
         { id: "not-sure", label: "I’m not sure yet." }
       ],
       answerOptionIds: ["amalia-assembled"],
@@ -258,10 +258,10 @@ export const blueTinTimelineCase: ResearchInstinctsCase = {
       points: 40,
       pickCount: 2,
       options: [
-        { id: "maker-window", label: "The NCW 21-B rubbing matches a model first offered on 15 September 1921." },
-        { id: "independent-accounts", label: "Amalia’s note and Nora’s journal independently describe Amalia arranging the tin in January 1922." },
-        { id: "oldest-item", label: "The passenger notice is dated 1907." },
-        { id: "fold-fit", label: "The receipt’s folds fit the container." },
+        { id: "oldest-item", label: "The 1907 notice and 1921 receipt show that the collection’s papers span at least fourteen years." },
+        { id: "maker-window", label: "The NCW 21-B code identifies a tin model first advertised in September 1921." },
+        { id: "independent-accounts", label: "Amalia’s note and Nora’s independent journal both describe her arranging three items in January 1922." },
+        { id: "fold-fit", label: "The receipt’s matching folds suggest the papers had already been stored together before the 1984 inventory." },
         { id: "not-sure", label: "I’m not sure which clues matter most." }
       ],
       answerOptionIds: ["maker-window", "independent-accounts"],
@@ -273,8 +273,8 @@ export const blueTinTimelineCase: ResearchInstinctsCase = {
       points: 20,
       pickCount: 1,
       options: [
-        { id: "snapshot-not-chain", label: "The 1984 inventory is a snapshot; item dates are not insertion dates, and continuous custody is not documented." },
-        { id: "circular-is-purchase", label: "The circular proves Amalia bought this exact tin on 15 September 1921." },
+        { id: "snapshot-not-chain", label: "Distinguish manufacture, arrangement, later additions, and surviving custody because none supplies a continuous chain on its own." },
+        { id: "circular-is-purchase", label: "Flag the missing purchase receipt as the main provenance gap; the maker code and January accounts otherwise establish continuous custody." },
         { id: "not-sure", label: "I’m not sure what to flag." }
       ],
       answerOptionIds: ["snapshot-not-chain"],
@@ -530,9 +530,9 @@ export const harborPhotoCase: ResearchInstinctsCase = {
       points: 40,
       pickCount: 1,
       options: [
-        { id: "northstar-1906", label: "Probably North Star Chandlery in Northstar Cove, September–November 1906; the people remain probable." },
-        { id: "lantern-1908", label: "Harbor Star Outfitters in Lantern Bay in 1908 because its name also ends in AR." },
-        { id: "clara-1930s", label: "A 1930s photograph because the violet annotation dates after 1928." },
+        { id: "northstar-1906", label: "The scene most likely shows North Star Chandlery in Northstar Cove during late 1906; the people remain tentative." },
+        { id: "lantern-1908", label: "The cropped sign and western-lamp note favor Harbor Star Outfitters in Lantern Bay around 1908; the people remain tentative." },
+        { id: "clara-1930s", label: "The violet caption favors a post-1928 date, with Clara documenting an earlier-looking harbor setting for the family album." },
         { id: "not-sure", label: "I’m not sure yet." }
       ],
       answerOptionIds: ["northstar-1906"],
@@ -544,10 +544,10 @@ export const harborPhotoCase: ResearchInstinctsCase = {
       points: 40,
       pickCount: 2,
       options: [
-        { id: "feature-cluster", label: "The awning, twelve-lamp rack, and full sign pattern match the North Star catalog." },
-        { id: "seal-window", label: "Diamond + II independently maps to Northstar Cove from September through November 1906." },
-        { id: "cropped-ar", label: "The photograph preserves the final letters AR." },
-        { id: "violet-note", label: "The verso carries a violet note about a western lamp." },
+        { id: "feature-cluster", label: "The awning sequence, twelve-lamp rack, and sign layout collectively match the North Star catalog image." },
+        { id: "cropped-ar", label: "The surviving AR letters and harbor setting narrow the scene to the two named waterfront businesses." },
+        { id: "violet-note", label: "The violet note connects the image to western lamp work and to Clara’s later album labels." },
+        { id: "seal-window", label: "Diamond + II maps independently to Northstar Cove during September through November 1906." },
         { id: "not-sure", label: "I’m not sure which clues matter most." }
       ],
       answerOptionIds: ["feature-cluster", "seal-window"],
@@ -559,8 +559,8 @@ export const harborPhotoCase: ResearchInstinctsCase = {
       points: 20,
       pickCount: 1,
       options: [
-        { id: "place-stronger-than-people", label: "Place and season are better supported than identity; the later annotation and directory absence cannot prove the people or event." },
-        { id: "absence-proves-none", label: "No North Star listing in 1908 proves the business never operated in Lantern Bay." },
+        { id: "absence-proves-none", label: "Keep Lantern Bay equally likely because the partial 1908 directory does not establish where North Star operated in 1906." },
+        { id: "place-stronger-than-people", label: "State place and season with stronger confidence than the people, annotator, or event described on the later verso." },
         { id: "not-sure", label: "I’m not sure what to flag." }
       ],
       answerOptionIds: ["place-stronger-than-people"],

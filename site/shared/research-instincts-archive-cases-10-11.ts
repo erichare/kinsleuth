@@ -251,9 +251,9 @@ export const twoMaliasCase: ResearchInstinctsCase = {
       points: 40,
       pickCount: 1,
       options: [
-        { id: "house-11-amalia", label: "The seven-year-old Malia at house 11 is probably Amalia Rose Bellandi; the house 27 child remains separate." },
-        { id: "unresolved-two-candidates", label: "The identity must remain unresolved because both childhood entries use Malia Bellandi and the later records use Amalia." },
-        { id: "merge-both", label: "Both Malias should be merged because the clerk’s key equates Malia and Amalia." },
+        { id: "unresolved-two-candidates", label: "The two childhood Malia entries remain equally viable because the name key and passenger ledger do not identify either household." },
+        { id: "house-11-amalia", label: "House 11 Malia is best correlated with Amalia Rose; house 27 remains separate, and the age discrepancy remains open." },
+        { id: "merge-both", label: "The two household entries may be duplicate enumerations of one child because the name key and village match, leaving the parent differences unresolved." },
         { id: "not-sure", label: "I’m not sure yet." }
       ],
       answerOptionIds: ["house-11-amalia"],
@@ -265,10 +265,10 @@ export const twoMaliasCase: ResearchInstinctsCase = {
       points: 40,
       pickCount: 2,
       options: [
-        { id: "family-cluster", label: "The Rosa–Malia–Ettore household cluster matches Luca and Mira’s three formal baptisms." },
-        { id: "permit-passenger-marriage", label: "Permit/ticket 612 joins Amalia Rose to passenger Malia, and the Lantern Bay marriage repeats her birth and parents while she signs Malia." },
-        { id: "name-variant", label: "The clerk’s key says Malia can be used for Amalia." },
-        { id: "shared-surname", label: "Both candidates use Bellandi and live in Ceraluna Alta." },
+        { id: "name-variant", label: "The Malia/Amalia name key and the bride’s Malia signature show that the variant persisted across jurisdictions." },
+        { id: "family-cluster", label: "Rosa–Malia–Ettore at house 11 matches the baptismal sibling group in names, order, and expected ages." },
+        { id: "shared-surname", label: "Bellandi and Ceraluna Alta recur in both childhood households and in the later migration records." },
+        { id: "permit-passenger-marriage", label: "Number 612 links permit and passenger entries; the marriage later repeats Amalia’s birth details and parents." },
         { id: "not-sure", label: "I’m not sure which clues matter most." }
       ],
       answerOptionIds: ["family-cluster", "permit-passenger-marriage"],
@@ -280,8 +280,8 @@ export const twoMaliasCase: ResearchInstinctsCase = {
       points: 20,
       pickCount: 1,
       options: [
-        { id: "separate-and-preserve", label: "Keep both Malias separate and preserve the 21/22 age conflict; the name convention is not proof of identity." },
-        { id: "normalize-age", label: "Change every age to 21 because the signed permit is the preferred source." },
+        { id: "normalize-age", label: "Keep both childhood households open because the one-year passenger-age conflict prevents choosing between the two Malia entries." },
+        { id: "separate-and-preserve", label: "Keep house 27 separate and preserve the 21/22 conflict while treating house 11 as the working identity." },
         { id: "not-sure", label: "I’m not sure what to flag." }
       ],
       answerOptionIds: ["separate-and-preserve"],
@@ -539,14 +539,14 @@ export const dnaClustersCase: ResearchInstinctsCase = {
   questions: [
     {
       id: "conclusion",
-      prompt: "Which hypothesis should guide the next research round?",
+      prompt: "Which model best accounts for all three matches without claiming more than the packet supports?",
       points: 40,
       pickCount: 1,
       options: [
-        { id: "two-working-tracks", label: "Treat Alder and Pike as a Rowan-focused working cluster led by Elowen; investigate Solari separately through Rosa Bellandi, with gaps unresolved." },
-        { id: "triangulated-elowen", label: "Alder and Pike are a proven triangulated group descending from Elowen." },
-        { id: "highest-cm-all", label: "The 86 cM result identifies Elowen as the ancestor of all three matches." },
-        { id: "exclude-solari", label: "Solari cannot connect to Rowan because the match is absent from the matrix." },
+        { id: "highest-cm-all", label: "Use Alder’s 86 cM result to anchor Elowen, then test whether Pike and Solari descend through adjacent family lines." },
+        { id: "triangulated-elowen", label: "Treat Alder and Pike as an Elowen descendant cluster, with the shared-match matrix providing provisional genetic confirmation." },
+        { id: "exclude-solari", label: "Focus the Rowan hypothesis on Alder and Pike, and defer Solari because it falls outside their displayed shared-match network." },
+        { id: "two-working-tracks", label: "Pursue Alder and Pike through Elowen as one working track, and Solari through Rosa as a separate track." },
         { id: "not-sure", label: "I’m not sure yet." }
       ],
       answerOptionIds: ["two-working-tracks"],
@@ -554,14 +554,14 @@ export const dnaClustersCase: ResearchInstinctsCase = {
     },
     {
       id: "evidence",
-      prompt: "Which two correlations justify those separate working tracks?",
+      prompt: "Which two correlations connect each working track to a candidate family line?",
       points: 40,
       pickCount: 2,
       options: [
-        { id: "alder-pike-elowen", label: "Alder and Pike share each other while two documentary paths converge on Elowen’s children." },
-        { id: "solari-rosa", label: "Solari’s Bellandi/Ceraluna profile clues correlate with the separate Rosa Bellandi worksheet." },
-        { id: "largest-cm", label: "Alder has the largest total at 86 cM." },
-        { id: "matrix-absence", label: "Solari is not listed with Alder or Pike." },
+        { id: "alder-pike-elowen", label: "Alder and Pike appear together in shared-match results while two incomplete paper paths independently point toward Elowen." },
+        { id: "largest-cm", label: "Alder’s 86 cM total and Rowan profile clues make it the strongest numerical anchor for the cluster." },
+        { id: "solari-rosa", label: "Solari’s Bellandi and Ceraluna clues align with the Rosa worksheet independently of the two Rowan paths." },
+        { id: "matrix-absence", label: "Solari’s absence from the displayed matrix separates it from Alder and Pike at the platform’s reporting threshold." },
         { id: "not-sure", label: "I’m not sure which clues matter most." }
       ],
       answerOptionIds: ["alder-pike-elowen", "solari-rosa"],
@@ -569,12 +569,12 @@ export const dnaClustersCase: ResearchInstinctsCase = {
     },
     {
       id: "caution",
-      prompt: "Which limitation belongs in every DNA hypothesis here?",
+      prompt: "Which limitation should govern both working tracks?",
       points: 20,
       pickCount: 1,
       options: [
-        { id: "not-triangulation", label: "In-common-with is not triangulation, absent listings may be threshold effects, cM ranges overlap, and the paper paths retain provisional links." },
-        { id: "trees-prove", label: "Public trees become proof once their surnames and places match the tester’s family." },
+        { id: "not-triangulation", label: "Shared-match status is not triangulation; thresholds, overlapping cM ranges, and provisional paper links leave each relationship estimate open." },
+        { id: "trees-prove", label: "Keep each public tree provisional until its lineage is rebuilt; after that, use cM totals to choose the most likely relationship range." },
         { id: "not-sure", label: "I’m not sure what to flag." }
       ],
       answerOptionIds: ["not-triangulation"],

@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { researchInstinctsCases } from "@/lib/research-instincts";
+import {
+  researchInstinctsCases,
+  scoreResearchInstinctsChallenge
+} from "@/lib/research-instincts";
 
 const allQuestions = researchInstinctsCases.flatMap((challengeCase) =>
   challengeCase.questions.map((question) => ({ challengeCase, question }))
@@ -19,6 +22,22 @@ function average(values: readonly number[]) {
 }
 
 describe("research instincts answer-bias contract", () => {
+  function scoreShortcut(
+    rankOptions: (options: ReturnType<typeof substantiveOptions>) => ReturnType<typeof substantiveOptions>
+  ) {
+    const answers = Object.fromEntries(researchInstinctsCases.map((challengeCase) => [
+      challengeCase.id,
+      Object.fromEntries(challengeCase.questions.map((question) => [
+        question.id,
+        rankOptions(substantiveOptions(question))
+          .slice(0, question.pickCount)
+          .map(({ id }) => id)
+      ]))
+    ])) as Parameters<typeof scoreResearchInstinctsChallenge>[0];
+
+    return scoreResearchInstinctsChallenge(answers).total;
+  }
+
   it("varies canonical positions instead of teaching a first-option pattern", () => {
     const firstOptionAnswerCount = allQuestions.filter(({ question }) =>
       question.answerOptionIds.includes(question.options[0].id)
@@ -101,5 +120,15 @@ describe("research instincts answer-bias contract", () => {
       (distractorWordTotal / distractorOptionCount);
     expect(overallLengthRatio).toBeGreaterThanOrEqual(0.85);
     expect(overallLengthRatio).toBeLessThanOrEqual(1.15);
+  });
+
+  it("makes position and answer-length shortcuts perform poorly", () => {
+    const firstChoiceScore = scoreShortcut((options) => options);
+    const longestChoiceScore = scoreShortcut((options) =>
+      [...options].sort((left, right) => right.label.length - left.label.length)
+    );
+
+    expect(firstChoiceScore).toBeLessThanOrEqual(200);
+    expect(longestChoiceScore).toBeLessThanOrEqual(300);
   });
 });
