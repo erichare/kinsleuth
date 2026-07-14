@@ -10,6 +10,7 @@ import {
 } from "./research-instincts-all-cases-contract";
 
 const ASSET_ROOTS = ["site/public", "public"] as const;
+const MIN_ASSET_BYTES = 32 * 1024;
 const MAX_ASSET_BYTES = 512 * 1024;
 const MAX_CASE_BYTES = 3 * 1024 * 1024;
 
@@ -102,6 +103,9 @@ describe("all-case immersive archive contract", () => {
         expect(siteBytes.equals(appBytes), `${record.catalogId} mirrors`).toBe(true);
         expect(siteBytes.subarray(0, 4).toString("ascii"), record.catalogId).toBe("RIFF");
         expect(siteBytes.subarray(8, 12).toString("ascii"), record.catalogId).toBe("WEBP");
+        expect(statSync(assets[0]).size, `${record.catalogId} useful image size`).toBeGreaterThanOrEqual(
+          MIN_ASSET_BYTES
+        );
         expect(statSync(assets[0]).size, `${record.catalogId} size`).toBeLessThanOrEqual(MAX_ASSET_BYTES);
         caseBytes += statSync(assets[0]).size;
       }
