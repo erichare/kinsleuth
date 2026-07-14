@@ -77,6 +77,27 @@ describe("research instincts fictional challenge data", () => {
     });
   });
 
+  it("uses the same facts as the canonical demo cases instead of forking the family lore", () => {
+    const canonicalDetails = [
+      ["4 May 1907", "1909 marriage", "Maeve Mercer", "1906 letter"],
+      ["1984", "1921 repair receipt", "Amalia Bellandi", "Nora Hartwell"],
+      ["North Star Chandlery", "September through November 1906", "image quality", "after 1928"],
+      ["Luca Bellandi", "Mira Solari", "Rosa", "Ettore", "7 July 1861", "1883"],
+      ["86 cM", "54 cM", "37 cM", "Elowen Rowan", "Rosa Bellandi", "provisional"]
+    ] as const;
+
+    researchInstinctsCases.forEach((challengeCase, index) => {
+      const serializedCase = JSON.stringify(challengeCase);
+      for (const detail of canonicalDetails[index]) {
+        expect(serializedCase, `${challengeCase.id} is missing canonical detail ${detail}`).toContain(detail);
+      }
+    });
+
+    expect(JSON.stringify(researchInstinctsCases)).not.toMatch(
+      /Maeve Hartwell|Tomaso Bellandi|Pietro|Luisa|injured left thumb/i
+    );
+  });
+
   it("uses a canonical 40/40/20 rubric worth exactly 100 points per case", () => {
     for (const challengeCase of researchInstinctsCases) {
       expect(challengeCase.questions.map((question) => question.id)).toEqual([
