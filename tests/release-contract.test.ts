@@ -20,8 +20,16 @@ function validInput(overrides: Partial<ReleaseContractInput> = {}): ReleaseContr
   return {
     releaseTag: "v0.17.4",
     packageVersion: "0.17.4",
+    releaseCommit: "0123456789abcdef0123456789abcdef01234567",
+    checkedOutCommit: "0123456789abcdef0123456789abcdef01234567",
     releaseIsOnMain: true,
-    project: { settings: { framework: "nextjs" } },
+    project: {
+      projectId: "prj_kinresolve",
+      orgId: "team_kinresolve",
+      settings: { framework: "nextjs" }
+    },
+    expectedProjectId: "prj_kinresolve",
+    expectedOrgId: "team_kinresolve",
     productionEnvironment: {
       DATABASE_URL: "postgresql://app:secret@database.example.com:6543/kinresolve?sslmode=require",
       DATABASE_POOL_MAX: "2",
@@ -48,10 +56,32 @@ describe("stable release contract", () => {
     expect(() => validateReleaseContract(validInput({ releaseIsOnMain: false }))).toThrow(/ancestor of origin\/main/i);
   });
 
-  it("requires the linked project to use the Next.js framework preset", () => {
+  it("requires the released tag commit to be the checked-out revision", () => {
     expect(() =>
-      validateReleaseContract(validInput({ project: { settings: { framework: "other" } } }))
+      validateReleaseContract(
+        validInput({ checkedOutCommit: "fedcba9876543210fedcba9876543210fedcba98" })
+      )
+    ).toThrow(/tag commit.*checked-out revision/i);
+  });
+
+  it("requires the expected linked Vercel project and Next.js framework preset", () => {
+    expect(() =>
+      validateReleaseContract(
+        validInput({
+          project: {
+            projectId: "prj_kinresolve",
+            orgId: "team_kinresolve",
+            settings: { framework: "other" }
+          }
+        })
+      )
     ).toThrow(/framework.*nextjs/i);
+    expect(() =>
+      validateReleaseContract(validInput({ expectedProjectId: "prj_unrelated" }))
+    ).toThrow(/project ID.*expected Vercel project/i);
+    expect(() =>
+      validateReleaseContract(validInput({ expectedOrgId: "team_unrelated" }))
+    ).toThrow(/organization ID.*expected Vercel organization/i);
   });
 
   it("requires actual pulled values for every production setting", () => {
@@ -78,6 +108,16 @@ describe("stable release contract", () => {
         validInput({ productionEnvironment: { ...validInput().productionEnvironment, DATABASE_URL: "https://database.example.com" } })
       )
     ).toThrow(/DATABASE_URL.*PostgreSQL/i);
+    expect(() =>
+      validateReleaseContract(
+        validInput({ productionEnvironment: { ...validInput().productionEnvironment, DATABASE_URL: "postgresql:///kinresolve" } })
+      )
+    ).toThrow(/DATABASE_URL.*host/i);
+    expect(() =>
+      validateReleaseContract(
+        validInput({ productionEnvironment: { ...validInput().productionEnvironment, DATABASE_URL: "postgresql://database.example.com" } })
+      )
+    ).toThrow(/DATABASE_URL.*database name/i);
   });
 
   it("requires an HTTPS origin and rejects placeholder secrets without leaking them", () => {
@@ -130,6 +170,24 @@ describe("stable release contract", () => {
     );
   });
 
+  it("rejects malformed and duplicate pulled production assignments", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "kinresolve-release-contract-"));
+    scratchDirectories.push(root);
+    await mkdir(path.join(root, ".vercel"), { recursive: true });
+    await writeFile(path.join(root, ".vercel", "project.json"), JSON.stringify(validInput().project), "utf8");
+    await writeFile(path.join(root, "package.json"), JSON.stringify({ version: "0.17.4" }), "utf8");
+
+    await writeFile(path.join(root, ".vercel", ".env.production.local"), "AUTH_SECRET='unterminated", "utf8");
+    await expect(loadReleaseContractFiles({ repositoryRoot: root })).rejects.toThrow(/could not be parsed/i);
+
+    await writeFile(
+      path.join(root, ".vercel", ".env.production.local"),
+      "AUTH_SECRET=first-value\nAUTH_SECRET=second-value\n",
+      "utf8"
+    );
+    await expect(loadReleaseContractFiles({ repositoryRoot: root })).rejects.toThrow(/duplicate.*AUTH_SECRET/i);
+  });
+
   it("accepts only the configured login redirect from the deployed application", () => {
     expect(() =>
       validateLoginRedirect({
@@ -145,5 +203,12 @@ describe("stable release contract", () => {
         location: "https://attacker.example/login?next=%2Fapp"
       })
     ).toThrow(/configured APP_BASE_URL/i);
+    expect(() =>
+      validateLoginRedirect({
+        deploymentUrl: "https://kinresolve-release.vercel.app",
+        appBaseUrl: "https://app.kinresolve.com",
+        location: "https://app.kinresolve.com/login?next=%2Fapp&unexpected=true"
+      })
+    ).toThrow(/exactly \/login\?next=\/app/i);
   });
 });

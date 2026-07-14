@@ -8,6 +8,9 @@ async function workflow(name: string): Promise<string> {
   return readFile(path.join(process.cwd(), ".github", "workflows", name), "utf8");
 }
 
+const databaseImage =
+  "pgvector/pgvector:0.8.1-pg16@sha256:33198da2828a14c30348d2ccb4750833d5ed9a44c88d840a0e523d7417120337";
+
 describe("product CI workflow contract", () => {
   it("runs for every product pull request and main push with an immutable database service", async () => {
     const contents = await workflow("ci.yml");
@@ -15,8 +18,9 @@ describe("product CI workflow contract", () => {
     expect(contents).toMatch(/pull_request:/);
     expect(contents).toMatch(/push:\s*\n\s*branches:\s*\[main\]/);
     expect(contents).not.toMatch(/^\s*paths:/m);
+    expect(contents).not.toMatch(/^\s*paths-ignore:/m);
     expect(contents).not.toMatch(/continue-on-error/);
-    expect(contents).toMatch(/pgvector\/pgvector:0\.8\.1-pg16@sha256:[a-f0-9]{64}/);
+    expect(contents.match(new RegExp(databaseImage, "g"))).toHaveLength(3);
   });
 
   it("exposes every release signal and one fail-closed aggregate gate", async () => {
@@ -29,11 +33,20 @@ describe("product CI workflow contract", () => {
     expect(contents).toMatch(/if:\s*always\(\)/);
     expect(contents).toMatch(/STATIC_RESULT.*DATABASE_RESULT.*UPGRADE_RESULT.*LARGE_IMPORT_RESULT.*RELEASE_CONTRACT_RESULT/s);
     expect(contents).toMatch(/test\s+"\$STATIC_RESULT"\s+=\s+"success"/);
+    for (const result of [
+      "DATABASE_RESULT",
+      "UPGRADE_RESULT",
+      "LARGE_IMPORT_RESULT",
+      "RELEASE_CONTRACT_RESULT"
+    ]) {
+      expect(contents, result).toMatch(new RegExp(`test\\s+"\\$${result}"\\s+=\\s+"success"`));
+    }
   });
 
   it("keeps package database commands exhaustive and explicit", () => {
     expect(packageJson.scripts["test:db"]).not.toMatch(/tests\//);
     expect(packageJson.scripts["test:db"]).toContain("vitest run");
+    expect(packageJson.scripts["test:db"]).toContain("--no-file-parallelism");
     expect(packageJson.scripts["test:release-upgrade"]).toContain("require-release-upgrade-database.mjs");
     expect(packageJson.scripts["test:db:large"]).toContain("require-test-database.mjs");
     expect(packageJson.scripts["test:db:large"]).toContain("RUN_LARGE_GEDCOM_TEST=true");
@@ -48,6 +61,13 @@ describe("stable release workflow contract", () => {
     expect(contents).toContain(".vercel/.env.production.local");
     expect(contents).toMatch(/fetch-depth:\s*0/);
     expect(contents).toMatch(/origin\/main/);
+    expect(contents.indexOf("vercel@56.1.0 pull")).toBeLessThan(
+      contents.indexOf("scripts/validate-release-contract.mjs")
+    );
+    expect(contents.indexOf("scripts/validate-release-contract.mjs")).toBeLessThan(
+      contents.indexOf("vercel@56.1.0 build")
+    );
+    expect(contents).toContain("TEST_RELEASE_UPGRADE_DATABASE_URL");
   });
 
   it("uses environment authentication and smokes the deployment it created", async () => {
@@ -58,6 +78,7 @@ describe("stable release workflow contract", () => {
     expect(contents).not.toContain("kinsleuth.vercel.app");
     expect(contents).not.toMatch(/^\s*PRODUCTION_URL:/m);
     expect(contents).toContain("steps.deploy.outputs.url");
-    expect(contents).toMatch(/pgvector\/pgvector:0\.8\.1-pg16@sha256:[a-f0-9]{64}/);
+    expect(contents).toContain(databaseImage);
+    expect(contents).toContain("scripts/validate-deployment-redirect.mjs");
   });
 });
