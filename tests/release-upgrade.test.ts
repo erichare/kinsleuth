@@ -352,6 +352,7 @@ describe.skipIf(!releaseDatabaseUrl)("v0.17.4 release upgrade", () => {
   let pool: Pool;
   let scratchDatabaseName: string;
   let scratchDatabaseUrl: string;
+  let controlInitialized = false;
   let scratchInitialized = false;
 
   beforeAll(() => {
@@ -361,6 +362,7 @@ describe.skipIf(!releaseDatabaseUrl)("v0.17.4 release upgrade", () => {
       databaseUrl: process.env.DATABASE_URL
     });
     controlPool = new Pool({ connectionString: releaseDatabaseUrl, max: 2 });
+    controlInitialized = true;
   });
 
   beforeEach(async () => {
@@ -382,6 +384,9 @@ describe.skipIf(!releaseDatabaseUrl)("v0.17.4 release upgrade", () => {
   });
 
   afterAll(async () => {
+    if (!controlInitialized) {
+      return;
+    }
     for (const name of [...trackedDatabases]) {
       await dropScratchDatabase(controlPool, name, trackedDatabases);
     }

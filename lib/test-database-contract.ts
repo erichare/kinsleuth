@@ -1,4 +1,5 @@
 const allowedReleaseDatabaseHosts = new Set(["loopback", "postgres", "release-postgres"]);
+const forbiddenConnectionParameters = new Set(["host", "hostaddr", "port", "database", "dbname", "user", "password", "service"]);
 
 type ReleaseUpgradeDatabaseOptions = {
   releaseDatabaseUrl?: string;
@@ -20,6 +21,11 @@ function parsePostgresUrl(value: string, variableName: string): URL {
   }
   if (!["postgres:", "postgresql:"].includes(url.protocol) || url.pathname === "" || url.pathname === "/") {
     throw new Error(`${variableName} must be a valid PostgreSQL URL with an explicit database name.`);
+  }
+  for (const parameter of url.searchParams.keys()) {
+    if (forbiddenConnectionParameters.has(parameter.toLowerCase())) {
+      throw new Error(`${variableName} connection query parameter ${parameter} is not allowed to override URL routing.`);
+    }
   }
   return url;
 }

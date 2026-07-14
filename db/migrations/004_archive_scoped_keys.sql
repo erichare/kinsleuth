@@ -119,7 +119,7 @@ BEGIN
           ON attribute.attrelid = index_record.indrelid
           AND attribute.attnum = index_column.attnum
         WHERE index_column.position <= index_record.indnkeyatts
-        ORDER BY index_column.position
+        ORDER BY attribute.attname
       ) IN (ARRAY['id']::text[], ARRAY['archive_id', 'id']::text[]);
     IF matching_count <> 0 THEN
       RAISE EXCEPTION 'Unexpected archive-key uniqueness: public.% has a duplicate unique index', archive_scoped_table;
