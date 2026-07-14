@@ -1,0 +1,202 @@
+name: Product CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: product-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  static:
+    name: Static product checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Verify immutable migrations
+        run: npm run migrations:verify
+
+      - name: Build production application
+        run: npm run build
+
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+
+  database:
+    name: Complete database suite
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:0.8.1-pg16@sha256:33198da2828a14c30348d2ccb4750833d5ed9a44c88d840a0e523d7417120337
+        env:
+          POSTGRES_DB: kinresolve_test
+          POSTGRES_USER: kinresolve
+          POSTGRES_PASSWORD: kinresolve
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U kinresolve -d kinresolve_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Check out full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run every database-backed test
+        env:
+          TEST_DATABASE_URL: postgres://kinresolve:kinresolve@localhost:5432/kinresolve_test
+        run: npm run test:db
+
+  release-upgrade:
+    name: Released database upgrade
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:0.8.1-pg16@sha256:33198da2828a14c30348d2ccb4750833d5ed9a44c88d840a0e523d7417120337
+        env:
+          POSTGRES_DB: kinresolve_release_upgrade
+          POSTGRES_USER: kinresolve
+          POSTGRES_PASSWORD: kinresolve
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U kinresolve -d kinresolve_release_upgrade"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Check out full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Rehearse the latest stable upgrade
+        env:
+          TEST_RELEASE_UPGRADE_DATABASE_URL: postgres://kinresolve:kinresolve@localhost:5432/kinresolve_release_upgrade
+        run: npm run test:release-upgrade
+
+  large-import:
+    name: Large GEDCOM persistence
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:0.8.1-pg16@sha256:33198da2828a14c30348d2ccb4750833d5ed9a44c88d840a0e523d7417120337
+        env:
+          POSTGRES_DB: kinresolve_large_import
+          POSTGRES_USER: kinresolve
+          POSTGRES_PASSWORD: kinresolve
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U kinresolve -d kinresolve_large_import"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Check out full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run large import regression
+        env:
+          TEST_DATABASE_URL: postgres://kinresolve:kinresolve@localhost:5432/kinresolve_large_import
+        run: npm run test:db:large
+
+  release-contract:
+    name: Release contract fixtures
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify release and workflow contracts
+        run: npx vitest run tests/release-contract.test.ts tests/workflow-contract.test.ts tests/migration-history.test.ts tests/release-workflow-history.test.ts
+
+  gate:
+    name: Product release contract
+    if: always()
+    needs: [static, database, release-upgrade, large-import, release-contract]
+    runs-on: ubuntu-latest
+    env:
+      STATIC_RESULT: ${{ needs.static.result }}
+      DATABASE_RESULT: ${{ needs.database.result }}
+      UPGRADE_RESULT: ${{ needs['release-upgrade'].result }}
+      LARGE_IMPORT_RESULT: ${{ needs['large-import'].result }}
+      RELEASE_CONTRACT_RESULT: ${{ needs['release-contract'].result }}
+    steps:
+      - name: Require every product check
+        run: |
+          test "$STATIC_RESULT" = "success"
+          test "$DATABASE_RESULT" = "success"
+          test "$UPGRADE_RESULT" = "success"
+          test "$LARGE_IMPORT_RESULT" = "success"
+          test "$RELEASE_CONTRACT_RESULT" = "success"

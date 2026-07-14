@@ -18,20 +18,19 @@ jobs:
     environment: production
     services:
       postgres:
-        image: pgvector/pgvector:pg16
+        image: pgvector/pgvector:0.8.1-pg16@sha256:33198da2828a14c30348d2ccb4750833d5ed9a44c88d840a0e523d7417120337
         env:
-          POSTGRES_DB: kinsleuth_test
-          POSTGRES_USER: kinsleuth
-          POSTGRES_PASSWORD: kinsleuth
+          POSTGRES_DB: kinresolve_release_test
+          POSTGRES_USER: kinresolve_ci
+          POSTGRES_PASSWORD: kinresolve_ci
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U kinsleuth -d kinsleuth_test"
-          --health-interval 10s
+          --health-cmd "pg_isready -U kinresolve_ci -d kinresolve_release_test"
+          --health-interval 5s
           --health-timeout 5s
-          --health-retries 5
+          --health-retries 10
     env:
-      PRODUCTION_URL: https://kinsleuth.vercel.app
       RELEASE_TAG: ${{ github.event.release.tag_name }}
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
       VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
@@ -59,83 +58,86 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
-      - name: Test
+      - name: Run unit and contract tests
         run: npm test
 
-      - name: Test Postgres persistence
+      - name: Verify immutable migrations
+        run: npm run migrations:verify
+
+      - name: Test complete Postgres persistence
         env:
-          TEST_DATABASE_URL: postgres://kinsleuth:kinsleuth@localhost:5432/kinsleuth_test
+          TEST_DATABASE_URL: postgres://kinresolve_ci:kinresolve_ci@localhost:5432/kinresolve_release_test
         run: npm run test:db
+
+      - name: Rehearse the latest stable database upgrade
+        env:
+          TEST_RELEASE_UPGRADE_DATABASE_URL: postgres://kinresolve_ci:kinresolve_ci@localhost:5432/postgres
+        run: npm run test:release-upgrade
 
       - name: Test large GEDCOM persistence
         env:
-          TEST_DATABASE_URL: postgres://kinsleuth:kinsleuth@localhost:5432/kinsleuth_test
+          TEST_DATABASE_URL: postgres://kinresolve_ci:kinresolve_ci@localhost:5432/kinresolve_release_test
         run: npm run test:db:large
 
-      - name: Pull Vercel production settings
-        run: npx --yes vercel@55.0.0 pull --yes --environment=production --token="$VERCEL_TOKEN"
+      - name: Build application
+        run: npm run build
 
-      - name: Verify required production settings
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Fetch the protected main branch
+        run: git fetch origin main:refs/remotes/origin/main --no-tags
+
+      - name: Pull Vercel production settings
+        run: npx --yes vercel@56.1.0 pull --yes --environment=production
+
+      - name: Verify stable release and production settings
         run: |
-          npx --yes vercel@55.0.0 env ls production --format json --token="$VERCEL_TOKEN" > "$RUNNER_TEMP/vercel-env.json"
-          node -e '
-            const { readFileSync } = require("node:fs");
-            const required = ["DATABASE_URL", "AUTH_SECRET", "KINSLEUTH_APP_PASSWORD", "BLOB_READ_WRITE_TOKEN", "CRON_SECRET"];
-            const { envs = [] } = JSON.parse(readFileSync(`${process.env.RUNNER_TEMP}/vercel-env.json`, "utf8"));
-            const project = JSON.parse(readFileSync(".vercel/project.json", "utf8"));
-            const configured = new Set(
-              envs
-                .filter(({ target = [] }) => target.includes("production"))
-                .map(({ key }) => key)
-            );
-            const missing = required.filter((name) => !configured.has(name));
-            if (missing.length) {
-              console.error(`Missing required Vercel production settings: ${missing.join(", ")}`);
-              process.exit(1);
-            }
-            if (project.settings?.framework !== "nextjs") {
-              console.error(`Expected the Vercel framework preset to be nextjs, got ${project.settings?.framework ?? "unset"}`);
-              process.exit(1);
-            }
-          '
+          test -s .vercel/.env.production.local
+          node --experimental-strip-types scripts/validate-release-contract.mjs
 
       - name: Build production artifact
-        run: npx --yes vercel@55.0.0 build --prod --token="$VERCEL_TOKEN"
+        run: npx --yes vercel@56.1.0 build --prod
 
       - name: Deploy production artifact
         id: deploy
         run: |
-          deployment_url="$(npx --yes vercel@55.0.0 deploy --prebuilt --prod --token="$VERCEL_TOKEN")"
-          echo "url=$deployment_url" >> "$GITHUB_OUTPUT"
+          deployment_url="$(npx --yes vercel@56.1.0 deploy --prebuilt --prod --yes)"
+          DEPLOYMENT_URL="$deployment_url" node -e '
+            const url = new URL(process.env.DEPLOYMENT_URL);
+            if (url.protocol !== "https:" || url.origin !== process.env.DEPLOYMENT_URL) {
+              throw new Error("Vercel did not emit one HTTPS deployment origin.");
+            }
+          '
+          printf 'url=%s\n' "$deployment_url" >> "$GITHUB_OUTPUT"
 
-      - name: Verify production health and access gate
+      - name: Verify deployed health and login redirect
+        env:
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.url }}
         run: |
-          health_status="$(curl --retry 10 --retry-delay 3 --retry-all-errors --fail-with-body --max-time 20 --silent --show-error --output health.json --write-out '%{http_code}' "$PRODUCTION_URL/api/health")"
+          health_status="$(curl --retry 10 --retry-delay 3 --retry-all-errors --fail-with-body --max-time 20 --silent --show-error --output "$RUNNER_TEMP/health.json" --write-out '%{http_code}' "$DEPLOYMENT_URL/api/health")"
           test "$health_status" = "200"
           node -e '
             const { readFileSync } = require("node:fs");
-            const health = JSON.parse(readFileSync("health.json", "utf8"));
+            const { join } = require("node:path");
+            const health = JSON.parse(readFileSync(join(process.env.RUNNER_TEMP, "health.json"), "utf8"));
             const expectedVersion = process.env.RELEASE_TAG.replace(/^v/, "");
-            if (health.status !== "ok" || health.database?.connected !== true || health.storage?.configured !== true || health.version !== expectedVersion) {
-              console.error("Production health response did not match the released, connected application", health);
-              process.exit(1);
+            if (
+              health.status !== "ok" ||
+              health.database?.connected !== true ||
+              health.storage?.configured !== true ||
+              health.version !== expectedVersion
+            ) {
+              throw new Error("Deployment health did not match the released, connected application.");
             }
           '
 
-          app_status="$(curl --max-time 20 --silent --show-error --dump-header app-headers.txt --output /dev/null --write-out '%{http_code}' "$PRODUCTION_URL/app")"
+          app_status="$(curl --max-time 20 --silent --show-error --dump-header "$RUNNER_TEMP/app-headers.txt" --output /dev/null --write-out '%{http_code}' "$DEPLOYMENT_URL/app")"
           case "$app_status" in
             302|303|307|308) ;;
             *) echo "Expected /app to redirect to login, got HTTP $app_status" >&2; exit 1 ;;
           esac
-          app_location="$(awk 'tolower($1) == "location:" { print $2 }' app-headers.txt | tr -d '\r')"
-          APP_LOCATION="$app_location" node -e '
-            const expectedOrigin = new URL(process.env.PRODUCTION_URL).origin;
-            const location = new URL(process.env.APP_LOCATION, expectedOrigin);
-            if (location.origin !== expectedOrigin || location.pathname !== "/login" || location.searchParams.get("next") !== "/app") {
-              console.error(`Expected /app to redirect to the Kin Resolve login gate, got ${location}`);
-              process.exit(1);
-            }
-          '
+          app_location="$(awk 'tolower($1) == "location:" { print $2 }' "$RUNNER_TEMP/app-headers.txt" | tr -d '\r')"
+          APP_LOCATION="$app_location" node --experimental-strip-types scripts/validate-deployment-redirect.mjs
 
-          echo "Production deployment: ${{ steps.deploy.outputs.url }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "Public application: $PRODUCTION_URL" >> "$GITHUB_STEP_SUMMARY"
+          printf 'Production deployment: %s\n' "$DEPLOYMENT_URL" >> "$GITHUB_STEP_SUMMARY"
