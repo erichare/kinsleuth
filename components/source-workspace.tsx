@@ -236,7 +236,7 @@ export function SourceWorkspace({ initialResult, initialPersonOptions, caseOptio
                 <Icons.Search size={16} aria-hidden />
                 <input
                   aria-label="Search sources"
-                  placeholder="Parish, census, Riemer, Chicago..."
+                  placeholder="Harbor ledger, Bellandi, Lantern Bay..."
                   value={query}
                   onChange={(event) => {
                     setQuery(event.target.value);

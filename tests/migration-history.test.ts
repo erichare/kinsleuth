@@ -47,7 +47,13 @@ function verifyFixture(repositoryRoot: string) {
 describe("migration checksum history", () => {
   it("accepts the checked-in migration set and the immutable v0.17.4 release anchor", async () => {
     await expect(verifyMigrationHistory({ repositoryRoot: process.cwd() })).resolves.toEqual({
-      migrationFiles: ["001_initial.sql", "002_search_unaccent.sql", "003_auth_accounts.sql", "004_archive_scoped_keys.sql"],
+      migrationFiles: [
+        "001_initial.sql",
+        "002_search_unaccent.sql",
+        "003_auth_accounts.sql",
+        "004_archive_scoped_keys.sql",
+        "005_guided_research_loop.sql"
+      ],
       releaseAnchors: ["v0.17.4"]
     });
   });

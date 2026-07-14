@@ -6,21 +6,21 @@ describe("DNA CSV import mapping", () => {
   it("maps common Ancestry-style columns into DNA matches", () => {
     const csv = [
       "Match Name,Shared cM,Longest Segment,Predicted Relationship,Side,Tree Status,Surnames,Places,Shared Matches,Notes,Ancestry URL",
-      '"J. Fletcher","238 cM",23.4,likely 2C1R,maternal,partial,"Fletcher; Riemer","Chicago; Limerick","M. O\'Donnell; A. Zajicek","Useful partial tree",https://example.test/match'
+      '"J. Mercer","86 cM",12.7,likely 3C,maternal,partial,"Mercer; Hartwell","Lantern Bay; Northstar Cove","M. March; A. Bellandi","Useful partial tree",https://example.test/match'
     ].join("\n");
     const result = mapDnaCsvRows(parseCsvRows(csv));
 
     expect(result.skipped).toEqual([]);
     expect(result.matches[0]).toMatchObject({
-      displayName: "J. Fletcher",
-      totalCm: 238,
-      longestSegmentCm: 23.4,
-      predictedRelationship: "likely 2C1R",
+      displayName: "J. Mercer",
+      totalCm: 86,
+      longestSegmentCm: 12.7,
+      predictedRelationship: "likely 3C",
       side: "maternal",
       treeStatus: "partial",
-      surnames: ["Fletcher", "Riemer"],
-      places: ["Chicago", "Limerick"],
-      sharedMatches: ["M. O'Donnell", "A. Zajicek"],
+      surnames: ["Mercer", "Hartwell"],
+      places: ["Lantern Bay", "Northstar Cove"],
+      sharedMatches: ["M. March", "A. Bellandi"],
       ancestryUrl: "https://example.test/match"
     });
   });

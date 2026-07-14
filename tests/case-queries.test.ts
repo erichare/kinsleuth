@@ -35,22 +35,22 @@ async function seededWorkspace(): Promise<WorkspaceData> {
   await createCase(
     {
       id: "case-cq-dna",
-      title: "Zajíčková DNA cluster",
-      question: "Which Riemer branch does the 238 cM match connect through?",
-      focus: "DNA + Chicago cluster",
+      title: "Bellàndi Moonwake DNA cluster",
+      question: "Which Hartwell branch does the 86 cM match connect through?",
+      focus: "DNA + Northstar Cove cluster",
       status: "active",
       privacy: "private",
-      hypotheses: [{ id: "hyp-cq-1", statement: "Connects through the maternal Fletcher line", confidence: 0.45, status: "open" }],
+      hypotheses: [{ id: "hyp-cq-1", statement: "Connects through the maternal Mercer line", confidence: 0.45, status: "open" }],
       evidence: [
         {
           id: "ev-cq-dna",
           title: "Shared match cluster",
           type: "DNA",
-          summary: "Cluster overlaps 100% with the Limerick group_names list.",
+          summary: "Cluster overlaps 73% with the Northstar Cove signal_keepers list.",
           confidence: 0.8,
           linkedDnaMatchId: "dna-cq-match"
         },
-        { id: "ev-cq-weak", title: "Unsourced tree hint", type: "Tree", summary: "A member tree places her in Chicago.", confidence: 0.3 }
+        { id: "ev-cq-weak", title: "Unsourced tree hint", type: "Tree", summary: "A member tree places her in Lantern Bay.", confidence: 0.3 }
       ],
       tasks: [
         { id: "task-cq-open", title: "Request segment data", status: "todo" },
@@ -62,7 +62,7 @@ async function seededWorkspace(): Promise<WorkspaceData> {
   await createCase(
     {
       id: "case-cq-empty",
-      title: "Ötztal parish gap",
+      title: "Ceraluna Alta parish gap",
       question: "Where are the missing 1850s registers?",
       status: "planning",
       privacy: "sensitive",
@@ -77,7 +77,7 @@ async function seededWorkspace(): Promise<WorkspaceData> {
       question: "Who ran the boarding house in 1926?",
       status: "paused",
       privacy: "public",
-      evidence: [{ id: "ev-cq-mid", title: "City directory row", type: "Directory", summary: "Lists a keeper with a matching surname.", confidence: 0.55 }]
+      evidence: [{ id: "ev-cq-mid", title: "Harbor roster row", type: "Roster", summary: "Lists a signal keeper with a matching surname.", confidence: 0.55 }]
     },
     storeOptions
   );
@@ -149,12 +149,12 @@ describeIfDatabase("SQL case search", () => {
 
     const scenarios: CaseSearchFilters[] = [
       {},
-      { query: "zajickova" },
-      { query: "Zajíčková" },
-      { query: "otztal" },
-      { query: "chicago cluster" },
+      { query: "bellandi moonwake" },
+      { query: "Bellàndi Moonwake" },
+      { query: "ceraluna alta" },
+      { query: "northstar cluster" },
       { query: "boarding 1926" },
-      { query: "fletcher" },
+      { query: "mercer" },
       { query: "segment" },
       { query: "dna-cq-match" },
       { query: "no-such-case-anywhere" },
@@ -185,16 +185,16 @@ describeIfDatabase("SQL case search", () => {
   it("returns full list items including child counts and weakest confidence", async () => {
     await seededWorkspace();
 
-    const result = await searchCasesPageFromDb({ query: "zajickova cluster" }, { page: 1, pageSize: 10 }, storeOptions);
+    const result = await searchCasesPageFromDb({ query: "bellandi moonwake cluster" }, { page: 1, pageSize: 10 }, storeOptions);
 
     expect(result.items).toHaveLength(1);
     expect(result.items[0]).toEqual({
       id: "case-cq-dna",
-      title: "Zajíčková DNA cluster",
-      question: "Which Riemer branch does the 238 cM match connect through?",
+      title: "Bellàndi Moonwake DNA cluster",
+      question: "Which Hartwell branch does the 86 cM match connect through?",
       status: "active",
       privacy: "private",
-      focus: "DNA + Chicago cluster",
+      focus: "DNA + Northstar Cove cluster",
       hypothesisCount: 1,
       evidenceCount: 2,
       dnaEvidenceCount: 1,
@@ -203,23 +203,23 @@ describeIfDatabase("SQL case search", () => {
       weakestEvidenceConfidence: 0.3
     });
 
-    const noEvidence = await searchCasesPageFromDb({ query: "otztal" }, { page: 1, pageSize: 10 }, storeOptions);
+    const noEvidence = await searchCasesPageFromDb({ query: "missing 1850s registers" }, { page: 1, pageSize: 10 }, storeOptions);
     expect(noEvidence.items[0].weakestEvidenceConfidence).toBeUndefined();
   });
 
   it("treats ILIKE wildcards as literals", async () => {
     const workspace = await seededWorkspace();
 
-    for (const searchQuery of ["100%", "group_names", "group_namesx"]) {
+    for (const searchQuery of ["73%", "signal_keepers", "signal_keepersx"]) {
       const expected = searchCasesPage(workspace.cases, { query: searchQuery }, { page: 1, pageSize: 50 });
       const actual = await searchCasesPageFromDb({ query: searchQuery }, { page: 1, pageSize: 50 }, storeOptions);
       expect(actual.items.map((item) => item.id), searchQuery).toEqual(expected.items.map((item) => item.id));
     }
 
-    const percent = await searchCasesPageFromDb({ query: "100%" }, { page: 1, pageSize: 50 }, storeOptions);
+    const percent = await searchCasesPageFromDb({ query: "73%" }, { page: 1, pageSize: 50 }, storeOptions);
     expect(percent.items.map((item) => item.id)).toEqual(["case-cq-dna"]);
 
-    const noMatch = await searchCasesPageFromDb({ query: "gro_p_names" }, { page: 1, pageSize: 50 }, storeOptions);
+    const noMatch = await searchCasesPageFromDb({ query: "signalxkeepers" }, { page: 1, pageSize: 50 }, storeOptions);
     expect(noMatch.items).toHaveLength(0);
   });
 

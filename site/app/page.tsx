@@ -55,6 +55,10 @@ export default function HomePage() {
         <EvidenceBoard />
       </section>
 
+      <div className="shell fiction-disclosure" role="note">
+        <strong>Fictional demo universe.</strong> Every Hartwell–Mercer name, date, place, record, photograph, story, and DNA match shown on this site is invented. No real family data is used.
+      </div>
+
       <section className="signal-strip" aria-label="Product principles">
         <div className="shell signal-strip-inner">
           <span><strong>Private</strong> research workspace</span>
@@ -99,19 +103,19 @@ export default function HomePage() {
       <section className="shell section editorial-feature">
         <div className="editorial-image-wrap">
           <Image
-            alt="Archival collage tracing a family route from Ireland to Chicago"
+            alt="Fictional Hartwell–Mercer blue tin, ferry papers, three-person harbor photograph, violet note, and clue map"
             className="editorial-image"
             fill
             priority={false}
             sizes="(max-width: 880px) 100vw, 52vw"
-            src="/assets/limerick-chicago.webp"
+            src="/assets/hartwell-mercer-blue-tin.webp"
           />
-          <span className="image-caption">Synthetic research story · Limerick to Chicago</span>
+          <span className="image-caption">Fictional Hartwell–Mercer archive · no real family data</span>
         </div>
         <div className="editorial-copy">
           <span className="eyebrow">Follow the trail</span>
           <h2>Keep the question, the clue, and the conclusion together.</h2>
-          <p>Research rarely moves in a straight line. A census points to one birthplace, a parish image to another, and a DNA match opens a third branch. Kin Resolve gives that uncertainty a place to live while the work continues.</p>
+          <p>Nora Hartwell’s 1922 journal calls the box “Amalia’s tin,” while an older family story credits Samuel. Inside are the passenger notice and harbor photograph he brought from Northstar Cove in 1907. Elsewhere in the archive, the 1907 passenger-list and 1909 marriage signatures can be tested against Maeve Mercer’s independent 1906 letter. Which claim survives the evidence?</p>
           <ul className="check-list">
             <li>Separate what a source says from what you infer.</li>
             <li>Record the conflict instead of quietly choosing a favorite.</li>
@@ -149,17 +153,17 @@ export default function HomePage() {
           <p className="disclosure">Provider-backed analysis may send private workspace context to the operator’s configured provider.</p>
           <Link className="arrow-link" href="/privacy">Read the data practices <span aria-hidden="true">→</span></Link>
         </div>
-        <div className="analyst-card" aria-label="Illustrative AI analysis with referenced evidence">
+        <div className="analyst-card" aria-label="Fictional Hartwell–Mercer AI analysis with referenced evidence">
           <div className="analyst-card-top">
-            <span>Analysis / Case 04</span>
-            <span className="preview-pill">Illustrative</span>
+            <span>Analysis / Fictional Case 07</span>
+            <span className="preview-pill">Fictional demo</span>
           </div>
-          <p className="analyst-question">“Which birthplace is better supported?”</p>
+          <p className="analyst-question">“Were Samuel Mercer and Samuel March the same person?”</p>
           <div className="analyst-answer">
-            <strong>The Limerick record is currently stronger.</strong>
-            <p>The parish register is closer to the event and names two relatives also present in the Chicago household. The census remains conflicting evidence, not an error to discard.</p>
+            <strong>The sources narrow the question, but do not decide it for you.</strong>
+            <p>The fictional 1907 passenger-list and 1909 marriage signatures share an unusual final stroke. Maeve’s independent 1906 letter mentions both surnames without explaining why. Matching age and route alone would not be enough.</p>
           </div>
-          <div className="reference-row"><span>[R1] Parish register</span><span>[R2] 1901 census</span><span>[D1] Shared match</span></div>
+          <div className="reference-row"><span>[R1] Passenger list</span><span>[R2] Marriage record</span><span>[R3] Maeve’s letter</span></div>
           <div className="analyst-caution"><i aria-hidden="true">!</i> Working analysis. Review source images before changing the tree.</div>
         </div>
       </section>

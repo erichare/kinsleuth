@@ -41,7 +41,7 @@ const scoreSql = `round(LEAST(
   100))::int`;
 
 // Everything buildDnaSearchText concatenates, in SQL form. trim_scale drops
-// the numeric columns' stored trailing zeros ("238.00" -> "238") so the text
+// the numeric columns' stored trailing zeros ("86.00" -> "86") so the text
 // matches the JS number rendering in the in-memory haystack; NULL numerics
 // drop out of concat_ws just like the filtered undefined values in JS.
 const searchHaystackSql = `extensions.unaccent(lower(concat_ws(' ',

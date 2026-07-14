@@ -151,7 +151,7 @@ async function seedLegacyRows(pool: Pool): Promise<void> {
       `Case ${suffix}`,
       `Who is person ${suffix}?`
     ]);
-    await pool.query("INSERT INTO hypotheses (id, archive_id, case_id, statement) VALUES ($1, $2, $3, $4)", [
+    await pool.query("INSERT INTO hypotheses (id, archive_id, case_id, statement, status) VALUES ($1, $2, $3, $4, 'rejected')", [
       `hypothesis-${suffix}`,
       archiveId,
       `case-${suffix}`,
@@ -161,11 +161,11 @@ async function seedLegacyRows(pool: Pool): Promise<void> {
       "INSERT INTO evidence_items (id, archive_id, case_id, title, evidence_type, summary) VALUES ($1, $2, $3, $4, 'record', $5)",
       [`evidence-${suffix}`, archiveId, `case-${suffix}`, `Evidence ${suffix}`, `Summary ${suffix}`]
     );
-    await pool.query("INSERT INTO tasks (id, archive_id, case_id, title) VALUES ($1, $2, $3, $4)", [
+    await pool.query("INSERT INTO tasks (id, archive_id, case_id, title, status) VALUES ($1, $2, $3, $4, 'done')", [
       `task-${suffix}`,
       archiveId,
       `case-${suffix}`,
-      `Task ${suffix}`
+      suffix === "a" ? "Éric's Groß Ærø Łódź search" : `Task ${suffix}`
     ]);
     await pool.query("INSERT INTO dna_matches (id, archive_id, display_name, total_cm) VALUES ($1, $2, $3, 42)", [
       `match-${suffix}`,
@@ -403,7 +403,8 @@ describe.skipIf(!releaseDatabaseUrl)("v0.17.4 release upgrade", () => {
       "001_initial",
       "002_search_unaccent",
       "003_auth_accounts",
-      "004_archive_scoped_keys"
+      "004_archive_scoped_keys",
+      "005_guided_research_loop"
     ]);
     for (const table of archiveScopedTables) {
       const count = await pool.query<{ count: string }>(`SELECT count(*)::text AS count FROM ${table}`);
@@ -413,6 +414,27 @@ describe.skipIf(!releaseDatabaseUrl)("v0.17.4 release upgrade", () => {
       rows: [{ email: "legacy@example.test" }]
     });
     await exerciseCompositeKeyWriters(pool);
+    await expect(
+      pool.query(
+        "SELECT status, decisions, updated_at FROM hypotheses WHERE archive_id = 'archive-a' AND id = 'hypothesis-a'"
+      )
+    ).resolves.toMatchObject({ rows: [{ status: "rejected", decisions: [], updated_at: null }] });
+    await expect(
+      pool.query(
+        "SELECT status, outcomes, completed_at, work_fingerprint FROM tasks WHERE archive_id = 'archive-a' AND id = 'task-a'"
+      )
+    ).resolves.toMatchObject({
+      rows: [{ status: "done", outcomes: [], completed_at: null, work_fingerprint: "eric s gro r odz search" }]
+    });
+    await pool.query(
+      "INSERT INTO tasks (id, archive_id, case_id, title, status, sort_order) VALUES ('old-writer-task', 'archive-a', 'case-a', 'Old writer task', 'todo', 99)"
+    );
+    await pool.query(
+      "UPDATE tasks SET status = 'done' WHERE archive_id = 'archive-a' AND case_id = 'case-a' AND id = 'old-writer-task'"
+    );
+    await pool.query(
+      "INSERT INTO hypotheses (id, archive_id, case_id, statement, confidence, status, sort_order) VALUES ('old-writer-hypothesis', 'archive-a', 'case-a', 'Old writer hypothesis', 0.5, 'supported', 99)"
+    );
     const upgradedCatalog = await catalogSnapshot(pool);
 
     const fresh = await createScratchDatabase(controlPool, releaseDatabaseUrl!, "fresh", trackedDatabases);
@@ -435,7 +457,12 @@ describe.skipIf(!releaseDatabaseUrl)("v0.17.4 release upgrade", () => {
     const result = await runPendingMigrations(pool);
 
     expect(result.alreadyApplied).toContain("001_initial");
-    expect(result.applied).toEqual(["002_search_unaccent", "003_auth_accounts", "004_archive_scoped_keys"]);
+    expect(result.applied).toEqual([
+      "002_search_unaccent",
+      "003_auth_accounts",
+      "004_archive_scoped_keys",
+      "005_guided_research_loop"
+    ]);
     await exerciseCompositeKeyWriters(pool);
     await expect(pool.query("SELECT count(*)::integer AS count FROM legacy_users")).resolves.toMatchObject({ rows: [{ count: 1 }] });
   });

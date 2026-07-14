@@ -36,7 +36,7 @@ type ImportResponse = {
 };
 
 export function ImportPreviewWorkspace() {
-  const [sourceName, setSourceName] = useState("Riemer-Zajicek.ged");
+  const [sourceName, setSourceName] = useState("hartwell-mercer-fictional-demo.ged");
   const [currentFile, setCurrentFile] = useState<File | undefined>();
   const [previousFile, setPreviousFile] = useState<File | undefined>();
   const [currentUpload, setCurrentUpload] = useState<GedcomUploadReference | undefined>();

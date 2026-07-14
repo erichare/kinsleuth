@@ -27,11 +27,11 @@ type CaseDraft = {
 };
 
 const initialDraft: CaseDraft = {
-  title: "New DNA connection case",
-  question: "How does this DNA match connect to the maternal Riemer line?",
-  focus: "DNA + Chicago/Limerick evidence",
-  firstHypothesis: "The match connects through the Riemer maternal branch before 1900.",
-  firstEvidence: "The match shares 238 cM, has a partial Fletcher tree, and overlaps Chicago/Limerick/Cornwall places."
+  title: "The Samuel Mercer / Samuel March identity",
+  question: "Were Samuel Mercer and Samuel March the same person?",
+  focus: "1907 passenger notice, 1909 signature, and Maeve's 1906 letter",
+  firstHypothesis: "Samuel Mercer and Samuel March were the same person, with March used on the 1907 passenger list.",
+  firstEvidence: "The passenger-list and marriage signatures share an unusual tall final stroke; Maeve's independent 1906 letter says Samuel practiced signing both surnames. Matching age and route alone are not enough."
 };
 
 const pageSizeOptions = [10, 25, 50, 100];
@@ -131,17 +131,14 @@ export function CaseWorkspace({ initialResult, initialEvidenceQueue }: Props) {
           hypotheses: draft.firstHypothesis
             ? [
                 {
-                  id: "hyp-draft",
                   statement: draft.firstHypothesis,
-                  confidence: 0.45,
-                  status: "open"
+                  confidence: 0.45
                 }
               ]
             : [],
           evidence: draft.firstEvidence
             ? [
                 {
-                  id: "ev-draft",
                   title: "Initial evidence note",
                   type: "Research note",
                   summary: draft.firstEvidence,
@@ -217,7 +214,7 @@ export function CaseWorkspace({ initialResult, initialEvidenceQueue }: Props) {
                 <Icons.Search size={16} aria-hidden />
                 <input
                   aria-label="Search cases"
-                  placeholder="DNA, Riemer, Chicago, unresolved..."
+                  placeholder="Mercer, blue tin, Lantern Bay, unresolved..."
                   value={query}
                   onChange={(event) => {
                     setQuery(event.target.value);
@@ -353,6 +350,7 @@ export function CaseWorkspace({ initialResult, initialEvidenceQueue }: Props) {
 
         <aside aria-busy={status === "loading"} className="app-card">
           <h2>New case</h2>
+          <p className="fiction-disclosure" role="note"><strong>Built-in example only:</strong> every Hartwell–Mercer name, date, place, record, photograph, and DNA clue is fictional. Replace these values when working in your own private archive.</p>
           <div className="form-grid" style={{ gridTemplateColumns: "1fr" }}>
             <Field label="Title" value={draft.title} onChange={(value) => updateDraft({ title: value })} />
             <TextArea label="Research question" value={draft.question} onChange={(value) => updateDraft({ question: value })} />

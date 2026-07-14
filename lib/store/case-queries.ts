@@ -36,8 +36,12 @@ function dnaLinkedSql(prefix: string): string {
 const hypothesesCountSql = "count(*)::int AS hypothesis_count";
 const hypothesesSearchLateralSql = `LEFT JOIN LATERAL (
   SELECT ${hypothesesCountSql},
-    string_agg(concat_ws(' ', ch.statement, ch.status), ' ') AS hypotheses_text
+    string_agg(concat_ws(' ', ch.statement, ch.status, coalesce(chd.decisions_text, '')), ' ') AS hypotheses_text
   FROM hypotheses ch
+  LEFT JOIN LATERAL (
+    SELECT string_agg(concat_ws(' ', decision.value->>'reason', decision.value->>'statement'), ' ') AS decisions_text
+    FROM jsonb_array_elements(coalesce(ch.decisions, '[]'::jsonb)) AS decision(value)
+  ) chd ON true
   WHERE ch.archive_id = c.archive_id AND ch.case_id = c.id
 ) h ON true`;
 const hypothesesCountLateralSql = `LEFT JOIN LATERAL (
@@ -65,8 +69,14 @@ const tasksCountsSql = `count(*)::int AS task_count,
     count(*) FILTER (WHERE ct.status <> 'done')::int AS open_task_count`;
 const tasksSearchLateralSql = `LEFT JOIN LATERAL (
   SELECT ${tasksCountsSql},
-    string_agg(concat_ws(' ', ct.title, ct.status), ' ') AS tasks_text
+    string_agg(concat_ws(' ', ct.title, ct.status,
+      coalesce(ct.guidance, ''), coalesce(ct.work_fingerprint, ''), coalesce(cto.outcomes_text, '')), ' ') AS tasks_text
   FROM tasks ct
+  LEFT JOIN LATERAL (
+    SELECT string_agg(concat_ws(' ', outcome.value->>'note',
+      coalesce((outcome.value->'searchScope')::text, '')), ' ') AS outcomes_text
+    FROM jsonb_array_elements(coalesce(ct.outcomes, '[]'::jsonb)) AS outcome(value)
+  ) cto ON true
   WHERE ct.archive_id = c.archive_id AND ct.case_id = c.id
 ) t ON true`;
 const tasksCountLateralSql = `LEFT JOIN LATERAL (

@@ -30,6 +30,9 @@ export default async function HomePage() {
             <span className="eyebrow">Public family archive</span>
             <h1>{workspace.archiveName}</h1>
             <p>A family-history archive for profiles explicitly published after person-level privacy checks. Private research, DNA triage, and living-person details stay in the signed-in workspace.</p>
+            <p className="fiction-disclosure" role="note">
+              <strong>Fictional demo universe.</strong> Every demo name, date, place, record, photograph, story, and DNA match is invented. No real family data is used in the Hartwell–Mercer examples.
+            </p>
             <div className="hero-actions">
               <Link className="button" href="/people">
                 <Icons.Users size={17} aria-hidden />
@@ -44,25 +47,25 @@ export default async function HomePage() {
           <figure className="map-panel surface-featured">
             <Image
               className="map-art"
-              src="/assets/archive-migration-map.webp"
-              alt="Illustrated migration route connecting Chicago, Limerick, and Cornwall"
+              src="/assets/hartwell-mercer-blue-tin.webp"
+              alt="Fictional Hartwell–Mercer blue tin, ferry papers, three-person harbor photograph, violet note, and clue map"
               fill
               priority
               sizes="(max-width: 960px) calc(100vw - 40px), 620px"
             />
-            <span className="map-pin map-pin--chicago">
+            <span className="map-pin map-pin--lantern-bay">
               <Icons.MapPin size={15} aria-hidden />
-              Chicago
+              Lantern Bay, WI
             </span>
-            <span className="map-pin map-pin--limerick">
+            <span className="map-pin map-pin--northstar-cove">
               <Icons.MapPin size={15} aria-hidden />
-              Limerick
+              Northstar Cove, NS
             </span>
-            <span className="map-pin map-pin--cornwall">
+            <span className="map-pin map-pin--ceraluna-alta">
               <Icons.MapPin size={15} aria-hidden />
-              Cornwall
+              Ceraluna Alta, Italy
             </span>
-            <figcaption className="map-caption">Illustrative demo route · 1880–1910</figcaption>
+            <figcaption className="map-caption">Fictional clue map · Hartwell–Mercer demo</figcaption>
           </figure>
         </section>
 
@@ -88,14 +91,14 @@ export default async function HomePage() {
                   ))}
                   <tr>
                     <td data-label="Type"><Icons.MapPin size={16} aria-hidden /></td>
-                    <td data-label="Title">Illustrative Chicago / Limerick / Cornwall migration path</td>
-                    <td data-label="Date">1880-1910</td>
+                    <td data-label="Title">Hartwell–Mercer blue-tin clue map</td>
+                    <td data-label="Date">1906–1922 (fictional)</td>
                     <td data-label="Visibility"><Status tone="warning">Demo</Status></td>
                   </tr>
                   <tr>
                     <td data-label="Type"><Icons.Shield size={16} aria-hidden /></td>
-                    <td data-label="Title">Illustrative private investigations and DNA matches</td>
-                    <td data-label="Date">Protected</td>
+                    <td data-label="Title">Fictional records, research cases, photographs, and DNA matches</td>
+                    <td data-label="Date">Demo only</td>
                     <td data-label="Visibility"><Status tone="private">Private</Status></td>
                   </tr>
                 </tbody>

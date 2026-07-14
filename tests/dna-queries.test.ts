@@ -38,20 +38,20 @@ async function seededWorkspace(): Promise<WorkspaceData> {
     [
       {
         // Accented text, ILIKE wildcard characters in notes, and decimal cM
-        // values whose SQL rendering ("238.00") must be trimmed to match the
-        // JS haystack ("238").
-        id: "dna-dq-zajickova",
-        displayName: "Žofie Zajíčková",
-        totalCm: 238,
-        longestSegmentCm: 23.4,
-        sharedDnaPercent: 3.12,
-        predictedRelationship: "likely 2C1R",
+        // values whose SQL rendering ("86.00") must be trimmed to match the
+        // JS haystack ("86").
+        id: "dna-dq-bellandi",
+        displayName: "Mira Bellàndi",
+        totalCm: 86,
+        longestSegmentCm: 12.7,
+        sharedDnaPercent: 1.15,
+        predictedRelationship: "likely 3C",
         side: "maternal",
         treeStatus: "partial",
-        surnames: ["Zajíček", "Müller"],
-        places: ["Kutná Hora"],
-        sharedMatches: ["A. Zajicek"],
-        notes: "Tree is 100% legible; margin holds a witness_names column.",
+        surnames: ["Bellàndi", "Hartwell"],
+        places: ["Ceraluna Alta"],
+        sharedMatches: ["M. March"],
+        notes: "Tree is 73% legible; margin holds a harbor_marks column.",
         ancestryUrl: "https://www.ancestry.com/discoveryui-matches/example",
         triageStatus: "needs_review"
       },
@@ -79,7 +79,7 @@ async function seededWorkspace(): Promise<WorkspaceData> {
         side: "paternal",
         treeStatus: "public",
         surnames: ["Alpha", "Beta", "Gamma", "Delta"],
-        places: ["Cornwall", "Limerick"],
+        places: ["Ceraluna Alta", "Northstar Cove"],
         sharedMatches: ["S. One"],
         notes: "",
         triageStatus: "triaged"
@@ -92,7 +92,7 @@ async function seededWorkspace(): Promise<WorkspaceData> {
         side: "unknown",
         treeStatus: "partial",
         surnames: [],
-        places: ["Chicago"],
+        places: ["Lantern Bay"],
         sharedMatches: [],
         notes: "Just one place.",
         triageStatus: "needs_review"
@@ -105,7 +105,7 @@ async function seededWorkspace(): Promise<WorkspaceData> {
   // order (sort_order) disagrees with id order — the case where a wrong SQL
   // tie-break diverges from the stable in-memory sort.
   const twin = {
-    displayName: "Tie Break Twin",
+    displayName: "Zeta Tie Break Twin",
     totalCm: 120,
     side: "maternal" as const,
     treeStatus: "private" as const,
@@ -128,13 +128,13 @@ describeIfDatabase("SQL DNA match search", () => {
 
     const scenarios: DnaMatchFilters[] = [
       {},
-      { query: "zajickova" },
-      { query: "Zajíčková" },
-      { query: "238" },
-      { query: "238.00" },
-      { query: "23.4" },
+      { query: "bellandi" },
+      { query: "Bellàndi" },
+      { query: "86" },
+      { query: "86.00" },
+      { query: "12.7" },
       { query: "62.35" },
-      { query: "kutna maternal" },
+      { query: "ceraluna alta maternal" },
       { query: "ancestry.com" },
       { query: "no-such-match" },
       { status: "high_priority" },
@@ -181,13 +181,13 @@ describeIfDatabase("SQL DNA match search", () => {
   it("treats ILIKE wildcards as literals", async () => {
     await seededWorkspace();
 
-    const percent = await searchDnaMatchesPageFromDb({ query: "100%" }, { page: 1, pageSize: 50 }, storeOptions);
-    expect(percent.items.map((item) => item.id)).toEqual(["dna-dq-zajickova"]);
+    const percent = await searchDnaMatchesPageFromDb({ query: "73%" }, { page: 1, pageSize: 50 }, storeOptions);
+    expect(percent.items.map((item) => item.id)).toEqual(["dna-dq-bellandi"]);
 
-    const underscore = await searchDnaMatchesPageFromDb({ query: "witness_names" }, { page: 1, pageSize: 50 }, storeOptions);
-    expect(underscore.items.map((item) => item.id)).toEqual(["dna-dq-zajickova"]);
+    const underscore = await searchDnaMatchesPageFromDb({ query: "harbor_marks" }, { page: 1, pageSize: 50 }, storeOptions);
+    expect(underscore.items.map((item) => item.id)).toEqual(["dna-dq-bellandi"]);
 
-    const noMatch = await searchDnaMatchesPageFromDb({ query: "witness_names_x" }, { page: 1, pageSize: 50 }, storeOptions);
+    const noMatch = await searchDnaMatchesPageFromDb({ query: "harbor_marks_x" }, { page: 1, pageSize: 50 }, storeOptions);
     expect(noMatch.items).toHaveLength(0);
   });
 

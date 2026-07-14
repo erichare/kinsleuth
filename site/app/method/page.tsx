@@ -31,12 +31,13 @@ export default function MethodPage() {
 
       <section className="shell section method-opening">
         <div className="method-image-wrap">
-          <Image alt="Archival route between Ireland and Chicago" fill sizes="(max-width: 900px) 100vw, 45vw" src="/assets/limerick-chicago.webp" />
+          <Image alt="Abstract archival contours for the fictional Hartwell–Mercer identity mystery" fill sizes="(max-width: 900px) 100vw, 45vw" src="/assets/archival-contours.webp" />
         </div>
         <div>
           <span className="eyebrow">A trail worth showing</span>
           <h2>The answer matters. So does the path to it.</h2>
           <p className="prose-large">A strong conclusion explains which sources were consulted, how conflicts were handled, why the evidence fits, and where uncertainty remains. Kin Resolve gives that reasoning a durable home beside the tree.</p>
+          <p className="fiction-disclosure" role="note"><strong>Fictional demo:</strong> every Hartwell–Mercer name, date, place, record, photograph, story, and DNA match used in examples is invented.</p>
         </div>
       </section>
 

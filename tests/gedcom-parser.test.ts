@@ -3,30 +3,30 @@ import { describe, expect, it } from "vitest";
 import { buildFamilyRelationshipMap, extractPeople, parseGedcom, parseGedcomLine, textWithContinuations } from "@/lib/gedcom/parser";
 
 describe("GEDCOM parser", () => {
-  it("parses synthetic GEDCOM records and summary counts", () => {
+  it("parses fictional GEDCOM records and summary counts", () => {
     const content = readFileSync("fixtures/synthetic-family.ged", "utf8");
     const parsed = parseGedcom(content);
 
-    expect(parsed.summary.individuals).toBe(3);
-    expect(parsed.summary.families).toBe(2);
-    expect(parsed.summary.sources).toBe(1);
+    expect(parsed.summary.individuals).toBe(8);
+    expect(parsed.summary.families).toBe(3);
+    expect(parsed.summary.sources).toBe(4);
     expect(parsed.summary.media).toBe(1);
-    expect(parsed.summary.dateRange?.minYear).toBe(1858);
-    expect(parsed.summary.dateRange?.maxYear).toBe(1961);
+    expect(parsed.summary.dateRange?.minYear).toBe(1856);
+    expect(parsed.summary.dateRange?.maxYear).toBe(1998);
   });
 
   it("extracts people, events, places, relationships, and notes", () => {
     const content = readFileSync("fixtures/synthetic-family.ged", "utf8");
     const people = extractPeople(parseGedcom(content).records);
-    const elizabeth = people.find((person) => person.displayName === "Elizabeth Katherine Riemer");
+    const nora = people.find((person) => person.displayName === "Nora Elise Hartwell");
 
-    expect(elizabeth).toBeDefined();
-    expect(elizabeth?.surname).toBe("Riemer");
-    expect(elizabeth?.birthPlace).toBe("Chicago, Cook, Illinois, USA");
-    expect(elizabeth?.facts.map((fact) => fact.type)).toContain("BIRT");
-    expect(elizabeth?.relatives).toContain("@I2@");
-    expect(elizabeth?.relatives).not.toContain("@F1@");
-    expect(elizabeth?.notes).toContain("Synthetic ancestor");
+    expect(nora).toBeDefined();
+    expect(nora?.surname).toBe("Hartwell");
+    expect(nora?.birthPlace).toBe("Lantern Bay, Wisconsin");
+    expect(nora?.facts.map((fact) => fact.type)).toContain("BIRT");
+    expect(nora?.relatives).toContain("@I2@");
+    expect(nora?.relatives).not.toContain("@F1@");
+    expect(nora?.notes).toContain("Nora's journal calls the memory box Amalia's tin");
   });
 
   it("resolves family records into person-to-person relationship links", () => {

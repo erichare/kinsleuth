@@ -11,25 +11,25 @@ const exportedAt = new Date("2026-07-13T08:00:00Z");
 
 function curatedPerson(overrides: Partial<PersonSummary> = {}): PersonSummary {
   return {
-    id: "p-elizabeth-riemer",
-    slug: "elizabeth-riemer",
-    displayName: "Elizabeth Katherine Riemer",
-    givenName: "Elizabeth Katherine",
-    surname: "Riemer",
-    birthDate: "12 APR 1884",
-    deathDate: "17 FEB 1961",
+    id: "p-nora-hartwell",
+    slug: "nora-elise-hartwell",
+    displayName: "Nora Elise Hartwell",
+    givenName: "Nora Elise",
+    surname: "Hartwell",
+    birthDate: "3 OCT 1889",
+    deathDate: "9 JUN 1968",
     sex: "F",
     livingStatus: "deceased",
     privacy: "public",
     published: true,
     facts: [
-      { id: "fact-1", type: "BIRT", date: "12 APR 1884", place: "Chicago, Cook, Illinois, USA", confidence: 0.8, privacy: "public" },
-      { id: "fact-2", type: "DEAT", date: "17 FEB 1961", place: "Chicago, Cook, Illinois, USA", confidence: 0.8, privacy: "public" },
-      { id: "fact-3", type: "OCCU", value: "Seamstress", confidence: 0.5, privacy: "private" },
-      { id: "fact-4", type: "EVEN", value: "Naturalization", date: "1902", confidence: 0.5, privacy: "private" }
+      { id: "fact-1", type: "BIRT", date: "3 OCT 1889", place: "Lantern Bay, Wisconsin", confidence: 0.8, privacy: "public" },
+      { id: "fact-2", type: "DEAT", date: "9 JUN 1968", place: "Lantern Bay, Wisconsin", confidence: 0.8, privacy: "public" },
+      { id: "fact-3", type: "OCCU", value: "Map illustrator", confidence: 0.5, privacy: "private" },
+      { id: "fact-4", type: "EVEN", value: "Harbor guild registration", date: "1913", confidence: 0.5, privacy: "private" }
     ],
     relatives: [],
-    notes: "Great-grandmother on the maternal side.\nResearch contact: archive@example.com",
+    notes: "Fictional demo person and careful mapmaker.\nResearch contact: archive@example.com",
     ...overrides
   };
 }
@@ -37,7 +37,7 @@ function curatedPerson(overrides: Partial<PersonSummary> = {}): PersonSummary {
 function workspaceFromFixture(): GedcomExportInput {
   const prepared = prepareGedcomImport("synthetic-family.ged", fixtureContent, exportedAt);
   return {
-    archiveName: "Riemer - Zajicek Archive",
+    archiveName: "Hartwell–Mercer Family Archive",
     people: prepared.people,
     rawRecords: prepared.rawRecords,
     imports: [{ id: prepared.appliedImport.id, appliedAt: prepared.appliedImport.appliedAt }]
@@ -81,20 +81,20 @@ describe("GEDCOM export", () => {
     const parsed = parseGedcom(result.content);
     const indi = parsed.records.find((record) => record.type === "INDI");
     expect(indi).toBeDefined();
-    expect(textWithContinuations(findChild(indi!.root, "NAME"))).toBe("Elizabeth Katherine /Riemer/");
+    expect(textWithContinuations(findChild(indi!.root, "NAME"))).toBe("Nora Elise /Hartwell/");
     expect(findChild(indi!.root, "SEX")?.value).toBe("F");
 
     const birth = findChild(indi!.root, "BIRT");
-    expect(findChild(birth!, "DATE")?.value).toBe("12 APR 1884");
-    expect(findChild(birth!, "PLAC")?.value).toBe("Chicago, Cook, Illinois, USA");
+    expect(findChild(birth!, "DATE")?.value).toBe("3 OCT 1889");
+    expect(findChild(birth!, "PLAC")?.value).toBe("Lantern Bay, Wisconsin");
 
-    expect(findChild(indi!.root, "OCCU")?.value).toBe("Seamstress");
+    expect(findChild(indi!.root, "OCCU")?.value).toBe("Map illustrator");
     const even = findChild(indi!.root, "EVEN");
-    expect(findChild(even!, "TYPE")?.value).toBe("Naturalization");
-    expect(findChild(even!, "DATE")?.value).toBe("1902");
+    expect(findChild(even!, "TYPE")?.value).toBe("Harbor guild registration");
+    expect(findChild(even!, "DATE")?.value).toBe("1913");
 
     expect(textWithContinuations(findChild(indi!.root, "NOTE"))).toBe(
-      "Great-grandmother on the maternal side.\nResearch contact: archive@example.com"
+      "Fictional demo person and careful mapmaker.\nResearch contact: archive@example.com"
     );
   });
 
@@ -118,9 +118,9 @@ describe("GEDCOM export", () => {
     const result = exportGedcom(workspaceFromFixture(), { now: exportedAt });
 
     const parsed = parseGedcom(result.content);
-    expect(parsed.summary.individuals).toBe(3);
-    expect(parsed.summary.families).toBe(2);
-    expect(parsed.summary.sources).toBe(1);
+    expect(parsed.summary.individuals).toBe(8);
+    expect(parsed.summary.families).toBe(3);
+    expect(parsed.summary.sources).toBe(4);
     expect(parsed.summary.media).toBe(1);
     expect(parsed.records.filter((record) => record.type === "HEAD")).toHaveLength(1);
     expect(parsed.records.filter((record) => record.type === "TRLR")).toHaveLength(1);
@@ -129,25 +129,25 @@ describe("GEDCOM export", () => {
     expect(findChild(family!.root, "HUSB")?.value).toBe("@I2@");
     expect(findChild(family!.root, "WIFE")?.value).toBe("@I1@");
 
-    expect(result.content).toContain("1 NAME Elizabeth Katherine /Riemer/");
+    expect(result.content).toContain("1 NAME Nora Elise /Hartwell/");
     expect(result.summary.synthesizedPeople).toBe(0);
   });
 
   it("round-trips curation flags through _KS_ tags on export and re-import", () => {
     const workspace = workspaceFromFixture();
-    const elizabeth = workspace.people.find((person) => person.id === "@I1@");
-    elizabeth!.privacy = "sensitive";
-    elizabeth!.published = true;
-    elizabeth!.livingStatus = "deceased";
+    const nora = workspace.people.find((person) => person.id === "@I1@");
+    nora!.privacy = "sensitive";
+    nora!.published = true;
+    nora!.livingStatus = "deceased";
 
     const firstExport = exportGedcom(workspace, { now: exportedAt });
     const reimported = prepareGedcomImport("round-trip.ged", firstExport.content, exportedAt);
-    const reimportedElizabeth = reimported.people.find((person) => person.id === "@I1@");
+    const reimportedNora = reimported.people.find((person) => person.id === "@I1@");
 
-    expect(reimportedElizabeth?.privacy).toBe("sensitive");
-    expect(reimportedElizabeth?.published).toBe(true);
-    expect(reimportedElizabeth?.livingStatus).toBe("deceased");
-    expect(reimportedElizabeth?.displayName).toBe("Elizabeth Katherine Riemer");
+    expect(reimportedNora?.privacy).toBe("sensitive");
+    expect(reimportedNora?.published).toBe(true);
+    expect(reimportedNora?.livingStatus).toBe("deceased");
+    expect(reimportedNora?.displayName).toBe("Nora Elise Hartwell");
 
     const secondExport = exportGedcom(
       {

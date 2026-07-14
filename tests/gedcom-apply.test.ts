@@ -40,15 +40,15 @@ describe("GEDCOM prepare", () => {
   it("prepares people, sources, and raw records from GEDCOM content", () => {
     const content = readFileSync("fixtures/synthetic-family.ged", "utf8");
     const prepared = prepareGedcomImport("synthetic-family.ged", content, new Date("2026-01-01T00:00:00.000Z"));
-    const elizabeth = prepared.people.find((person) => person.id === "@I1@");
+    const nora = prepared.people.find((person) => person.id === "@I1@");
 
-    expect(prepared.people).toHaveLength(3);
-    expect(elizabeth?.relatives).toContain("@I2@");
-    expect(elizabeth?.relatives).not.toContain("@F1@");
+    expect(prepared.people).toHaveLength(8);
+    expect(nora?.relatives).toContain("@I2@");
+    expect(nora?.relatives).not.toContain("@F1@");
     expect(prepared.sources).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          title: "Synthetic Chicago birth register",
+          title: "Fictional Lantern Bay civil register",
           sourceType: "GEDCOM source",
           importId: prepared.snapshot.id
         })
@@ -64,12 +64,23 @@ describeIfDatabase("GEDCOM apply", () => {
     const result = await applyGedcomImport({ sourceName: "synthetic-family.ged", content }, storeOptions);
     const workspace = await readWorkspace(storeOptions);
 
-    expect(result.import.peopleImported).toBe(3);
+    expect(result.import.peopleImported).toBe(8);
     expect(workspace.imports[0]).toMatchObject({
       id: result.import.id,
       backupId: result.backup.id
     });
-    expect(workspace.people.map((person) => person.id)).toEqual(expect.arrayContaining(["@I1@", "@I2@", "@I3@"]));
+    expect(workspace.people.map((person) => person.id)).toEqual(
+      expect.arrayContaining([
+        "@I1@",
+        "@I2@",
+        "@I3@",
+        "@I4@",
+        "@I5@",
+        "@I6@",
+        "@I7@",
+        "@I8@"
+      ])
+    );
     expect(workspace.people.find((person) => person.id === "@I1@")?.relatives).toContain("@I2@");
     expect(workspace.rawRecords).toHaveLength(result.rawRecordCount);
     expect(result.backup.storageKey).toContain("postgres://workspace_backups/");
@@ -100,13 +111,13 @@ describeIfDatabase("GEDCOM apply", () => {
 
     const result = await repairGedcomRelationshipLinks(storeOptions);
     const repairedWorkspace = await readWorkspace(storeOptions);
-    const repairedElizabeth = repairedWorkspace.people.find((person) => person.id === "@I1@");
+    const repairedNora = repairedWorkspace.people.find((person) => person.id === "@I1@");
 
     expect(workspace.rawRecords.length).toBeGreaterThan(0);
     expect(result.updatedPeople).toBeGreaterThan(0);
-    expect(repairedElizabeth?.relatives).toContain("@I2@");
-    expect(repairedElizabeth?.relatives).not.toContain("@F1@");
-    expect(repairedElizabeth).toMatchObject({ published: true, privacy: "public", livingStatus: "deceased" });
+    expect(repairedNora?.relatives).toContain("@I2@");
+    expect(repairedNora?.relatives).not.toContain("@F1@");
+    expect(repairedNora).toMatchObject({ published: true, privacy: "public", livingStatus: "deceased" });
   });
 
   itLarge("applies a GEDCOM larger than 10.5 MB with batched persistence", async () => {

@@ -15,7 +15,7 @@ afterEach(() => {
 describe("GEDCOM export route", () => {
   it("returns the archive as a downloadable GEDCOM file", async () => {
     workspaceMocks.readWorkspace.mockResolvedValue({
-      archiveName: "Riemer - Zajicek Archive",
+      archiveName: "Hartwell–Mercer Family Archive",
       people: [],
       rawRecords: [],
       imports: []
@@ -26,7 +26,7 @@ describe("GEDCOM export route", () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toContain("text/plain");
-    expect(response.headers.get("content-disposition")).toMatch(/^attachment; filename="riemer-zajicek-archive-\d{4}-\d{2}-\d{2}\.ged"$/);
+    expect(response.headers.get("content-disposition")).toMatch(/^attachment; filename="hartwell-mercer-family-archive-\d{4}-\d{2}-\d{2}\.ged"$/);
     expect(response.headers.get("cache-control")).toBe("no-store");
     expect(body.startsWith("0 HEAD")).toBe(true);
     expect(body.trimEnd().endsWith("0 TRLR")).toBe(true);

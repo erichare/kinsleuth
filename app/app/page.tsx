@@ -3,7 +3,8 @@ import { AppShell } from "@/components/app-shell";
 import { Icons } from "@/components/icons";
 import { Confidence, Metric, Status, TableScroll } from "@/components/ui";
 import { buildDashboardSummary } from "@/lib/dashboard";
-import { createDnaConnectionHypothesis } from "@/lib/dna";
+import { isGuidedResearchEnabled } from "@/lib/guided-research-config";
+import { buildResearchGuide } from "@/lib/research-guide";
 import { readWorkspace } from "@/lib/workspace-store";
 
 export const dynamic = "force-dynamic";
@@ -11,7 +12,18 @@ export const dynamic = "force-dynamic";
 export default async function AppDashboardPage() {
   const workspace = await readWorkspace();
   const dashboard = buildDashboardSummary(workspace);
-  const dnaHypotheses = dashboard.dnaLeads.slice(0, 2).map((match) => createDnaConnectionHypothesis(match, workspace.people));
+  const guidedResearchEnabled = isGuidedResearchEnabled();
+  const guideCandidates = guidedResearchEnabled
+    ? workspace.cases
+        .filter((researchCase) => researchCase.status === "active" || researchCase.status === "planning")
+        .map((researchCase) => ({ researchCase, plan: buildResearchGuide(researchCase) }))
+    : [];
+  const guidedEntry =
+    guideCandidates.find((entry) => entry.plan.phase === "resume" && entry.plan.assignment) ??
+    guideCandidates.find((entry) => entry.plan.assignment);
+  const guidedCase = guidedEntry?.researchCase;
+  const guidePlan = guidedEntry?.plan;
+  const guideFallbackCase = guideCandidates[0]?.researchCase;
   const visibleActions = dashboard.actions.slice(0, 5);
   const remainingActionCount = Math.max(0, dashboard.actions.length - visibleActions.length);
 
@@ -77,24 +89,38 @@ export default async function AppDashboardPage() {
             </TableScroll>
           </section>
 
-          <section className="app-card surface-quiet dashboard-ai">
-            <div className="app-card-header">
-              <div>
-                <span className="card-kicker">Pattern support</span>
-                <h2>AI Analyst</h2>
-              </div>
-              <Link className="button-ghost" href="/app/ai">Open analyst</Link>
-            </div>
-            <div className="evidence-list">
-              {dnaHypotheses.slice(0, 2).map((hypothesis) => (
-                <div className="evidence-item surface-inset" key={hypothesis.matchId}>
-                  <strong>{hypothesis.likelyBranch}</strong>
-                  <p className="muted">{hypothesis.explanation}</p>
-                  <Confidence value={hypothesis.confidence} />
+          {guidedResearchEnabled ? (
+            <section className="app-card surface-featured dashboard-ai dashboard-guide">
+              <div className="app-card-header">
+                <div>
+                  <span className="card-kicker">Private research guide</span>
+                  <h2>Your next research step</h2>
                 </div>
-              ))}
-            </div>
-          </section>
+                {guidedCase ? <Link className="button-ghost" href={`/app/cases/${guidedCase.id}`}>Open case</Link> : null}
+              </div>
+              {guidedCase && guidePlan ? (
+                <Link className="dashboard-guide-step" href={`/app/cases/${guidedCase.id}`}>
+                  <div>
+                    <span>{guidedCase.title}</span>
+                    <strong>{guidePlan.assignment?.title ?? guidePlan.reason}</strong>
+                  </div>
+                  <p>{guidePlan.assignment?.guidance ?? "Open the case to give the guide a testable hypothesis."}</p>
+                  <small><Icons.Lock aria-hidden size={14} />Uses only this case’s saved research. Nothing is posted to a group or sent to an AI provider.</small>
+                </Link>
+              ) : (
+                <div className="empty-state">
+                  <p className="muted">
+                    {guideFallbackCase
+                      ? "No active case has an actionable assignment yet. Open a case to add a testable hypothesis or specific search."
+                      : "Create an active case and the guide will help choose one useful assignment."}
+                  </p>
+                  <Link className="button-secondary" href={guideFallbackCase ? `/app/cases/${guideFallbackCase.id}` : "/app/cases"}>
+                    {guideFallbackCase ? "Open a case" : "Open cases"}
+                  </Link>
+                </div>
+              )}
+            </section>
+          ) : null}
         </div>
 
         <div className="dashboard-column">

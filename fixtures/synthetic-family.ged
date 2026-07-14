@@ -1,51 +1,170 @@
 0 HEAD
-1 SOUR KinSleuth Synthetic Fixtures
+1 SOUR Kin Resolve Fictional Demo Fixture
 1 GEDC
 2 VERS 5.5.1
 2 FORM LINEAGE-LINKED
 1 CHAR UTF-8
+1 NOTE FICTIONAL DEMO: every name, date, place, record, photograph, story, and DNA reference in this file was invented for Kin Resolve. No detail represents a real person or family.
 0 @I1@ INDI
-1 NAME Elizabeth Katherine /Riemer/
+1 NAME Nora Elise /Hartwell/
 1 SEX F
 1 BIRT
-2 DATE 12 APR 1884
-2 PLAC Chicago, Cook, Illinois, USA
+2 DATE 3 OCT 1889
+2 PLAC Lantern Bay, Wisconsin
 2 SOUR @S1@
 1 DEAT
-2 DATE 17 FEB 1961
-2 PLAC Chicago, Cook, Illinois, USA
+2 DATE 9 JUN 1968
+2 PLAC Lantern Bay, Wisconsin
+2 SOUR @S4@
+1 FAMC @F2@
 1 FAMS @F1@
-1 NOTE Synthetic ancestor used for KinSleuth demos.
+1 NOTE Fictional demo person. Nora's journal calls the memory box Amalia's tin and says Samuel arrived with a folded passenger notice and harbor photograph.
 0 @I2@ INDI
-1 NAME William Henry /Fletcher/
+1 NAME Samuel Rowan /Mercer/
 1 SEX M
 1 BIRT
-2 DATE 1881
-2 PLAC Limerick, Ireland
+2 DATE 18 FEB 1886
+2 PLAC Northstar Cove, Nova Scotia
+2 SOUR @S2@
+1 IMMI
+2 DATE 4 MAY 1907
+2 PLAC Lantern Bay, Wisconsin
+2 NOTE Fictional passenger-list mystery: possibly recorded as Samuel March; a later journal says he carried the folded notice and a harbor photograph.
 1 DEAT
-2 DATE 1954
-2 PLAC Chicago, Cook, Illinois, USA
+2 DATE 21 NOV 1957
+2 PLAC Lantern Bay, Wisconsin
+2 SOUR @S4@
+1 FAMC @F3@
 1 FAMS @F1@
+1 NOTE Fictional demo person. Family lore says Samuel arrived with a folded passenger notice and a harbor photograph, not the later blue tin.
 0 @I3@ INDI
-1 NAME Mary Ann /Zajicek/
+1 NAME Amalia Rose /Bellandi/
 1 SEX F
 1 BIRT
-2 DATE 1858
-2 PLAC Cornwall, England
-1 FAMC @F2@
+2 DATE 7 JUL 1861
+2 PLAC Ceraluna Alta, Italy
+2 SOUR @S3@
+1 IMMI
+2 DATE 2 APR 1883
+2 PLAC Lantern Bay, Wisconsin
+1 DEAT
+2 DATE 14 JAN 1934
+2 PLAC Lantern Bay, Wisconsin
+2 SOUR @S4@
+1 FAMS @F2@
+1 NOTE Fictional demo person. Her invented recipe notebook records assembling the blue memory tin in 1922 around Samuel's two older items.
+0 @I4@ INDI
+1 NAME Elias Thorne /Hartwell/
+1 SEX M
+1 BIRT
+2 DATE 4 DEC 1856
+2 PLAC Northstar Cove, Nova Scotia
+2 SOUR @S2@
+1 DEAT
+2 DATE 30 AUG 1926
+2 PLAC Lantern Bay, Wisconsin
+2 SOUR @S4@
+1 FAMS @F2@
+1 NOTE Fictional demo person. Elias worked on the Lantern Bay docks.
+0 @I5@ INDI
+1 NAME Clara Juniper /Mercer/
+1 SEX F
+1 BIRT
+2 DATE 11 MAR 1912
+2 PLAC Lantern Bay, Wisconsin
+2 SOUR @S1@
+1 DEAT
+2 DATE 5 MAY 1998
+2 PLAC Lantern Bay, Wisconsin
+2 SOUR @S4@
+1 FAMC @F1@
+1 NOTE Fictional demo person. Clara labeled family photographs in violet ink.
+0 @I6@ INDI
+1 NAME Tobias Bell /Mercer/
+1 SEX M
+1 BIRT
+2 DATE 28 SEP 1915
+2 PLAC Lantern Bay, Wisconsin
+2 SOUR @S1@
+1 DEAT
+2 DATE 4 FEB 1984
+2 PLAC Lantern Bay, Wisconsin
+2 SOUR @S4@
+1 FAMC @F1@
+1 NOTE Fictional demo person. Tobias inherited Samuel's repair bench and the blue tin Amalia assembled in 1922.
+0 @I7@ INDI
+1 NAME Maeve Lenora Rowan /Mercer/
+1 SEX F
+1 BIRT
+2 DATE 6 MAY 1863
+2 PLAC Northstar Cove, Nova Scotia
+2 SOUR @S2@
+1 DEAT
+2 DATE 2 APR 1941
+2 PLAC Northstar Cove, Nova Scotia
+2 SOUR @S4@
+1 FAMS @F3@
+1 NOTE Fictional demo person. Her invented letter says Samuel practiced signing Mercer and March.
+0 @I8@ INDI
+1 NAME Jonah Silas /Mercer/
+1 SEX M
+1 BIRT
+2 DATE 9 JAN 1859
+2 PLAC Northstar Cove, Nova Scotia
+2 SOUR @S2@
+1 DEAT
+2 DATE 17 OCT 1911
+2 PLAC Northstar Cove, Nova Scotia
+2 SOUR @S4@
+1 FAMS @F3@
+1 NOTE Fictional demo person. A page in his invented tide table contains S.M. west beside a blue square.
 0 @F1@ FAM
 1 HUSB @I2@
 1 WIFE @I1@
 1 MARR
-2 DATE 14 JUN 1905
-2 PLAC Chicago, Cook, Illinois, USA
+2 DATE 19 OCT 1909
+2 PLAC Lantern Bay, Wisconsin
+2 SOUR @S1@
+1 CHIL @I5@
+1 CHIL @I6@
 0 @F2@ FAM
-1 CHIL @I3@
+1 HUSB @I4@
+1 WIFE @I3@
+1 MARR
+2 DATE 22 SEP 1885
+2 PLAC Lantern Bay, Wisconsin
+2 SOUR @S1@
+1 CHIL @I1@
+0 @F3@ FAM
+1 HUSB @I8@
+1 WIFE @I7@
+1 MARR
+2 DATE 24 JUN 1883
+2 PLAC Northstar Cove, Nova Scotia
+2 SOUR @S2@
+1 CHIL @I2@
 0 @S1@ SOUR
-1 TITL Synthetic Chicago birth register
-1 REPO @R1@
+1 TITL Fictional Lantern Bay civil register
+1 AUTH Kin Resolve demo writers
+1 PUBL Invented solely for product demonstration
+1 NOTE This record is entirely fictional.
+0 @S2@ SOUR
+1 TITL Fictional Northstar Cove register
+1 AUTH Kin Resolve demo writers
+1 PUBL Invented solely for product demonstration
+1 NOTE This record is entirely fictional.
+0 @S3@ SOUR
+1 TITL Fictional Ceraluna Alta parish register
+1 AUTH Kin Resolve demo writers
+1 PUBL Invented solely for product demonstration
+1 NOTE This record is entirely fictional.
+0 @S4@ SOUR
+1 TITL Fictional family memorial register
+1 AUTH Kin Resolve demo writers
+1 PUBL Invented solely for product demonstration
+1 NOTE This record is entirely fictional.
 0 @O1@ OBJE
-1 TITL Synthetic portrait placeholder
-1 FILE uploads/synthetic/elizabeth-riemer.jpg
+1 TITL Fictional Nora Hartwell portrait placeholder
+1 FILE uploads/fictional-demo/nora-hartwell.jpg
+1 NOTE This media reference is invented and does not depict a real person.
 0 TRLR
-

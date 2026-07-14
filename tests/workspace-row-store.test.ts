@@ -64,8 +64,8 @@ function testDnaMatch(overrides: Partial<DnaMatch> = {}): DnaMatch {
     totalCm: 128,
     side: "unknown",
     treeStatus: "private",
-    surnames: ["Riemer"],
-    places: ["Chicago"],
+    surnames: ["Hartwell"],
+    places: ["Lantern Bay"],
     sharedMatches: [],
     notes: "",
     triageStatus: "needs_review",
@@ -94,7 +94,12 @@ describeIfDatabase("row-level workspace persistence", () => {
     const dnaBefore = await captureRowVersions(storeOptions.archiveId, "dna_matches");
 
     const added = await addCaseTask(created.id, { title: "Check the census" }, storeOptions);
-    await updateCaseTask(created.id, added.task.id, { status: "doing" }, storeOptions);
+    await updateCaseTask(
+      created.id,
+      added.task.id,
+      { status: "doing", expectedUpdatedAt: added.task.updatedAt! },
+      storeOptions
+    );
 
     expectSameVersions(peopleBefore, await captureRowVersions(storeOptions.archiveId, "people"));
     expectSameVersions(factsBefore, await captureRowVersions(storeOptions.archiveId, "person_facts"));

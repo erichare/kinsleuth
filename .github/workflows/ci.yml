@@ -37,6 +37,9 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: Verify fictional demo boundary
+        run: npm run demo:verify
+
       - name: Unit tests
         run: npm test
 

@@ -160,11 +160,27 @@ function buildCaseSearchText(researchCase: ResearchCase): string {
       researchCase.status,
       researchCase.privacy,
       researchCase.focus,
-      researchCase.hypotheses.map((hypothesis) => [hypothesis.statement, hypothesis.status].join(" ")).join(" "),
+      researchCase.hypotheses.map(buildHypothesisSearchText).join(" "),
       researchCase.evidence.map((evidence) => [evidence.title, evidence.type, evidence.summary, evidence.linkedPersonId, evidence.linkedDnaMatchId].filter(Boolean).join(" ")).join(" "),
-      researchCase.tasks.map((task) => [task.title, task.status].join(" ")).join(" ")
+      researchCase.tasks.map(buildTaskSearchText).join(" ")
     ].join(" ")
   );
+}
+
+function buildHypothesisSearchText(hypothesis: ResearchCase["hypotheses"][number]): string {
+  const decisionsText = (hypothesis.decisions ?? [])
+    .map((decision) => [decision.reason, decision.statement].join(" "))
+    .join(" ");
+
+  return [hypothesis.statement, hypothesis.status, decisionsText].join(" ");
+}
+
+function buildTaskSearchText(task: ResearchCase["tasks"][number]): string {
+  const outcomesText = (task.outcomes ?? [])
+    .map((outcome) => [outcome.note, outcome.searchScope ? JSON.stringify(outcome.searchScope) : ""].join(" "))
+    .join(" ");
+
+  return [task.title, task.status, task.guidance, task.workFingerprint, outcomesText].filter(Boolean).join(" ");
 }
 
 function compareCases(left: ResearchCase, right: ResearchCase, sort: CaseSortKey): number {

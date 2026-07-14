@@ -4,30 +4,30 @@ import { filterPeople, paginateItems, searchPeoplePage } from "@/lib/people-sear
 
 const people: PersonSummary[] = [
   person({
-    id: "p-elizabeth-riemer",
-    displayName: "Elizabeth Katherine Riemer",
-    surname: "Riemer",
-    birthDate: "1884",
-    birthPlace: "Chicago, Illinois",
+    id: "p-nora-hartwell",
+    displayName: "Nora Elise Hartwell",
+    surname: "Hartwell",
+    birthDate: "1889",
+    birthPlace: "Lantern Bay, Wisconsin",
     privacy: "public",
     published: true,
     livingStatus: "deceased"
   }),
   person({
-    id: "p-mary-zajicek",
-    displayName: "Mary Zajicek",
-    surname: "Zajicek",
-    birthDate: "1901",
-    birthPlace: "Cedar Rapids, Iowa",
+    id: "p-amalia-bellandi",
+    displayName: "Amalia Rose Bellandi",
+    surname: "Bellandi",
+    birthDate: "1861",
+    birthPlace: "Ceraluna Alta, Italy",
     privacy: "private",
     published: false,
     livingStatus: "unknown",
-    notes: "Family story mentions Bohemia."
+    notes: "Family story mentions Ceraluna Alta."
   }),
   person({
     id: "p-living",
-    displayName: "Living Relative",
-    surname: "Riemer",
+    displayName: "Zara Hartwell",
+    surname: "Hartwell",
     privacy: "sensitive",
     published: false,
     livingStatus: "living"
@@ -36,12 +36,12 @@ const people: PersonSummary[] = [
 
 describe("people search", () => {
   it("searches across names, places, dates, and notes", () => {
-    expect(filterPeople(people, { query: "riemer chicago" }).map((item) => item.id)).toEqual(["p-elizabeth-riemer"]);
-    expect(filterPeople(people, { query: "bohemia" }).map((item) => item.id)).toEqual(["p-mary-zajicek"]);
+    expect(filterPeople(people, { query: "hartwell lantern" }).map((item) => item.id)).toEqual(["p-nora-hartwell"]);
+    expect(filterPeople(people, { query: "ceraluna alta" }).map((item) => item.id)).toEqual(["p-amalia-bellandi"]);
   });
 
   it("filters publication, privacy, and living status", () => {
-    expect(filterPeople(people, { publication: "published" }).map((item) => item.id)).toEqual(["p-elizabeth-riemer"]);
+    expect(filterPeople(people, { publication: "published" }).map((item) => item.id)).toEqual(["p-nora-hartwell"]);
     expect(filterPeople(people, { privacy: "sensitive" }).map((item) => item.id)).toEqual(["p-living"]);
     expect(filterPeople(people, { livingStatus: "living" }).map((item) => item.id)).toEqual(["p-living"]);
   });
@@ -57,12 +57,12 @@ describe("people search", () => {
   });
 
   it("returns slim paged people rows and workspace stats", () => {
-    const result = searchPeoplePage(people, { query: "riemer", sort: "name" }, { page: 1, pageSize: 1 });
+    const result = searchPeoplePage(people, { query: "hartwell", sort: "name" }, { page: 1, pageSize: 1 });
 
     expect(result.total).toBe(2);
     expect(result.items).toEqual([
       expect.objectContaining({
-        id: "p-elizabeth-riemer",
+        id: "p-nora-hartwell",
         factCount: 0
       })
     ]);

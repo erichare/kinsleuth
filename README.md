@@ -12,7 +12,9 @@
 
 *Import GEDCOM files, triage DNA matches, build research cases, run AI-assisted analysis — then publish selected deceased profiles through person-level privacy gates.*
 
-<img src="docs/screenshots/dashboard.webp" alt="Kin Resolve investigation dashboard" width="90%" />
+<p><em>Every person, record, place, photograph, story, and DNA value shown below belongs to the wholly fictional Hartwell–Mercer demo.</em></p>
+
+<img src="docs/screenshots/dashboard.webp" alt="Fictional Hartwell–Mercer Kin Resolve investigation dashboard" width="90%" />
 
 </div>
 
@@ -28,7 +30,7 @@ Most genealogy tools make you choose between *sharing everything* and *sharing n
 | Account-gated pages and APIs (owner-created accounts) | Living, private, and sensitive records withheld automatically |
 | Research cases, task queues, AI analysis runs | Published deceased profiles and facts already marked public |
 
-The repository ships with **synthetic fixtures only**. Real GEDCOM exports, DNA match files, and uploads belong in ignored local storage (`data/`, `uploads/`).
+The repository ships with the wholly fictional **Hartwell–Mercer Family Archive**. Every included name, date, place, record, photograph, story, and DNA value was invented for Kin Resolve; no detail represents a real person or family. Real GEDCOM exports, DNA match files, and uploads belong in ignored local storage (`data/`, `uploads/`).
 
 ## Feature tour
 
@@ -36,7 +38,7 @@ The repository ships with **synthetic fixtures only**. Real GEDCOM exports, DNA 
 
 A curated, privacy-gated site for the ancestors you choose to share — published profiles pass both a manual publish flag *and* automated living/privacy gates before anonymous visitors see them. Current controls are person-level; granular fact/source curation and persisted stories are still in progress.
 
-<img src="docs/screenshots/public-home.webp" alt="Public archive landing page" width="90%" />
+<img src="docs/screenshots/public-home.webp" alt="Fictional Hartwell–Mercer public archive landing page" width="90%" />
 
 ### Investigation dashboard
 
@@ -46,13 +48,13 @@ Workspace metrics, cases in motion, an action queue of privacy and quality probl
 
 Server-paginated search over every imported person with publication, privacy, and life-status filters plus per-person curation controls.
 
-<img src="docs/screenshots/people-workspace.webp" alt="People workspace with search and curation" width="90%" />
+<img src="docs/screenshots/people-workspace.webp" alt="Fictional Hartwell–Mercer people workspace with search and curation" width="90%" />
 
 ### GEDCOM imports with reviewable diffs
 
 Every GEDCOM is previewed before it is applied: new, changed, and removed records are diffed against the current workspace so curated research is never silently overwritten. Raw records, xrefs, custom tags, and checksums are preserved, and each apply stores a restorable pre-import snapshot.
 
-<img src="docs/screenshots/gedcom-import-preview.webp" alt="GEDCOM import preview with diff review" width="90%" />
+<img src="docs/screenshots/gedcom-import-preview.webp" alt="Fictional Hartwell–Mercer GEDCOM import preview with diff review" width="90%" />
 
 Large files (over 3.5 MB) upload directly from the browser to private Blob storage, bypassing serverless request limits — files up to 25 MB each are supported on Vercel.
 
@@ -62,19 +64,19 @@ Your data is never locked in: the whole archive exports back to GEDCOM 5.5.1 fro
 
 Import DNA match CSVs, rank matches by a helpfulness score (shared cM, tree status, surnames, places, shared matches), edit match details, link matches to cases as evidence, and generate connection hypotheses with candidate common ancestors.
 
-<img src="docs/screenshots/dna-triage.webp" alt="DNA match triage queue with hypothesis panel" width="90%" />
+<img src="docs/screenshots/dna-triage.webp" alt="Fictional Hartwell–Mercer DNA match triage queue with hypothesis panel" width="90%" />
 
 ### AI Analyst
 
 Deterministic structural checks (date conflicts, privacy risks) run with no API key at all. Add an OpenAI-compatible provider key and the analyst answers research questions with cited workspace context, saved run history, and staged case-task suggestions you approve before they land.
 
-<img src="docs/screenshots/ai-analyst.webp" alt="AI analyst workspace" width="90%" />
+<img src="docs/screenshots/ai-analyst.webp" alt="Fictional Hartwell–Mercer AI analyst workspace" width="90%" />
 
 ### Publishing readiness & quality reports
 
 Per-profile readiness scoring, publication blockers, source-coverage gaps, and low-confidence facts — reviewed before anything goes public.
 
-<img src="docs/screenshots/publishing-review.webp" alt="Publishing readiness review" width="90%" />
+<img src="docs/screenshots/publishing-review.webp" alt="Fictional Hartwell–Mercer publishing readiness review" width="90%" />
 
 ## Quick start
 
@@ -128,6 +130,7 @@ Compose provisions Postgres with pgvector and a MinIO service alongside the app.
 | `DATABASE_URL` | **Required.** Postgres connection string for workspace storage |
 | `DATABASE_POOL_MAX` | Max connections per instance; use `2` for serverless |
 | `DATABASE_AUTO_MIGRATE` | Applies pending versioned migrations at boot; set `false` in production and run `npm run db:migrate` at deploy time instead |
+| `KINRESOLVE_GUIDED_RESEARCH_ENABLED` | Server-side kill switch for the private case guide and its mutation APIs; defaults to `true`, set `false` to disable without deleting research history |
 | `AUTH_SECRET` | Secret for account sessions (better-auth); required in production |
 | `KINSLEUTH_ARCHIVE_ID` | Archive id; defaults to `archive-default` |
 | `BLOB_READ_WRITE_TOKEN` | Private Vercel Blob store for staging large GEDCOM uploads |
@@ -140,7 +143,7 @@ Compose provisions Postgres with pgvector and a MinIO service alongside the app.
 
 Archive name and tagline are edited in **Settings → Archive branding** and flow through both the private workspace and the public site. Settings also reports live database, storage, and AI-provider health.
 
-<img src="docs/screenshots/settings.webp" alt="Settings with archive branding and runtime status" width="90%" />
+<img src="docs/screenshots/settings.webp" alt="Fictional Hartwell–Mercer settings with archive branding and runtime status" width="90%" />
 
 ## Development
 
@@ -152,6 +155,7 @@ npm run test:db       # Every Postgres-gated suite, serialized (needs TEST_DATAB
 npm run test:db:large # 10.5+ MB / 65k-person GEDCOM load regression
 npm run test:release-upgrade # Rehearse v0.17.4 -> current (needs a local control DB)
 npm run migrations:verify   # Verify migration checksums and released history
+npm run demo:verify # Block retired real-family demo identifiers and images
 npm run db:migrate    # Apply pending db/migrations to DATABASE_URL (Node 22.6+)
 npm run build         # Production build
 ```

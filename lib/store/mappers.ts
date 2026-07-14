@@ -78,7 +78,9 @@ export function mapHypothesis(row: Record<string, unknown>): ResearchCase["hypot
     id: String(row.id),
     statement: String(row.statement),
     confidence: Number(row.confidence ?? 0.5),
-    status: row.status as ResearchCase["hypotheses"][number]["status"]
+    status: row.status as ResearchCase["hypotheses"][number]["status"],
+    decisions: toJsonArray(row.decisions),
+    updatedAt: row.updated_at ? toIsoString(row.updated_at) : "1970-01-01T00:00:00.000Z"
   };
 }
 
@@ -96,11 +98,23 @@ export function mapEvidence(row: Record<string, unknown>): ResearchCase["evidenc
 }
 
 export function mapTask(row: Record<string, unknown>): ResearchCase["tasks"][number] & { caseId: string } {
+  const title = String(row.title);
   return {
     caseId: String(row.case_id),
     id: String(row.id),
-    title: String(row.title),
-    status: row.status as ResearchCase["tasks"][number]["status"]
+    title,
+    status: row.status as ResearchCase["tasks"][number]["status"],
+    origin: row.origin === "guide" ? "guide" : "manual",
+    priority: row.priority === "high" || row.priority === "low" ? row.priority : "normal",
+    guideKey: optionalString(row.guide_key),
+    workFingerprint: optionalString(row.work_fingerprint) ?? normalizeWorkFingerprint(title),
+    guidance: String(row.guidance ?? ""),
+    targetHypothesisId: optionalString(row.target_hypothesis_id),
+    contextRefs: toJsonArray(row.context_refs),
+    outcomes: toJsonArray(row.outcomes),
+    createdAt: row.created_at ? toIsoString(row.created_at) : undefined,
+    completedAt: row.completed_at ? toIsoString(row.completed_at) : undefined,
+    updatedAt: row.updated_at ? toIsoString(row.updated_at) : row.created_at ? toIsoString(row.created_at) : "1970-01-01T00:00:00.000Z"
   };
 }
 
@@ -246,6 +260,10 @@ function toStringArray(value: unknown): string[] {
 
 function optionalString(value: unknown): string | undefined {
   return typeof value === "string" && value.length ? value : undefined;
+}
+
+function normalizeWorkFingerprint(value: string): string {
+  return value.toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
 }
 
 function toIsoString(value: unknown): string {

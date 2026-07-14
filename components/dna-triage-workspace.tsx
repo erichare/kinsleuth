@@ -67,16 +67,16 @@ type CaseLinkForm = {
 };
 
 const defaultForm = {
-  displayName: "J. Fletcher",
-  totalCm: "238",
-  longestSegmentCm: "23.4",
-  predictedRelationship: "likely 2C1R",
-  side: "maternal",
+  displayName: "M. Alder (fictional)",
+  totalCm: "86",
+  longestSegmentCm: "12.6",
+  predictedRelationship: "invented estimate: likely 3C or 3C1R",
+  side: "paternal",
   treeStatus: "partial",
-  surnames: "Fletcher, Zajicek, Riemer",
-  places: "Chicago, Limerick, Cornwall",
-  sharedMatches: "M. O'Donnell, A. Zajicek, S. Riemer",
-  notes: "Partial tree reaches a Fletcher household in Chicago with Irish and Cornwall place overlap."
+  surnames: "Mercer, March, Rowan, Hartwell",
+  places: "Northstar Cove, Lantern Bay",
+  sharedMatches: "T. Pike (fictional)",
+  notes: "A fictional descendant chart and shared-match grid connect M. Alder and T. Pike through Elowen Rowan, Maeve's unrecorded sister. The 86 cM value alone does not establish that path."
 };
 
 const pageSizeOptions = [10, 25, 50, 100];
@@ -503,7 +503,7 @@ export function DnaTriageWorkspace({ initialResult, initialHypotheses = [], init
                 <Icons.Search size={16} aria-hidden />
                 <input
                   aria-label="Search DNA matches"
-                  placeholder="Riemer, Chicago, shared match..."
+                  placeholder="Alder, Rowan, Northstar Cove..."
                   value={query}
                   onChange={(event) => {
                     setQuery(event.target.value);
@@ -613,6 +613,7 @@ export function DnaTriageWorkspace({ initialResult, initialHypotheses = [], init
 
         <section aria-busy={status === "loading"} className="section">
           <h2>Analyze a match</h2>
+          <p className="fiction-disclosure" role="note"><strong>Built-in example only:</strong> these Hartwell–Mercer names, locations, relationship estimates, shared-match names, and DNA values are entirely fictional.</p>
           <div className="form-grid">
             <TextField label="Match name" value={form.displayName} onChange={(value) => setForm({ ...form, displayName: value })} />
             <TextField inputMode="decimal" label="Total cM" min={0} step={0.1} type="number" value={form.totalCm} onChange={(value) => setForm({ ...form, totalCm: value })} />

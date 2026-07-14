@@ -32,10 +32,12 @@ const sortableTables = {
   raw_records: "raw_records",
   workspace_backups: "workspace_backups",
   people: "people",
-  evidence_items: "evidence_items"
+  evidence_items: "evidence_items",
+  hypotheses: "hypotheses"
 } as const;
 
 export type SortableTable = keyof typeof sortableTables;
+type RowWriteMode = "upsert" | "insert";
 
 export function normalizeConfidence(value: number): number {
   if (!Number.isFinite(value)) {
@@ -43,6 +45,10 @@ export function normalizeConfidence(value: number): number {
   }
 
   return Math.max(0, Math.min(1, Number(value.toFixed(2))));
+}
+
+export function normalizeWorkFingerprint(value: string): string {
+  return value.toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
 }
 
 export async function prependSortOrder(client: PoolClient, table: SortableTable, archiveId: string): Promise<number> {
@@ -71,37 +77,104 @@ export async function prependCaseTaskSortOrder(client: PoolClient, archiveId: st
   return result.rows[0].next;
 }
 
-export async function upsertCaseRow(client: PoolClient, archiveId: string, researchCase: ResearchCase, sortOrder: number): Promise<void> {
+export async function upsertCaseRow(
+  client: PoolClient,
+  archiveId: string,
+  researchCase: ResearchCase,
+  sortOrder: number,
+  writeMode: RowWriteMode = "upsert"
+): Promise<void> {
+  const conflictClause = writeMode === "insert"
+    ? ""
+    : `ON CONFLICT (archive_id, id) DO UPDATE SET
+       title = EXCLUDED.title, question = EXCLUDED.question, status = EXCLUDED.status,
+       focus = EXCLUDED.focus, privacy = EXCLUDED.privacy, sort_order = EXCLUDED.sort_order`;
   await client.query(
     `INSERT INTO research_cases (id, archive_id, title, question, status, focus, privacy, sort_order)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-     ON CONFLICT (archive_id, id) DO UPDATE SET
-       title = EXCLUDED.title, question = EXCLUDED.question, status = EXCLUDED.status,
-       focus = EXCLUDED.focus, privacy = EXCLUDED.privacy, sort_order = EXCLUDED.sort_order`,
+     ${conflictClause}`,
     [researchCase.id, archiveId, researchCase.title, researchCase.question, researchCase.status, researchCase.focus, researchCase.privacy, sortOrder]
   );
 }
 
 // Replaces all children of one case; used when a case is created or replaced
 // wholesale. Individual task/evidence mutations use the targeted writers below.
-export async function replaceCaseChildren(client: PoolClient, archiveId: string, researchCase: ResearchCase): Promise<void> {
-  await client.query("DELETE FROM tasks WHERE archive_id = $1 AND case_id = $2", [archiveId, researchCase.id]);
-  await client.query("DELETE FROM evidence_items WHERE archive_id = $1 AND case_id = $2", [archiveId, researchCase.id]);
-  await client.query("DELETE FROM hypotheses WHERE archive_id = $1 AND case_id = $2", [archiveId, researchCase.id]);
+export async function replaceCaseChildren(
+  client: PoolClient,
+  archiveId: string,
+  researchCase: ResearchCase,
+  writeMode: RowWriteMode = "upsert"
+): Promise<void> {
+  if (writeMode === "upsert") {
+    await client.query("DELETE FROM tasks WHERE archive_id = $1 AND case_id = $2", [archiveId, researchCase.id]);
+    await client.query("DELETE FROM evidence_items WHERE archive_id = $1 AND case_id = $2", [archiveId, researchCase.id]);
+    await client.query("DELETE FROM hypotheses WHERE archive_id = $1 AND case_id = $2", [archiveId, researchCase.id]);
+  }
 
   for (const [index, hypothesis] of researchCase.hypotheses.entries()) {
-    await client.query(
-      `INSERT INTO hypotheses (id, archive_id, case_id, statement, confidence, status, sort_order)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-      [hypothesis.id, archiveId, researchCase.id, hypothesis.statement, normalizeConfidence(hypothesis.confidence), hypothesis.status, index]
-    );
+    await upsertHypothesisRow(client, archiveId, researchCase.id, hypothesis, index, writeMode);
   }
   for (const [index, evidence] of researchCase.evidence.entries()) {
-    await upsertEvidenceRow(client, archiveId, researchCase.id, evidence, index);
+    await upsertEvidenceRow(client, archiveId, researchCase.id, evidence, index, writeMode);
   }
   for (const [index, task] of researchCase.tasks.entries()) {
-    await upsertTaskRow(client, archiveId, researchCase.id, task, index);
+    await upsertTaskRow(client, archiveId, researchCase.id, task, index, writeMode);
   }
+}
+
+export async function upsertHypothesisRow(
+  client: PoolClient,
+  archiveId: string,
+  caseId: string,
+  hypothesis: ResearchCase["hypotheses"][number],
+  sortOrder: number,
+  writeMode: RowWriteMode = "upsert"
+): Promise<void> {
+  const conflictClause = writeMode === "insert"
+    ? ""
+    : `ON CONFLICT (archive_id, id) DO UPDATE SET
+       case_id = EXCLUDED.case_id, statement = EXCLUDED.statement, confidence = EXCLUDED.confidence,
+       status = EXCLUDED.status, decisions = EXCLUDED.decisions, updated_at = EXCLUDED.updated_at,
+       sort_order = EXCLUDED.sort_order`;
+  await client.query(
+    `INSERT INTO hypotheses (
+       id, archive_id, case_id, statement, confidence, status, decisions, updated_at, sort_order
+     ) VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9)
+     ${conflictClause}`,
+    [
+      hypothesis.id,
+      archiveId,
+      caseId,
+      hypothesis.statement,
+      normalizeConfidence(hypothesis.confidence),
+      hypothesis.status,
+      JSON.stringify(hypothesis.decisions ?? []),
+      hypothesis.updatedAt ?? new Date().toISOString(),
+      sortOrder
+    ]
+  );
+}
+
+export async function updateHypothesisRow(
+  client: PoolClient,
+  archiveId: string,
+  caseId: string,
+  hypothesis: ResearchCase["hypotheses"][number]
+): Promise<void> {
+  await client.query(
+    `UPDATE hypotheses SET statement = $4, confidence = $5, status = $6, decisions = $7::jsonb, updated_at = $8
+     WHERE archive_id = $1 AND id = $2 AND case_id = $3`,
+    [
+      archiveId,
+      hypothesis.id,
+      caseId,
+      hypothesis.statement,
+      normalizeConfidence(hypothesis.confidence),
+      hypothesis.status,
+      JSON.stringify(hypothesis.decisions ?? []),
+      hypothesis.updatedAt ?? new Date().toISOString()
+    ]
+  );
 }
 
 export async function upsertTaskRow(
@@ -109,25 +182,71 @@ export async function upsertTaskRow(
   archiveId: string,
   caseId: string,
   task: ResearchCase["tasks"][number],
-  sortOrder: number
+  sortOrder: number,
+  writeMode: RowWriteMode = "upsert"
 ): Promise<void> {
+  const now = new Date().toISOString();
+  const conflictClause = writeMode === "insert"
+    ? ""
+    : `ON CONFLICT (archive_id, id) DO UPDATE SET
+       case_id = EXCLUDED.case_id, title = EXCLUDED.title, status = EXCLUDED.status,
+       origin = EXCLUDED.origin, priority = EXCLUDED.priority, guide_key = EXCLUDED.guide_key,
+       work_fingerprint = EXCLUDED.work_fingerprint, guidance = EXCLUDED.guidance,
+       target_hypothesis_id = EXCLUDED.target_hypothesis_id, context_refs = EXCLUDED.context_refs,
+       outcomes = EXCLUDED.outcomes, created_at = EXCLUDED.created_at,
+       completed_at = EXCLUDED.completed_at, updated_at = EXCLUDED.updated_at, sort_order = EXCLUDED.sort_order`;
   await client.query(
-    `INSERT INTO tasks (id, archive_id, case_id, title, status, sort_order)
-     VALUES ($1, $2, $3, $4, $5, $6)
-     ON CONFLICT (archive_id, id) DO UPDATE SET
-       case_id = EXCLUDED.case_id, title = EXCLUDED.title, status = EXCLUDED.status, sort_order = EXCLUDED.sort_order`,
-    [task.id, archiveId, caseId, task.title, task.status, sortOrder]
+    `INSERT INTO tasks (
+       id, archive_id, case_id, title, status, origin, priority, guide_key, work_fingerprint,
+       guidance, target_hypothesis_id, context_refs, outcomes, created_at, completed_at, updated_at, sort_order
+     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb, $13::jsonb, $14, $15, $16, $17)
+     ${conflictClause}`,
+    [
+      task.id,
+      archiveId,
+      caseId,
+      task.title,
+      task.status,
+      task.origin ?? "manual",
+      task.priority ?? "normal",
+      task.guideKey,
+      task.workFingerprint?.trim() || normalizeWorkFingerprint(task.title),
+      task.guidance ?? "",
+      task.targetHypothesisId,
+      JSON.stringify(task.contextRefs ?? []),
+      JSON.stringify(task.outcomes ?? []),
+      task.createdAt ?? now,
+      task.completedAt,
+      task.updatedAt ?? now,
+      sortOrder
+    ]
   );
 }
 
 export async function updateTaskRow(client: PoolClient, archiveId: string, caseId: string, task: ResearchCase["tasks"][number]): Promise<void> {
-  await client.query("UPDATE tasks SET title = $4, status = $5 WHERE archive_id = $1 AND id = $2 AND case_id = $3", [
-    archiveId,
-    task.id,
-    caseId,
-    task.title,
-    task.status
-  ]);
+  await client.query(
+    `UPDATE tasks SET title = $4, status = $5, origin = $6, priority = $7, guide_key = $8,
+       work_fingerprint = $9, guidance = $10, target_hypothesis_id = $11,
+       context_refs = $12::jsonb, outcomes = $13::jsonb, completed_at = $14, updated_at = $15
+     WHERE archive_id = $1 AND id = $2 AND case_id = $3`,
+    [
+      archiveId,
+      task.id,
+      caseId,
+      task.title,
+      task.status,
+      task.origin ?? "manual",
+      task.priority ?? "normal",
+      task.guideKey,
+      task.workFingerprint?.trim() || normalizeWorkFingerprint(task.title),
+      task.guidance ?? "",
+      task.targetHypothesisId,
+      JSON.stringify(task.contextRefs ?? []),
+      JSON.stringify(task.outcomes ?? []),
+      task.completedAt,
+      task.updatedAt ?? new Date().toISOString()
+    ]
+  );
 }
 
 export async function upsertEvidenceRow(
@@ -135,17 +254,21 @@ export async function upsertEvidenceRow(
   archiveId: string,
   caseId: string,
   evidence: ResearchCase["evidence"][number],
-  sortOrder: number
+  sortOrder: number,
+  writeMode: RowWriteMode = "upsert"
 ): Promise<void> {
+  const conflictClause = writeMode === "insert"
+    ? ""
+    : `ON CONFLICT (archive_id, id) DO UPDATE SET
+       title = EXCLUDED.title, evidence_type = EXCLUDED.evidence_type, summary = EXCLUDED.summary,
+       confidence = EXCLUDED.confidence, linked_person_id = EXCLUDED.linked_person_id,
+       linked_dna_match_id = EXCLUDED.linked_dna_match_id,
+       sort_order = evidence_items.sort_order`;
   await client.query(
     `INSERT INTO evidence_items (
        id, archive_id, case_id, title, evidence_type, summary, confidence, linked_person_id, linked_dna_match_id, sort_order
      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-     ON CONFLICT (archive_id, id) DO UPDATE SET
-       title = EXCLUDED.title, evidence_type = EXCLUDED.evidence_type, summary = EXCLUDED.summary,
-       confidence = EXCLUDED.confidence, linked_person_id = EXCLUDED.linked_person_id,
-       linked_dna_match_id = EXCLUDED.linked_dna_match_id,
-       sort_order = evidence_items.sort_order`,
+     ${conflictClause}`,
     [
       evidence.id,
       archiveId,

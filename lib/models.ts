@@ -34,6 +34,80 @@ export type PersonSummary = {
   notes?: string;
 };
 
+export type ResearchReference = {
+  type: "case" | "hypothesis" | "evidence" | "task";
+  id: string;
+};
+
+export type ResearchHypothesisDecision = {
+  id: string;
+  requestId: string;
+  fromStatus: ResearchHypothesis["status"];
+  toStatus: ResearchHypothesis["status"];
+  statement: string;
+  reason: string;
+  contextRefs: ResearchReference[];
+  actorId: string;
+  actorName: string;
+  createdAt: string;
+};
+
+export type ResearchHypothesis = {
+  id: string;
+  statement: string;
+  confidence: number;
+  status: "open" | "supported" | "weakened" | "rejected";
+  decisions?: ResearchHypothesisDecision[];
+  updatedAt?: string;
+};
+
+export type ResearchEvidence = {
+  id: string;
+  title: string;
+  type: string;
+  summary: string;
+  confidence: number;
+  linkedPersonId?: string;
+  linkedDnaMatchId?: string;
+};
+
+export type ResearchSearchScope = {
+  repository: string;
+  collection?: string;
+  place?: string;
+  dateRange?: string;
+  query?: string;
+};
+
+export type ResearchTaskOutcome = {
+  id: string;
+  requestId: string;
+  type: "found" | "not_found" | "inconclusive" | "blocked" | "already_tried";
+  note: string;
+  searchScope?: ResearchSearchScope;
+  actorId: string;
+  actorName: string;
+  createdAt: string;
+  correctsOutcomeId?: string;
+};
+
+export type ResearchTask = {
+  id: string;
+  title: string;
+  status: "todo" | "doing" | "done";
+  origin?: "manual" | "guide";
+  priority?: "high" | "normal" | "low";
+  guideKey?: string;
+  workFingerprint?: string;
+  guidance?: string;
+  targetHypothesisId?: string;
+  contextRefs?: ResearchReference[];
+  outcomes?: ResearchTaskOutcome[];
+  createdAt?: string;
+  completedAt?: string;
+  updatedAt?: string;
+};
+
 export type ResearchCase = {
   id: string;
   title: string;
@@ -41,26 +115,9 @@ export type ResearchCase = {
   status: "active" | "planning" | "paused" | "resolved";
   focus: string;
   privacy: PrivacyLevel;
-  hypotheses: Array<{
-    id: string;
-    statement: string;
-    confidence: number;
-    status: "open" | "supported" | "weakened" | "rejected";
-  }>;
-  evidence: Array<{
-    id: string;
-    title: string;
-    type: string;
-    summary: string;
-    confidence: number;
-    linkedPersonId?: string;
-    linkedDnaMatchId?: string;
-  }>;
-  tasks: Array<{
-    id: string;
-    title: string;
-    status: "todo" | "doing" | "done";
-  }>;
+  hypotheses: ResearchHypothesis[];
+  evidence: ResearchEvidence[];
+  tasks: ResearchTask[];
 };
 
 export type AIAnalysisStatus = "ready" | "configuration_required" | "provider_error";

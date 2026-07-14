@@ -51,6 +51,14 @@ describe("product CI workflow contract", () => {
     expect(packageJson.scripts["test:db:large"]).toContain("require-test-database.mjs");
     expect(packageJson.scripts["test:db:large"]).toContain("RUN_LARGE_GEDCOM_TEST=true");
   });
+
+  it("fails closed when retired real-family demo identifiers return", async () => {
+    const contents = await workflow("ci.yml");
+
+    expect(packageJson.scripts["demo:verify"]).toBe("node scripts/verify-fictional-demo.mjs");
+    expect(contents).toContain("npm run demo:verify");
+    expect(contents.indexOf("npm run demo:verify")).toBeLessThan(contents.indexOf("npm test"));
+  });
 });
 
 describe("stable release workflow contract", () => {

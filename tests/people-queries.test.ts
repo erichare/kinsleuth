@@ -33,23 +33,23 @@ const accentedGedcom = [
   "0 HEAD",
   "1 CHAR UTF-8",
   "0 @I1@ INDI",
-  "1 NAME Ludmila /Zajíček/",
+  "1 NAME Lucia /Bellàndi/",
   "1 SEX F",
   "1 BIRT",
-  "2 DATE 3 MAY 1861",
-  "2 PLAC Kutná Hora, Bohemia",
+  "2 DATE 27 FEB 1872",
+  "2 PLAC Ceraluna Alta, Italy",
   "1 DEAT",
-  "2 DATE 1934",
-  "1 NOTE Emigrated with 100% of her siblings_records intact.",
+  "2 DATE 1946",
+  "1 NOTE Emigrated with 73% of her harbor_entries intact.",
   "0 @I2@ INDI",
-  "1 NAME Friedrich /Müller/",
+  "1 NAME Orin /March/",
   "1 SEX M",
   "1 BIRT",
-  "2 DATE 12 APR 1884",
-  "2 PLAC Hamburg, Germany",
+  "2 DATE 24 AUG 1894",
+  "2 PLAC Northstar Cove, Nova Scotia",
   "1 OCCU Shipwright",
   "0 @I3@ INDI",
-  "1 NAME Plain /Smith/",
+  "1 NAME Iris /March/",
   "1 BIRT",
   "2 DATE 1901",
   "0 TRLR"
@@ -69,17 +69,17 @@ describeIfDatabase("SQL people search", () => {
 
     const scenarios: PeopleSearchFilters[] = [
       {},
-      { query: "zajicek" },
-      { query: "Zajíček" },
-      { query: "kutna hora" },
+      { query: "bellandi" },
+      { query: "Bellàndi" },
+      { query: "ceraluna alta" },
       { query: "shipwright" },
-      { query: "ludmila bohemia" },
+      { query: "lucia ceraluna alta" },
       { query: "no-such-person-anywhere" },
       { publication: "published" },
       { publication: "unpublished" },
       { privacy: "sensitive" },
       { livingStatus: "living" },
-      { query: "1884", livingStatus: "living" },
+      { query: "1894", livingStatus: "living" },
       { sort: "facts" }
     ];
 
@@ -103,15 +103,15 @@ describeIfDatabase("SQL people search", () => {
   it("returns full list items including fact counts", async () => {
     await seededWorkspace();
 
-    const result = await searchPeoplePageFromDb({ query: "ludmila zajicek" }, { page: 1, pageSize: 10 }, storeOptions);
+    const result = await searchPeoplePageFromDb({ query: "lucia bellandi" }, { page: 1, pageSize: 10 }, storeOptions);
 
     expect(result.items).toHaveLength(1);
     expect(result.items[0]).toMatchObject({
       id: "@I1@",
-      displayName: "Ludmila Zajíček",
-      surname: "Zajíček",
-      birthDate: "3 MAY 1861",
-      birthPlace: "Kutná Hora, Bohemia",
+      displayName: "Lucia Bellàndi",
+      surname: "Bellàndi",
+      birthDate: "27 FEB 1872",
+      birthPlace: "Ceraluna Alta, Italy",
       livingStatus: "deceased",
       privacy: "public",
       published: true,
@@ -131,13 +131,13 @@ describeIfDatabase("SQL people search", () => {
   it("treats ILIKE wildcards in queries as literal text", async () => {
     await seededWorkspace();
 
-    const percent = await searchPeoplePageFromDb({ query: "100%" }, { page: 1, pageSize: 50 }, storeOptions);
+    const percent = await searchPeoplePageFromDb({ query: "73%" }, { page: 1, pageSize: 50 }, storeOptions);
     expect(percent.items.map((item) => item.id)).toEqual(["@I1@"]);
 
-    const underscore = await searchPeoplePageFromDb({ query: "siblings_records" }, { page: 1, pageSize: 50 }, storeOptions);
+    const underscore = await searchPeoplePageFromDb({ query: "harbor_entries" }, { page: 1, pageSize: 50 }, storeOptions);
     expect(underscore.items.map((item) => item.id)).toEqual(["@I1@"]);
 
-    const noMatch = await searchPeoplePageFromDb({ query: "s_blings" }, { page: 1, pageSize: 50 }, storeOptions);
+    const noMatch = await searchPeoplePageFromDb({ query: "harborxentries" }, { page: 1, pageSize: 50 }, storeOptions);
     expect(noMatch.items).toHaveLength(0);
   });
 
@@ -171,15 +171,15 @@ describeIfDatabase("public people queries", () => {
       expect(person.livingStatus).toBe("deceased");
       expect(person.privacy).toBe("public");
     }
-    const ludmila = candidates.find((person) => person.id === "@I1@");
-    expect(ludmila?.facts.length).toBeGreaterThan(0);
+    const lucia = candidates.find((person) => person.id === "@I1@");
+    expect(lucia?.facts.length).toBeGreaterThan(0);
   });
 
   it("loads a published person by slug with published relatives only", async () => {
     const workspace = await seededWorkspace();
-    const ludmila = workspace.people.find((person) => person.id === "@I1@");
+    const lucia = workspace.people.find((person) => person.id === "@I1@");
 
-    const loaded = await getPublicPersonBySlug(ludmila!.slug, storeOptions);
+    const loaded = await getPublicPersonBySlug(lucia!.slug, storeOptions);
 
     expect(loaded?.person.id).toBe("@I1@");
     expect(loaded?.person.facts.length).toBeGreaterThan(0);
@@ -193,6 +193,9 @@ describeIfDatabase("public people queries", () => {
 
     const branding = await readArchiveBranding(storeOptions);
 
-    expect(branding).toEqual({ name: "Riemer - Zajicek Archive", tagline: "Family history. Openly shared." });
+    expect(branding).toEqual({
+      name: "Hartwell–Mercer Family Archive",
+      tagline: "A completely fictional family archive for exploring Kin Resolve."
+    });
   });
 });

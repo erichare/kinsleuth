@@ -2,7 +2,21 @@ import { randomUUID } from "node:crypto";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { closeDatabasePools, query } from "@/lib/db";
 import type { DnaMatch } from "@/lib/models";
-import { addCaseTask, createCase, deleteDnaMatch, linkDnaMatchToCase, readWorkspace, saveAIAnalysisRun, saveDnaMatch, saveDnaMatches, saveSourceDocument, updateArchiveBranding, updateCaseTask, updateDnaMatch, updatePersonCuration } from "@/lib/workspace-store";
+import {
+  addCaseTask,
+  createCase,
+  deleteDnaMatch,
+  linkDnaMatchToCase,
+  readWorkspace,
+  recordCaseTaskOutcome,
+  saveAIAnalysisRun,
+  saveDnaMatch,
+  saveDnaMatches,
+  saveSourceDocument,
+  updateArchiveBranding,
+  updateDnaMatch,
+  updatePersonCuration
+} from "@/lib/workspace-store";
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
 const describeIfDatabase = databaseUrl ? describe : describe.skip;
@@ -34,7 +48,7 @@ describeIfDatabase("workspace store", () => {
 
     expect(workspace.people.length).toBeGreaterThan(0);
     expect(workspace.cases.length).toBeGreaterThan(0);
-    expect(workspace.archiveName).toBe("Riemer - Zajicek Archive");
+    expect(workspace.archiveName).toBe("Hartwell–Mercer Family Archive");
   });
 
   it("persists created cases", async () => {
@@ -88,7 +102,7 @@ describeIfDatabase("workspace store", () => {
     });
   });
 
-  it("updates existing case task status", async () => {
+  it("records an outcome when completing an existing case task", async () => {
     const createdCase = await createCase(
       {
         id: "case-task-update",
@@ -100,12 +114,30 @@ describeIfDatabase("workspace store", () => {
     );
     const createdTask = await addCaseTask(createdCase.id, { id: "task-update-target", title: "Review the census" }, storeOptions);
 
-    const result = await updateCaseTask(createdCase.id, createdTask.task.id, { status: "done" }, storeOptions);
+    const result = await recordCaseTaskOutcome(
+      createdCase.id,
+      createdTask.task.id,
+      {
+        requestId: randomUUID(),
+        expectedTaskUpdatedAt: createdTask.task.updatedAt!,
+        outcome: "found",
+        note: "The census entry named the expected household.",
+        actorId: "test-researcher",
+        actorName: "Test Researcher"
+      },
+      storeOptions
+    );
     const workspace = await readWorkspace(storeOptions);
 
     expect(result.task).toMatchObject({
       id: "task-update-target",
-      status: "done"
+      status: "done",
+      outcomes: [
+        expect.objectContaining({
+          type: "found",
+          note: "The census entry named the expected household."
+        })
+      ]
     });
     expect(workspace.cases.find((item) => item.id === createdCase.id)?.tasks[0]).toMatchObject({
       id: "task-update-target",
@@ -129,18 +161,18 @@ describeIfDatabase("workspace store", () => {
             type: "task",
             title: "Check the strongest DNA lead",
             summary: "Review against primary evidence.",
-            contextRefs: ["case-riemer-chicago"],
+            contextRefs: ["case-mercer-march-identity"],
             confidence: 0.7
           }
         ],
         contextReferences: [
           {
-            id: "case-riemer-chicago",
+            id: "case-mercer-march-identity",
             type: "case",
-            label: "Riemer immigration to Chicago"
+            label: "The Mercer-March identity"
           }
         ],
-        linkedCaseId: "case-riemer-chicago",
+        linkedCaseId: "case-mercer-march-identity",
         createdAt: "2026-07-09T12:00:00.000Z"
       },
       storeOptions
@@ -153,7 +185,7 @@ describeIfDatabase("workspace store", () => {
       question: "What should I investigate next?",
       anomalyCount: 2,
       suggestions: expect.arrayContaining([expect.objectContaining({ id: "sugg-test" })]),
-      linkedCaseId: "case-riemer-chicago"
+      linkedCaseId: "case-mercer-march-identity"
     });
   });
 
@@ -165,9 +197,9 @@ describeIfDatabase("workspace store", () => {
       predictedRelationship: "likely 2C",
       side: "maternal",
       treeStatus: "partial",
-      surnames: ["Riemer", "Fletcher"],
-      places: ["Chicago"],
-      sharedMatches: ["J. Fletcher"],
+      surnames: ["Hartwell", "Mercer"],
+      places: ["Lantern Bay"],
+      sharedMatches: ["M. March"],
       notes: "Partial tree with useful overlap.",
       triageStatus: "needs_review"
     };
@@ -193,9 +225,9 @@ describeIfDatabase("workspace store", () => {
           predictedRelationship: "likely 2C",
           side: "maternal",
           treeStatus: "public",
-          surnames: ["Riemer", "Zajicek"],
-          places: ["Chicago", "Limerick"],
-          sharedMatches: ["J. Fletcher", "A. Zajicek"],
+          surnames: ["Hartwell", "Bellandi"],
+          places: ["Lantern Bay", "Ceraluna Alta"],
+          sharedMatches: ["M. March", "A. Bellandi"],
           notes: "Public tree with surname and place overlap.",
           triageStatus: "needs_review"
         }
@@ -272,13 +304,13 @@ describeIfDatabase("workspace store", () => {
       {
         id: "dna-link-target",
         displayName: "Evidence Match",
-        totalCm: 238,
-        predictedRelationship: "likely 2C1R",
+        totalCm: 86,
+        predictedRelationship: "likely 3C",
         side: "maternal",
         treeStatus: "partial",
-        surnames: ["Riemer", "Fletcher"],
-        places: ["Chicago"],
-        sharedMatches: ["A. Zajicek"],
+        surnames: ["Hartwell", "Mercer"],
+        places: ["Lantern Bay"],
+        sharedMatches: ["A. Bellandi"],
         notes: "Useful match.",
         triageStatus: "high_priority"
       },
@@ -326,7 +358,7 @@ describeIfDatabase("workspace store", () => {
         sourceType: "Church record",
         fileName: "parish-register.pdf",
         storageKey: "uploads/sources/parish-register.pdf",
-        linkedPersonId: "p-elizabeth-riemer",
+        linkedPersonId: "p-nora-hartwell",
         transcript: "Baptism entry transcript.",
         privacy: "private",
         confidence: 0.74
@@ -339,14 +371,14 @@ describeIfDatabase("workspace store", () => {
     expect(workspace.sources[0]).toMatchObject({
       id: source.id,
       title: "Parish register scan",
-      linkedPersonId: "p-elizabeth-riemer",
+      linkedPersonId: "p-nora-hartwell",
       transcript: "Baptism entry transcript."
     });
   });
 
   it("keeps archives isolated when ids repeat across archives", async () => {
     // Regression: ids repeat across archives by design (GEDCOM xrefs, fixed
-    // demo-seed ids such as p-elizabeth-riemer). With global primary keys the
+    // fixed fictional-demo ids such as p-nora-hartwell). With global primary keys the
     // second archive's seed failed with a duplicate-key error on people_pkey.
     const otherOptions = { ...storeOptions, archiveId: `test-${randomUUID()}` };
 
@@ -354,8 +386,8 @@ describeIfDatabase("workspace store", () => {
       const first = await readWorkspace(storeOptions);
       const second = await readWorkspace(otherOptions);
 
-      expect(first.people.some((person) => person.id === "p-elizabeth-riemer")).toBe(true);
-      expect(second.people.some((person) => person.id === "p-elizabeth-riemer")).toBe(true);
+      expect(first.people.some((person) => person.id === "p-nora-hartwell")).toBe(true);
+      expect(second.people.some((person) => person.id === "p-nora-hartwell")).toBe(true);
 
       await updateArchiveBranding({ name: "Renamed Test Archive", tagline: "Second archive only" }, otherOptions);
       await createCase(
@@ -372,9 +404,9 @@ describeIfDatabase("workspace store", () => {
 
       expect(renamed.archiveName).toBe("Renamed Test Archive");
       expect(renamed.cases.some((item) => item.id === "case-isolated")).toBe(true);
-      expect(untouched.archiveName).toBe("Riemer - Zajicek Archive");
+      expect(untouched.archiveName).toBe("Hartwell–Mercer Family Archive");
       expect(untouched.cases.some((item) => item.id === "case-isolated")).toBe(false);
-      expect(untouched.people.some((person) => person.id === "p-elizabeth-riemer")).toBe(true);
+      expect(untouched.people.some((person) => person.id === "p-nora-hartwell")).toBe(true);
     } finally {
       await query("DELETE FROM archives WHERE id = $1", [otherOptions.archiveId], { databaseUrl });
     }
@@ -382,7 +414,7 @@ describeIfDatabase("workspace store", () => {
 
   it("updates person curation settings", async () => {
     const updated = await updatePersonCuration(
-      "p-mary-zajicek",
+      "p-amalia-bellandi",
       {
         published: true,
         privacy: "public",
@@ -393,12 +425,12 @@ describeIfDatabase("workspace store", () => {
     const workspace = await readWorkspace(storeOptions);
 
     expect(updated).toMatchObject({
-      id: "p-mary-zajicek",
+      id: "p-amalia-bellandi",
       published: true,
       privacy: "public",
       livingStatus: "deceased"
     });
-    expect(workspace.people.find((person) => person.id === "p-mary-zajicek")).toMatchObject({
+    expect(workspace.people.find((person) => person.id === "p-amalia-bellandi")).toMatchObject({
       published: true,
       privacy: "public"
     });

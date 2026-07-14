@@ -11,8 +11,8 @@ describe("DNA triage", () => {
     expect(strong).toBeGreaterThanOrEqual(70);
   });
 
-  it("returns plausible relationship ranges for 238 cM", () => {
-    const labels = plausibleRelationships(238).map((range) => range.label);
+  it("returns plausible relationship ranges for 86 cM", () => {
+    const labels = plausibleRelationships(86).map((range) => range.label);
 
     expect(labels).toContain("2C");
     expect(labels).toContain("2C1R");
@@ -21,9 +21,9 @@ describe("DNA triage", () => {
   it("creates branch, geography, evidence, and uncertainty hypotheses", () => {
     const hypothesis = createDnaConnectionHypothesis(demoDnaMatches[0], demoPeople);
 
-    expect(hypothesis.likelyBranch).toBe("Maternal branch");
-    expect(hypothesis.geography).toContain("Chicago");
-    expect(hypothesis.candidateCommonAncestors).toContain("Elizabeth Katherine Riemer");
+    expect(hypothesis.likelyBranch).toBe("Paternal branch");
+    expect(hypothesis.geography).toContain("Northstar Cove, Nova Scotia");
+    expect(hypothesis.candidateCommonAncestors).toContain("Samuel Rowan Mercer");
     expect(hypothesis.evidence.length).toBeGreaterThan(3);
     expect(hypothesis.uncertainty.length).toBeGreaterThan(1);
   });
@@ -36,11 +36,10 @@ describe("DNA triage", () => {
 
   it("matches surnames and places case-insensitively", () => {
     const hypothesis = createDnaConnectionHypothesis(
-      { ...demoDnaMatches[0], surnames: ["RIEMER"], places: ["chicago"] },
+      { ...demoDnaMatches[0], surnames: ["MERCER"], places: ["northstar cove, nova scotia"] },
       demoPeople
     );
 
-    expect(hypothesis.candidateCommonAncestors).toContain("Elizabeth Katherine Riemer");
+    expect(hypothesis.candidateCommonAncestors).toContain("Samuel Rowan Mercer");
   });
 });
-

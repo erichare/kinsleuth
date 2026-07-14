@@ -6,9 +6,20 @@ import { Status } from "./ui";
 
 type CaseTask = ResearchCase["tasks"][number];
 
-const statusOptions: CaseTask["status"][] = ["todo", "doing", "done"];
+const activeStatusOptions: CaseTask["status"][] = ["todo", "doing"];
+const manualStatusOptions: CaseTask["status"][] = [...activeStatusOptions, "done"];
 
-export function CaseTaskList({ caseId, initialTasks }: { caseId: string; initialTasks: CaseTask[] }) {
+export function CaseTaskList({
+  caseId,
+  initialTasks,
+  canWrite,
+  allowManualCompletion = false
+}: {
+  caseId: string;
+  initialTasks: CaseTask[];
+  canWrite: boolean;
+  allowManualCompletion?: boolean;
+}) {
   const [tasks, setTasks] = useState(initialTasks);
   const [title, setTitle] = useState("");
   const [message, setMessage] = useState("");
@@ -17,6 +28,7 @@ export function CaseTaskList({ caseId, initialTasks }: { caseId: string; initial
   const [isAdding, setIsAdding] = useState(false);
 
   async function addTask() {
+    if (!canWrite) return;
     const trimmedTitle = title.trim();
     if (!trimmedTitle) {
       setMessage("Add a task title first.");
@@ -52,6 +64,12 @@ export function CaseTaskList({ caseId, initialTasks }: { caseId: string; initial
   }
 
   async function updateStatus(task: CaseTask, status: CaseTask["status"]) {
+    if (!canWrite) return;
+    if (!task.updatedAt) {
+      setMessage("Refresh this case before changing the task.");
+      setMessageRole("alert");
+      return;
+    }
     setBusyTaskId(task.id);
     setMessage("");
 
@@ -59,7 +77,7 @@ export function CaseTaskList({ caseId, initialTasks }: { caseId: string; initial
       const response = await fetch(`/api/cases/${encodeURIComponent(caseId)}/tasks/${encodeURIComponent(task.id)}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ status })
+        body: JSON.stringify({ status, expectedUpdatedAt: task.updatedAt })
       });
       const body = await response.json();
 
@@ -78,15 +96,19 @@ export function CaseTaskList({ caseId, initialTasks }: { caseId: string; initial
 
   return (
     <div aria-busy={isAdding || Boolean(busyTaskId)} className="case-task-workspace">
-      <div className="task-add-row">
-        <label className="field">
-          <span>New task</span>
-          <input placeholder="Search a parish register, verify a source, compare a DNA cluster..." value={title} onChange={(event) => setTitle(event.target.value)} />
-        </label>
-        <button aria-busy={isAdding} className="button-secondary" disabled={isAdding} onClick={addTask} type="button">
-          {isAdding ? "Adding..." : "Add"}
-        </button>
-      </div>
+      {canWrite ? (
+        <div className="task-add-row">
+          <label className="field">
+            <span>New task</span>
+            <input placeholder="Compare the fictional blue-tin receipts with the harbor payroll..." value={title} onChange={(event) => setTitle(event.target.value)} />
+          </label>
+          <button aria-busy={isAdding} className="button-secondary" disabled={isAdding} onClick={addTask} type="button">
+            {isAdding ? "Adding..." : "Add"}
+          </button>
+        </div>
+      ) : (
+        <p className="research-readonly-note">An editor can update manual tasks for this case.</p>
+      )}
 
       <div className="task-list">
         {tasks.map((task) => (
@@ -95,21 +117,26 @@ export function CaseTaskList({ caseId, initialTasks }: { caseId: string; initial
               <strong>{task.title}</strong>
               <Status tone={task.status === "done" ? "ok" : task.status === "doing" ? "warning" : "private"}>{task.status}</Status>
             </div>
-            <div className="segmented-control" aria-label={`Update ${task.title} status`} role="group">
-              {statusOptions.map((status) => (
-                <button
-                  aria-busy={busyTaskId === task.id}
-                  aria-pressed={task.status === status}
-                  className={task.status === status ? "active" : undefined}
-                  disabled={busyTaskId === task.id}
-                  key={status}
-                  onClick={() => updateStatus(task, status)}
-                  type="button"
-                >
-                  {status}
-                </button>
-              ))}
-            </div>
+            {canWrite && task.status !== "done" ? (
+              <div className="segmented-control" aria-label={`Update ${task.title} status`} role="group">
+                {(allowManualCompletion && (task.origin ?? "manual") === "manual"
+                  ? manualStatusOptions
+                  : activeStatusOptions
+                ).map((status) => (
+                  <button
+                    aria-busy={busyTaskId === task.id}
+                    aria-pressed={task.status === status}
+                    className={task.status === status ? "active" : undefined}
+                    disabled={busyTaskId === task.id || !task.updatedAt}
+                    key={status}
+                    onClick={() => updateStatus(task, status)}
+                    type="button"
+                  >
+                    {status}
+                  </button>
+                ))}
+              </div>
+            ) : null}
           </div>
         ))}
       </div>

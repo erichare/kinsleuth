@@ -112,7 +112,7 @@ export function PeopleWorkspace({ initialResult }: Props) {
               <Icons.Search size={16} aria-hidden />
               <input
                 aria-label="Search people"
-                placeholder="Riemer, Zajicek, Chicago, 1884..."
+                placeholder="Hartwell, Bellandi, Lantern Bay, 1913..."
                 value={query}
                 onChange={(event) => {
                   setQuery(event.target.value);

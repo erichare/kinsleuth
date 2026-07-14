@@ -152,6 +152,22 @@ a {
   padding-block: 108px;
 }
 
+.fiction-disclosure {
+  margin-block: 0 32px;
+  border: 1px solid rgba(180, 132, 53, 0.42);
+  border-left: 5px solid var(--ochre);
+  border-radius: var(--radius-small);
+  padding: 14px 18px;
+  color: #66512c;
+  background: var(--ochre-soft);
+  font-size: 0.82rem;
+  line-height: 1.55;
+}
+
+.fiction-disclosure strong {
+  color: var(--ink);
+}
+
 .eyebrow {
   display: inline-flex;
   align-items: center;

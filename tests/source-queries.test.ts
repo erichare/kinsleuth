@@ -28,18 +28,18 @@ async function seededWorkspace(): Promise<WorkspaceData> {
   const workspace = await readWorkspace(storeOptions);
   const person = workspace.people[0];
   const researchCase = await createCase(
-    { id: "case-sq-test", title: "Zajíčková line", question: "Where did the Kutná Hora branch settle?" },
+    { id: "case-sq-test", title: "Bellàndi line", question: "Where did the Ceraluna Alta branch settle?" },
     storeOptions
   );
 
   await saveSourceDocument(
     {
       id: "src-sq-linked-person",
-      title: "Přehled parish register",
+      title: "Città parish register",
       sourceType: "Church record",
       repository: "Diocesan archive",
       linkedPersonId: person.id,
-      transcript: "Baptismal entry — 100% legible, includes witness_names in the margin.",
+      transcript: "Baptismal entry — 73% legible, includes harbor_marks in the margin.",
       privacy: "public",
       confidence: 0.9
     },
@@ -51,7 +51,7 @@ async function seededWorkspace(): Promise<WorkspaceData> {
       title: "Passenger manifest",
       sourceType: "Immigration record",
       linkedCaseId: researchCase.id,
-      notes: "Departure port unclear; compare against the Bremen index.",
+      notes: "Departure port unclear; compare against the Northstar index.",
       privacy: "private",
       confidence: 0.55
     },
@@ -77,11 +77,11 @@ describeIfDatabase("SQL source search", () => {
 
     const scenarios: SourceSearchFilters[] = [
       {},
-      { query: "prehled" },
-      { query: "Přehled" },
-      { query: "bremen index" },
-      { query: "elizabeth" },
-      { query: "zajickova line" },
+      { query: "citta" },
+      { query: "Città" },
+      { query: "northstar index" },
+      { query: "nora" },
+      { query: "bellandi line" },
       { query: "no-such-source" },
       { privacy: "sensitive" },
       { sourceType: "Church record" },
@@ -114,8 +114,8 @@ describeIfDatabase("SQL source search", () => {
     expect(result.items[0]).toMatchObject({
       id: "src-sq-linked-case",
       linkedCaseId: "case-sq-test",
-      linkedCaseTitle: "Zajíčková line",
-      notesPreview: "Departure port unclear; compare against the Bremen index."
+      linkedCaseTitle: "Bellàndi line",
+      notesPreview: "Departure port unclear; compare against the Northstar index."
     });
 
     const personLinked = await searchSourcesPageFromDb({ query: "parish" }, { page: 1, pageSize: 10 }, storeOptions);
@@ -134,20 +134,20 @@ describeIfDatabase("SQL source search", () => {
     const byPersonName = await searchSourcesPageFromDb({ query: firstName.toLowerCase() }, { page: 1, pageSize: 50 }, storeOptions);
     expect(byPersonName.items.map((item) => item.id)).toContain("src-sq-linked-person");
 
-    const byCaseTitle = await searchSourcesPageFromDb({ query: "zajickova" }, { page: 1, pageSize: 50 }, storeOptions);
+    const byCaseTitle = await searchSourcesPageFromDb({ query: "bellandi" }, { page: 1, pageSize: 50 }, storeOptions);
     expect(byCaseTitle.items.map((item) => item.id)).toContain("src-sq-linked-case");
   });
 
   it("treats ILIKE wildcards as literals", async () => {
     await seededWorkspace();
 
-    const percent = await searchSourcesPageFromDb({ query: "100%" }, { page: 1, pageSize: 50 }, storeOptions);
+    const percent = await searchSourcesPageFromDb({ query: "73%" }, { page: 1, pageSize: 50 }, storeOptions);
     expect(percent.items.map((item) => item.id)).toEqual(["src-sq-linked-person"]);
 
-    const underscore = await searchSourcesPageFromDb({ query: "witness_names" }, { page: 1, pageSize: 50 }, storeOptions);
+    const underscore = await searchSourcesPageFromDb({ query: "harbor_marks" }, { page: 1, pageSize: 50 }, storeOptions);
     expect(underscore.items.map((item) => item.id)).toEqual(["src-sq-linked-person"]);
 
-    const noMatch = await searchSourcesPageFromDb({ query: "witness_names_x" }, { page: 1, pageSize: 50 }, storeOptions);
+    const noMatch = await searchSourcesPageFromDb({ query: "harbor_marks_x" }, { page: 1, pageSize: 50 }, storeOptions);
     expect(noMatch.items).toHaveLength(0);
   });
 

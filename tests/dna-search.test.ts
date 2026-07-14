@@ -5,30 +5,30 @@ import { filterDnaMatches, helpfulnessBucket, paginateDnaMatches, type ScoredDna
 const matches: ScoredDnaMatch[] = [
   scored(
     {
-      id: "dna-fletcher",
-      displayName: "J. Fletcher",
-      totalCm: 238,
-      predictedRelationship: "likely 2C1R",
+      id: "dna-march",
+      displayName: "J. March",
+      totalCm: 86,
+      predictedRelationship: "likely 3C",
       side: "maternal",
       treeStatus: "partial",
-      surnames: ["Fletcher", "Riemer"],
-      places: ["Chicago", "Limerick"],
-      sharedMatches: ["A. Zajicek"],
-      notes: "Partial tree with Chicago overlap.",
+      surnames: ["March", "Hartwell"],
+      places: ["Lantern Bay", "Northstar Cove"],
+      sharedMatches: ["A. Bellandi"],
+      notes: "Partial tree with Lantern Bay overlap.",
       triageStatus: "high_priority"
     },
     92
   ),
   scored(
     {
-      id: "dna-collins",
-      displayName: "L. Collins",
-      totalCm: 118,
+      id: "dna-mercer",
+      displayName: "L. Mercer",
+      totalCm: 64,
       predictedRelationship: "likely 3C",
       side: "paternal",
       treeStatus: "none",
       surnames: [],
-      places: ["Cornwall"],
+      places: ["Ceraluna Alta"],
       sharedMatches: [],
       notes: "",
       triageStatus: "needs_review"
@@ -37,15 +37,15 @@ const matches: ScoredDnaMatch[] = [
   ),
   scored(
     {
-      id: "dna-zajicek",
-      displayName: "A. Zajicek",
-      totalCm: 198,
-      predictedRelationship: "likely 2C2R",
+      id: "dna-bellandi",
+      displayName: "A. Bellandi",
+      totalCm: 143,
+      predictedRelationship: "likely 3C",
       side: "maternal",
       treeStatus: "public",
-      surnames: ["Zajicek"],
-      places: ["Cook County"],
-      sharedMatches: ["J. Fletcher"],
+      surnames: ["Bellandi"],
+      places: ["Lantern Bay"],
+      sharedMatches: ["J. March"],
       notes: "Public tree.",
       triageStatus: "triaged"
     },
@@ -55,24 +55,24 @@ const matches: ScoredDnaMatch[] = [
 
 describe("DNA match search", () => {
   it("searches match names, surnames, places, and notes", () => {
-    expect(filterDnaMatches(matches, { query: "riemer chicago" }).map((match) => match.id)).toEqual(["dna-fletcher"]);
-    expect(filterDnaMatches(matches, { query: "cornwall" }).map((match) => match.id)).toEqual(["dna-collins"]);
+    expect(filterDnaMatches(matches, { query: "hartwell lantern" }).map((match) => match.id)).toEqual(["dna-march"]);
+    expect(filterDnaMatches(matches, { query: "ceraluna alta" }).map((match) => match.id)).toEqual(["dna-mercer"]);
   });
 
   it("filters by side, tree status, triage status, and helpfulness", () => {
-    expect(filterDnaMatches(matches, { side: "maternal" }).map((match) => match.id)).toEqual(["dna-fletcher", "dna-zajicek"]);
-    expect(filterDnaMatches(matches, { treeStatus: "none" }).map((match) => match.id)).toEqual(["dna-collins"]);
-    expect(filterDnaMatches(matches, { status: "triaged" }).map((match) => match.id)).toEqual(["dna-zajicek"]);
-    expect(filterDnaMatches(matches, { helpfulness: "low" }).map((match) => match.id)).toEqual(["dna-collins"]);
+    expect(filterDnaMatches(matches, { side: "maternal" }).map((match) => match.id)).toEqual(["dna-march", "dna-bellandi"]);
+    expect(filterDnaMatches(matches, { treeStatus: "none" }).map((match) => match.id)).toEqual(["dna-mercer"]);
+    expect(filterDnaMatches(matches, { status: "triaged" }).map((match) => match.id)).toEqual(["dna-bellandi"]);
+    expect(filterDnaMatches(matches, { helpfulness: "low" }).map((match) => match.id)).toEqual(["dna-mercer"]);
   });
 
   it("sorts by helpfulness by default and paginates safely", () => {
     const filtered = filterDnaMatches(matches);
     const page = paginateDnaMatches(filtered, 3, 2);
 
-    expect(filtered.map((match) => match.id)).toEqual(["dna-fletcher", "dna-zajicek", "dna-collins"]);
+    expect(filtered.map((match) => match.id)).toEqual(["dna-march", "dna-bellandi", "dna-mercer"]);
     expect(page.page).toBe(2);
-    expect(page.items.map((match) => match.id)).toEqual(["dna-collins"]);
+    expect(page.items.map((match) => match.id)).toEqual(["dna-mercer"]);
   });
 
   it("buckets helpfulness scores", () => {

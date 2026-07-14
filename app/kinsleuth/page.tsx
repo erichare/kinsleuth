@@ -46,13 +46,13 @@ export default function KinResolveProductPage() {
             </div>
             <div className="product-preview">
               <Image
-                src="/assets/kinsleuth-dashboard-preview.webp"
-                alt="Synthetic Kin Resolve private workspace showing investigation metrics, cases, and an action queue"
+                src="/assets/kinresolve-dashboard-preview.webp"
+                alt="Fictional Hartwell–Mercer Kin Resolve workspace showing investigation metrics, cases, and an action queue"
                 width={1440}
                 height={900}
                 sizes="(max-width: 960px) calc(100vw - 40px), 620px"
               />
-              <span className="product-preview-caption"><Icons.Lock size={15} aria-hidden />Synthetic product preview</span>
+              <span className="product-preview-caption"><Icons.Lock size={15} aria-hidden />Fictional Hartwell–Mercer preview</span>
             </div>
           </div>
         </section>

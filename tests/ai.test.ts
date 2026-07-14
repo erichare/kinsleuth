@@ -16,8 +16,8 @@ describe("AI analysis", () => {
     const anomalies = findStructuredAnomalies([
       {
         ...demoPeople[0],
-        deathDate: "1800",
-        birthDate: "1900"
+        deathDate: "1910",
+        birthDate: "1920"
       }
     ]);
 
@@ -62,7 +62,7 @@ describe("AI analysis", () => {
     });
 
     expect(result.status).toBe("configuration_required");
-    expect(result.evidenceUsed).toContain("3 people");
+    expect(result.evidenceUsed).toContain(`${demoPeople.length} people`);
   });
 
   it("calls a configured provider and returns staged suggestions", async () => {
@@ -70,16 +70,16 @@ describe("AI analysis", () => {
       new Response(
         JSON.stringify({
           output_text: JSON.stringify({
-            answer: "Provider recommendation: verify the Fletcher branch.",
+            answer: "Provider recommendation: verify the Mercer branch.",
             uncertainty: ["Treat DNA as directional."],
-            evidenceUsed: ["case-riemer-chicago"],
+            evidenceUsed: ["case-northstar-dna-cluster"],
             suggestions: [
               {
                 type: "task",
-                title: "Check Fletcher parish register",
+                title: "Check Mercer harbor register",
                 summary: "Look for direct documentary support.",
-                linkedCaseId: "case-riemer-chicago",
-                contextRefs: ["case-riemer-chicago"],
+                linkedCaseId: "case-northstar-dna-cluster",
+                contextRefs: ["case-northstar-dna-cluster"],
                 confidence: 0.73
               }
             ]
@@ -91,7 +91,7 @@ describe("AI analysis", () => {
     const result = await runAIAnalysis({
       role: "owner",
       ...baseRequest,
-      selectedCaseId: "case-riemer-chicago",
+      selectedCaseId: "case-northstar-dna-cluster",
       provider: {
         baseUrl: "https://api.openai.com/v1",
         apiKey: "test-key",
@@ -104,8 +104,8 @@ describe("AI analysis", () => {
     expect(result.status).toBe("ready");
     expect(result.answer).toContain("Provider recommendation");
     expect(result.suggestions[0]).toMatchObject({
-      title: "Check Fletcher parish register",
-      linkedCaseId: "case-riemer-chicago"
+      title: "Check Mercer harbor register",
+      linkedCaseId: "case-northstar-dna-cluster"
     });
   });
 

@@ -5,7 +5,7 @@ import { createWorkspaceDnaHypotheses, readWorkspace } from "@/lib/workspace-sto
 
 export const dynamic = "force-dynamic";
 
-const initialQuestion = "Where is J. Fletcher most likely to connect to the Riemer maternal line, and which evidence should be checked next?";
+const initialQuestion = "Could Samuel Mercer and Samuel March be the same person, and which fictional Hartwell–Mercer record should be checked next?";
 
 export default async function AIPage() {
   const workspace = await readWorkspace();
@@ -14,6 +14,7 @@ export default async function AIPage() {
 
   return (
     <AppShell title="AI Analyst" active="/app/ai" archiveName={workspace.archiveName}>
+      <p className="fiction-disclosure" role="note"><strong>Built-in prompt only:</strong> the Hartwell–Mercer names, places, dates, records, photograph, and DNA clues are entirely fictional. Your own workspace content is not demo data.</p>
       <AIAnalystWorkspace
         initialQuestion={initialQuestion}
         cases={workspace.cases}

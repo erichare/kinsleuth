@@ -2,9 +2,10 @@ import { randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import { withTransaction, type DatabaseOptions } from "./db";
 import { createDnaConnectionHypothesis, scoreDnaMatch } from "./dna";
-import { demoCases, demoDnaMatches, demoPeople } from "./demo-data";
+import { demoCases, demoDnaMatches, demoFictionNotice, demoPeople } from "./demo-data";
 import { prepareGedcomImport, type PreparedGedcomImport } from "./gedcom/apply";
 import { buildFamilyRelationshipMap, parseGedcom } from "./gedcom/parser";
+import { buildResearchGuide } from "./research-guide";
 import {
   mapAIAnalysisRun,
   mapAppliedImport,
@@ -24,6 +25,7 @@ import {
   insertBackupRow,
   insertRawRecordRows,
   normalizeConfidence,
+  normalizeWorkFingerprint,
   prependCaseTaskSortOrder,
   prependSortOrder,
   prependSortOrderRange,
@@ -33,6 +35,7 @@ import {
   replacePersonFacts,
   updatePeopleRelatives,
   updatePersonCurationRow,
+  updateHypothesisRow,
   updateTaskRow,
   upsertAiRunRow,
   upsertBackupRowPreservingSnapshot,
@@ -40,6 +43,7 @@ import {
   upsertDnaHypothesisRow,
   upsertDnaMatchRow,
   upsertEvidenceRow,
+  upsertHypothesisRow,
   upsertImportSnapshotRow,
   upsertPeopleRows,
   upsertSourceRows,
@@ -54,6 +58,12 @@ import type {
   PrivacyLevel,
   RawGedcomRecord,
   ResearchCase,
+  ResearchHypothesis,
+  ResearchHypothesisDecision,
+  ResearchReference,
+  ResearchSearchScope,
+  ResearchTask,
+  ResearchTaskOutcome,
   SourceDocument,
   WorkspaceBackup
 } from "./models";
@@ -79,6 +89,10 @@ export type WorkspaceStoreOptions = DatabaseOptions & {
   archiveId?: string;
 };
 
+type UpdateCaseTaskOptions = WorkspaceStoreOptions & {
+  allowManualCompletionWithoutOutcome?: boolean;
+};
+
 const defaultArchiveId = "archive-default";
 // Full pre-import snapshots are large; retain only the most recent ones.
 const retainedBackupCount = 10;
@@ -91,22 +105,108 @@ export function getArchiveId(options: WorkspaceStoreOptions = {}): string {
 export function createSeedWorkspace(now = new Date()): WorkspaceData {
   return {
     version: "0.17.0",
-    archiveName: "Riemer - Zajicek Archive",
-    archiveTagline: "Family history. Openly shared.",
+    archiveName: "Hartwell–Mercer Family Archive",
+    archiveTagline: "A completely fictional family archive for exploring Kin Resolve.",
     people: demoPeople,
     cases: demoCases,
     sources: [
       {
-        id: "src-synthetic-chicago-birth",
-        title: "Synthetic Chicago birth register",
+        id: "src-fictional-lantern-bay-birth",
+        title: "Fictional Lantern Bay civil register: Nora Hartwell",
         sourceType: "Vital record",
-        repository: "Synthetic Cook County archive",
-        citationDate: "12 Apr 1884",
-        linkedPersonId: "p-elizabeth-riemer",
-        transcript: "Synthetic extract documenting Elizabeth Katherine Riemer's birth in Chicago.",
-        notes: "Seed source used for beta workflow demonstration.",
+        repository: "Fictional Lantern Bay Archive",
+        citationDate: "3 Oct 1889",
+        linkedPersonId: "p-nora-hartwell",
+        transcript: "Invented civil-register extract recording the fictional birth of Nora Elise Hartwell in Lantern Bay, Wisconsin.",
+        notes: `${demoFictionNotice} Seed source for the guided-research demo.`,
         privacy: "public",
         confidence: 0.92,
+        createdAt: now.toISOString()
+      },
+      {
+        id: "src-fictional-nora-tin-journal",
+        title: "Fictional 1922 journal entry: Amalia's tin",
+        sourceType: "Family manuscript",
+        repository: "Hartwell–Mercer Family Archive (fictional)",
+        citationDate: "1922",
+        linkedPersonId: "p-nora-hartwell",
+        linkedCaseId: "case-blue-tin",
+        transcript:
+          "Invented transcription: Nora calls the box 'Amalia's tin' and says Samuel arrived in 1907 with a folded passenger notice and harbor photograph; Amalia placed those items and later keepsakes into the tin in 1922.",
+        notes: `${demoFictionNotice} Cited by the blue-tin evidence and completed journal-transcription outcome.`,
+        privacy: "private",
+        confidence: 0.76,
+        createdAt: now.toISOString()
+      },
+      {
+        id: "src-fictional-north-star-catalog",
+        title: "Fictional North Star Chandlery autumn 1906 catalog",
+        sourceType: "Business catalog",
+        repository: "Fictional Northstar Cove Archive",
+        citationDate: "Autumn 1906",
+        linkedCaseId: "case-harbor-photograph",
+        transcript:
+          "Invented catalog description: diagonal awning stripes, a lantern rack, and the NORTH STAR sign match the photograph; the autumn supplement also shows the season's diamond inspection seal.",
+        notes: `${demoFictionNotice} This source constrains place and season but does not identify the photographed people.`,
+        privacy: "private",
+        confidence: 0.86,
+        createdAt: now.toISOString()
+      },
+      {
+        id: "src-fictional-photo-comparison",
+        title: "Fictional harbor-photograph comparison worksheet",
+        sourceType: "Research note",
+        repository: "Hartwell–Mercer Family Archive (fictional)",
+        citationDate: "9 Jun 2026",
+        linkedCaseId: "case-harbor-photograph",
+        transcript:
+          "Invented worksheet: the three figures share multiple features with independently dated portraits of Maeve, Samuel, and Jonah. A separate pencil study dates Clara's violet annotation to after 1928. Both findings retain stated uncertainty.",
+        notes: `${demoFictionNotice} Cited by the comparison and annotation outcomes; resemblance alone is not proof.`,
+        privacy: "sensitive",
+        confidence: 0.72,
+        createdAt: now.toISOString()
+      },
+      {
+        id: "src-fictional-ceraluna-alta-sibling-register",
+        title: "Fictional Ceraluna Alta Bellandi sibling reconstruction",
+        sourceType: "Parish and household register",
+        repository: "Fictional Ceraluna Alta Parish Archive",
+        citationDate: "1859–1868",
+        linkedPersonId: "p-amalia-bellandi",
+        linkedCaseId: "case-bellandi-ceraluna-alta",
+        transcript:
+          "Invented register sequence: Rosa (1859), Amalia Rose (7 July 1861), and Ettore (1864) are children of Luca Bellandi and Mira Solari; the 1868 household lists Rosa, Malia, and Ettore in that age order. Another Malia, age three, has different parents.",
+        notes: `${demoFictionNotice} Cited by the sibling-set outcome; an independent migration source is still requested.`,
+        privacy: "private",
+        confidence: 0.85,
+        createdAt: now.toISOString()
+      },
+      {
+        id: "src-fictional-rowan-descendant-chart",
+        title: "Fictional Elowen Rowan descendant-source packet",
+        sourceType: "Vital records and research chart",
+        repository: "Fictional Northstar Cove Archive",
+        citationDate: "1857–1948",
+        linkedCaseId: "case-northstar-dna-cluster",
+        transcript:
+          "Invented record packet: Elowen Rowan is Maeve's younger sister. Separately documented descendant paths approach the Alder and Pike match trees, with one provisional parent-child link retained in each route.",
+        notes: `${demoFictionNotice} The documentary paths, not the cM totals alone, support the working branch hypothesis.`,
+        privacy: "sensitive",
+        confidence: 0.71,
+        createdAt: now.toISOString()
+      },
+      {
+        id: "src-fictional-solari-bellandi-chart",
+        title: "Fictional Solari–Bellandi descendant-source packet",
+        sourceType: "Civil, migration, and research records",
+        repository: "Fictional Ceraluna Alta Parish Archive",
+        citationDate: "1859–1952",
+        linkedCaseId: "case-northstar-dna-cluster",
+        transcript:
+          "Invented record packet: the Solari match profile traces toward Rosa Bellandi's descendants in Ceraluna Alta. It shares no match or documentary link with the Elowen Rowan paths; 37 cM remains compatible with several relationships.",
+        notes: `${demoFictionNotice} Cited by the separate-cluster outcome and retained as a provisional documentary chain.`,
+        privacy: "sensitive",
+        confidence: 0.68,
         createdAt: now.toISOString()
       }
     ],
@@ -286,24 +386,72 @@ export async function updateArchiveBranding(input: ArchiveBranding, options: Wor
   });
 }
 
+export type NewCaseInput = {
+  title: string;
+  question: string;
+  focus?: string;
+  hypotheses?: Array<{
+    statement: string;
+    confidence?: number;
+  }>;
+  evidence?: Array<{
+    title: string;
+    type: string;
+    summary: string;
+    confidence?: number;
+  }>;
+};
+
+/**
+ * Creates a user-authored case without accepting persistence ids, workflow
+ * state, guide metadata, or attributed history from the caller.
+ */
+export async function createNewCase(
+  input: NewCaseInput,
+  options: WorkspaceStoreOptions = {}
+): Promise<ResearchCase> {
+  const now = new Date().toISOString();
+  return createCase(
+    {
+      title: input.title,
+      question: input.question,
+      focus: input.focus ?? "",
+      status: "active",
+      privacy: "private",
+      hypotheses: (input.hypotheses ?? []).map((hypothesis) => ({
+        id: `hyp-${randomUUID()}`,
+        statement: hypothesis.statement,
+        confidence: hypothesis.confidence ?? 0.5,
+        status: "open",
+        decisions: [],
+        updatedAt: now
+      })),
+      evidence: (input.evidence ?? []).map((evidence) => ({
+        id: `ev-${randomUUID()}`,
+        title: evidence.title,
+        type: evidence.type,
+        summary: evidence.summary,
+        confidence: evidence.confidence ?? 0.5
+      })),
+      tasks: []
+    },
+    options
+  );
+}
+
 export async function createCase(input: Partial<ResearchCase>, options: WorkspaceStoreOptions = {}): Promise<ResearchCase> {
   if (!input.title?.trim() || !input.question?.trim()) {
     throw new Error("title and question are required");
   }
 
-  const created: ResearchCase = {
+  const created = normalizeResearchCase({
     id: input.id ?? `case-${randomUUID()}`,
     title: input.title.trim(),
     question: input.question.trim(),
     status: input.status ?? "active",
     privacy: input.privacy ?? "private",
     focus: input.focus ?? "",
-    hypotheses: (input.hypotheses ?? []).map((hypothesis) => ({
-      id: hypothesis.id ?? `hyp-${randomUUID()}`,
-      statement: hypothesis.statement,
-      confidence: hypothesis.confidence,
-      status: hypothesis.status
-    })),
+    hypotheses: input.hypotheses ?? [],
     evidence: (input.evidence ?? []).map((evidence) => ({
       id: evidence.id ?? `ev-${randomUUID()}`,
       title: evidence.title,
@@ -314,35 +462,58 @@ export async function createCase(input: Partial<ResearchCase>, options: Workspac
       linkedDnaMatchId: evidence.linkedDnaMatchId
     })),
     tasks: input.tasks ?? []
-  };
+  });
 
   return withArchiveMutation(options, async (client, archiveId) => {
     const sortOrder = await prependSortOrder(client, "research_cases", archiveId);
-    await upsertCaseRow(client, archiveId, created, sortOrder);
-    await replaceCaseChildren(client, archiveId, created);
+    // Case creation is insert-only. Reusing any archive-scoped parent or child
+    // id must roll the transaction back instead of overwriting or moving rows.
+    await upsertCaseRow(client, archiveId, created, sortOrder, "insert");
+    await replaceCaseChildren(client, archiveId, created, "insert");
     return created;
   });
 }
 
 export async function addCaseTask(
   caseId: string,
-  input: { id?: string; title?: string; status?: ResearchCase["tasks"][number]["status"] },
+  input: {
+    id?: string;
+    title?: string;
+    status?: ResearchTask["status"];
+    priority?: ResearchTask["priority"];
+    guidance?: string;
+  },
   options: WorkspaceStoreOptions = {}
 ): Promise<{ case: ResearchCase; task: ResearchCase["tasks"][number] }> {
   if (!input.title?.trim()) {
     throw new Error("task title is required");
   }
+  if (input.status === "done") {
+    throw new Error("complete tasks by recording an outcome");
+  }
 
-  const task: ResearchCase["tasks"][number] = {
+  const now = new Date().toISOString();
+  const task: ResearchTask = {
     id: input.id ?? `task-${randomUUID()}`,
     title: input.title.trim(),
-    status: input.status ?? "todo"
+    status: input.status ?? "todo",
+    origin: "manual",
+    priority: input.priority ?? "normal",
+    workFingerprint: normalizeWorkFingerprint(input.title),
+    guidance: input.guidance?.trim() ?? "",
+    contextRefs: [],
+    outcomes: [],
+    createdAt: now,
+    updatedAt: now
   };
 
   return withArchiveMutation(options, async (client, archiveId) => {
     const researchCase = await loadCaseData(client, archiveId, caseId);
     if (!researchCase) {
       throw new Error("case not found");
+    }
+    if (task.status === "doing" && researchCase.tasks.some((item) => item.status === "doing")) {
+      throw guidedResearchError("ACTIVE_ASSIGNMENT_CONFLICT", "another assignment is already in progress");
     }
 
     const sortOrder = await prependCaseTaskSortOrder(client, archiveId, caseId);
@@ -359,8 +530,14 @@ export async function addCaseTask(
 export async function updateCaseTask(
   caseId: string,
   taskId: string,
-  input: { title?: string; status?: ResearchCase["tasks"][number]["status"] },
-  options: WorkspaceStoreOptions = {}
+  input: {
+    title?: string;
+    status?: ResearchTask["status"];
+    priority?: ResearchTask["priority"];
+    guidance?: string;
+    expectedUpdatedAt: string;
+  },
+  options: UpdateCaseTaskOptions = {}
 ): Promise<{ case: ResearchCase; task: ResearchCase["tasks"][number] }> {
   return withArchiveMutation(options, async (client, archiveId) => {
     const researchCase = await loadCaseData(client, archiveId, caseId);
@@ -372,11 +549,46 @@ export async function updateCaseTask(
     if (!currentTask) {
       throw new Error("task not found");
     }
+    if (!input.expectedUpdatedAt) {
+      throw guidedResearchError("INVALID_TASK_UPDATE", "expectedUpdatedAt is required for task updates");
+    }
+    if (input.expectedUpdatedAt !== currentTask.updatedAt) {
+      throw guidedResearchError("STALE_RESEARCH_STATE", "task was updated by another request");
+    }
+    const isManualTask = (currentTask.origin ?? "manual") === "manual";
+    const canCompleteWithoutOutcome = options.allowManualCompletionWithoutOutcome && isManualTask;
+    if (input.status === "done" && !canCompleteWithoutOutcome) {
+      throw new Error("complete tasks by recording an outcome");
+    }
+    if (currentTask.status === "done") {
+      throw guidedResearchError("INVALID_TASK_UPDATE", "completed tasks are immutable; append an outcome correction instead");
+    }
+    if (
+      currentTask.origin === "guide" &&
+      (input.title !== undefined || input.priority !== undefined || input.guidance !== undefined)
+    ) {
+      throw guidedResearchError("IMMUTABLE_GUIDE_METADATA", "guide metadata is server-owned and immutable");
+    }
+    if (
+      input.status === "doing" &&
+      researchCase.tasks.some((task) => task.id !== currentTask.id && task.status === "doing")
+    ) {
+      throw guidedResearchError("ACTIVE_ASSIGNMENT_CONFLICT", "another assignment is already in progress");
+    }
 
-    const task: ResearchCase["tasks"][number] = {
+    const title = input.title?.trim() || currentTask.title;
+
+    const updatedAt = nextUpdatedAt(currentTask.updatedAt);
+    const status = input.status ?? currentTask.status;
+    const task: ResearchTask = {
       ...currentTask,
-      title: input.title?.trim() || currentTask.title,
-      status: input.status ?? currentTask.status
+      title,
+      status,
+      priority: input.priority ?? currentTask.priority ?? "normal",
+      guidance: input.guidance?.trim() ?? currentTask.guidance ?? "",
+      workFingerprint: title === currentTask.title ? currentTask.workFingerprint : normalizeWorkFingerprint(title),
+      completedAt: status === "done" ? currentTask.completedAt ?? updatedAt : currentTask.completedAt,
+      updatedAt
     };
     await updateTaskRow(client, archiveId, caseId, task);
 
@@ -385,6 +597,255 @@ export async function updateCaseTask(
       tasks: researchCase.tasks.map((item) => (item.id === taskId ? task : item))
     };
     return { case: updatedCase, task };
+  });
+}
+
+export async function readResearchCase(caseId: string, options: WorkspaceStoreOptions = {}): Promise<ResearchCase | undefined> {
+  await ensureWorkspaceSeeded(options);
+  const archiveId = getArchiveId(options);
+  return withTransaction(options, (client) => loadCaseData(client, archiveId, caseId));
+}
+
+export async function addCaseHypothesis(
+  caseId: string,
+  input: { id?: string; statement?: string; confidence?: number },
+  options: WorkspaceStoreOptions = {}
+): Promise<{ case: ResearchCase; hypothesis: ResearchHypothesis }> {
+  if (!input.statement?.trim()) {
+    throw new Error("hypothesis statement is required");
+  }
+  const statement = input.statement.trim();
+
+  return withArchiveMutation(options, async (client, archiveId) => {
+    const researchCase = await loadCaseData(client, archiveId, caseId);
+    if (!researchCase) {
+      throw new Error("case not found");
+    }
+    const hypothesis: ResearchHypothesis = {
+      id: input.id ?? `hyp-${randomUUID()}`,
+      statement,
+      confidence: normalizeConfidence(input.confidence ?? 0.5),
+      status: "open",
+      decisions: [],
+      updatedAt: new Date().toISOString()
+    };
+    const sortOrder = await prependSortOrder(client, "hypotheses", archiveId);
+    await upsertHypothesisRow(client, archiveId, caseId, hypothesis, sortOrder);
+    const updatedCase = { ...researchCase, hypotheses: [hypothesis, ...researchCase.hypotheses] };
+    return { case: updatedCase, hypothesis };
+  });
+}
+
+export type HypothesisDecisionInput = {
+  requestId: string;
+  expectedUpdatedAt: string;
+  status: ResearchHypothesis["status"];
+  reason: string;
+  actorId: string;
+  actorName: string;
+};
+
+export async function updateCaseHypothesis(
+  caseId: string,
+  hypothesisId: string,
+  input: {
+    statement?: string;
+    confidence?: number;
+    expectedUpdatedAt?: string;
+    requestId?: string;
+    status?: ResearchHypothesis["status"];
+    reason?: string;
+    actorId?: string;
+    actorName?: string;
+    contextRefs?: ResearchReference[];
+  },
+  options: WorkspaceStoreOptions = {}
+): Promise<{ case: ResearchCase; hypothesis: ResearchHypothesis }> {
+  return withArchiveMutation(options, async (client, archiveId) => {
+    const researchCase = await loadCaseData(client, archiveId, caseId);
+    if (!researchCase) {
+      throw new Error("case not found");
+    }
+    const current = researchCase.hypotheses.find((hypothesis) => hypothesis.id === hypothesisId);
+    if (!current) {
+      throw new Error("hypothesis not found");
+    }
+
+    const updated = applyHypothesisUpdate(current, input);
+    for (const decision of updated.decisions ?? []) {
+      assertCaseOwnedReferences(researchCase, decision.contextRefs);
+    }
+    await updateHypothesisRow(client, archiveId, caseId, updated);
+    const updatedCase = {
+      ...researchCase,
+      hypotheses: researchCase.hypotheses.map((hypothesis) => (hypothesis.id === hypothesisId ? updated : hypothesis))
+    };
+    return { case: updatedCase, hypothesis: updated };
+  });
+}
+
+export async function acceptGuideAssignment(
+  caseId: string,
+  guideKey: string,
+  options: WorkspaceStoreOptions = {}
+): Promise<{ created: boolean; case: ResearchCase; task: ResearchTask }> {
+  return withArchiveMutation(options, async (client, archiveId) => {
+    const researchCase = await loadCaseData(client, archiveId, caseId);
+    if (!researchCase) {
+      throw new Error("case not found");
+    }
+
+    const existing = researchCase.tasks.find((task) => task.guideKey === guideKey);
+    if (existing) {
+      return { created: false, case: researchCase, task: existing };
+    }
+
+    const assignment = buildResearchGuide(researchCase).assignment;
+    if (!assignment || assignment.source !== "generated" || assignment.guideKey !== guideKey) {
+      throw guidedResearchError("STALE_GUIDE_KEY", "guide assignment is no longer available");
+    }
+
+    const now = new Date().toISOString();
+    const task: ResearchTask = {
+      id: `task-${randomUUID()}`,
+      title: assignment.title,
+      status: "todo",
+      origin: "guide",
+      priority: "normal",
+      guideKey: assignment.guideKey,
+      workFingerprint: assignment.workFingerprint,
+      guidance: assignment.guidance,
+      targetHypothesisId: assignment.targetHypothesisId,
+      contextRefs: assignment.contextRefs ?? [],
+      outcomes: [],
+      createdAt: now,
+      updatedAt: now
+    };
+    assertCaseOwnedTaskReferences(researchCase, task);
+    const sortOrder = await prependCaseTaskSortOrder(client, archiveId, caseId);
+    await upsertTaskRow(client, archiveId, caseId, task, sortOrder);
+    const updatedCase = { ...researchCase, tasks: [task, ...researchCase.tasks] };
+    return { created: true, case: updatedCase, task };
+  });
+}
+
+export type RecordCaseTaskOutcomeInput = {
+  requestId: string;
+  expectedTaskUpdatedAt: string;
+  outcome: ResearchTaskOutcome["type"];
+  note: string;
+  searchScope?: ResearchSearchScope;
+  correctsOutcomeId?: string;
+  actorId: string;
+  actorName: string;
+  hypothesisDecision?: {
+    hypothesisId: string;
+    expectedUpdatedAt?: string;
+    expectedHypothesisUpdatedAt?: string;
+    status: ResearchHypothesis["status"];
+    reason: string;
+  };
+};
+
+export async function recordCaseTaskOutcome(
+  caseId: string,
+  taskId: string,
+  input: RecordCaseTaskOutcomeInput,
+  options: WorkspaceStoreOptions = {}
+): Promise<{ case: ResearchCase; task: ResearchTask; hypothesis?: ResearchHypothesis }> {
+  validateOutcomeInput(input);
+
+  return withArchiveMutation(options, async (client, archiveId) => {
+    const researchCase = await loadCaseData(client, archiveId, caseId);
+    if (!researchCase) {
+      throw new Error("case not found");
+    }
+    const currentTask = researchCase.tasks.find((task) => task.id === taskId);
+    if (!currentTask) {
+      throw new Error("task not found");
+    }
+
+    const existingOutcome = (currentTask.outcomes ?? []).find((outcome) => outcome.requestId === input.requestId);
+    if (existingOutcome) {
+      if (!sameOutcomeRequest(existingOutcome, input)) {
+        throw guidedResearchError("IDEMPOTENCY_CONFLICT", "request id was already used for a different outcome");
+      }
+      const existingHypothesis = assertSameOutcomeDecisionReplay(researchCase, taskId, input);
+      return { case: researchCase, task: currentTask, hypothesis: existingHypothesis };
+    }
+
+    if (currentTask.updatedAt !== input.expectedTaskUpdatedAt) {
+      throw guidedResearchError("STALE_RESEARCH_STATE", "task was updated by another request");
+    }
+    const priorOutcomes = currentTask.outcomes ?? [];
+    const correctedOutcome = input.correctsOutcomeId
+      ? priorOutcomes.find((outcome) => outcome.id === input.correctsOutcomeId)
+      : undefined;
+    if (input.correctsOutcomeId && (currentTask.status !== "done" || !correctedOutcome)) {
+      throw guidedResearchError("INVALID_OUTCOME", "outcome corrections must target an earlier outcome on this task");
+    }
+    if (currentTask.status === "done" && priorOutcomes.length > 0 && !correctedOutcome) {
+      throw guidedResearchError("INVALID_OUTCOME", "completed assignments can only receive an explicit outcome correction");
+    }
+
+    let updatedHypothesis: ResearchHypothesis | undefined;
+    if (input.hypothesisDecision) {
+      const currentHypothesis = researchCase.hypotheses.find(
+        (hypothesis) => hypothesis.id === input.hypothesisDecision?.hypothesisId
+      );
+      if (!currentHypothesis) {
+        throw new Error("hypothesis does not belong to this case");
+      }
+      updatedHypothesis = applyHypothesisUpdate(currentHypothesis, {
+        requestId: input.requestId,
+        expectedUpdatedAt:
+          input.hypothesisDecision.expectedUpdatedAt ?? input.hypothesisDecision.expectedHypothesisUpdatedAt,
+        status: input.hypothesisDecision.status,
+        reason: input.hypothesisDecision.reason,
+        actorId: input.actorId,
+        actorName: input.actorName,
+        contextRefs: [{ type: "task", id: taskId }]
+      });
+      for (const decision of updatedHypothesis.decisions ?? []) {
+        assertCaseOwnedReferences(researchCase, decision.contextRefs);
+      }
+    }
+
+    const now = nextUpdatedAt(currentTask.updatedAt);
+    const outcome: ResearchTaskOutcome = {
+      id: `outcome-${randomUUID()}`,
+      requestId: input.requestId,
+      type: input.outcome,
+      note: input.note.trim(),
+      searchScope: normalizeSearchScope(input.searchScope),
+      actorId: input.actorId,
+      actorName: input.actorName.trim(),
+      createdAt: now,
+      correctsOutcomeId: input.correctsOutcomeId
+    };
+    const task: ResearchTask = {
+      ...currentTask,
+      status: "done",
+      outcomes: [...priorOutcomes, outcome],
+      completedAt: currentTask.completedAt ?? now,
+      updatedAt: now
+    };
+
+    await updateTaskRow(client, archiveId, caseId, task);
+    if (updatedHypothesis) {
+      await updateHypothesisRow(client, archiveId, caseId, updatedHypothesis);
+    }
+
+    const updatedCase: ResearchCase = {
+      ...researchCase,
+      tasks: researchCase.tasks.map((item) => (item.id === taskId ? task : item)),
+      hypotheses: updatedHypothesis
+        ? researchCase.hypotheses.map((hypothesis) =>
+            hypothesis.id === updatedHypothesis?.id ? updatedHypothesis : hypothesis
+          )
+        : researchCase.hypotheses
+    };
+    return { case: updatedCase, task, hypothesis: updatedHypothesis };
   });
 }
 
@@ -971,10 +1432,10 @@ async function persistWorkspace(client: PoolClient, archiveId: string, workspace
 function normalizeWorkspaceData(value: Partial<WorkspaceData>): WorkspaceData {
   return {
     version: "0.17.0",
-    archiveName: value.archiveName || "Riemer - Zajicek Archive",
+    archiveName: value.archiveName || "Hartwell–Mercer Family Archive",
     archiveTagline: value.archiveTagline ?? "",
     people: Array.isArray(value.people) ? value.people : [],
-    cases: Array.isArray(value.cases) ? value.cases : [],
+    cases: Array.isArray(value.cases) ? value.cases.map(normalizeResearchCase) : [],
     sources: Array.isArray(value.sources) ? value.sources : [],
     dnaMatches: Array.isArray(value.dnaMatches) ? value.dnaMatches : [],
     aiRuns: Array.isArray(value.aiRuns) ? value.aiRuns.map(normalizeAIAnalysisRun) : [],
@@ -983,6 +1444,411 @@ function normalizeWorkspaceData(value: Partial<WorkspaceData>): WorkspaceData {
     backups: Array.isArray(value.backups) ? value.backups : [],
     updatedAt: value.updatedAt || new Date().toISOString()
   };
+}
+
+function normalizeResearchCase(researchCase: ResearchCase): ResearchCase {
+  if (!isOneOf(researchCase.status, ["active", "planning", "paused", "resolved"])) {
+    throw new Error("invalid research case status");
+  }
+  if (!isOneOf(researchCase.privacy, ["public", "private", "sensitive"])) {
+    throw new Error("invalid research case privacy");
+  }
+
+  const normalized: ResearchCase = {
+    ...researchCase,
+    focus: researchCase.focus ?? "",
+    hypotheses: (researchCase.hypotheses ?? []).map((hypothesis) => {
+      if (!isOneOf(hypothesis.status, ["open", "supported", "weakened", "rejected"])) {
+        throw new Error("invalid hypothesis status");
+      }
+      const normalizedHypothesis: ResearchHypothesis = {
+        ...hypothesis,
+        id: hypothesis.id || `hyp-${randomUUID()}`,
+        statement: hypothesis.statement.trim(),
+        confidence: normalizeConfidence(hypothesis.confidence),
+        decisions: (hypothesis.decisions ?? []).map(normalizeHypothesisDecision)
+      };
+      assertHypothesisDecisionHistory(normalizedHypothesis);
+      return normalizedHypothesis;
+    }),
+    evidence: (researchCase.evidence ?? []).map((evidence) => ({
+      ...evidence,
+      id: evidence.id || `ev-${randomUUID()}`,
+      title: evidence.title.trim(),
+      summary: evidence.summary ?? "",
+      confidence: normalizeConfidence(evidence.confidence)
+    })),
+    tasks: (researchCase.tasks ?? []).map((task) => {
+      if (!isOneOf(task.status, ["todo", "doing", "done"])) {
+        throw new Error("invalid research task status");
+      }
+      const title = task.title.trim();
+      const origin = task.origin ?? (task.guideKey ? "guide" : "manual");
+      const priority = task.priority ?? "normal";
+      if (!isOneOf(origin, ["manual", "guide"])) {
+        throw new Error("invalid research task origin");
+      }
+      if (!isOneOf(priority, ["high", "normal", "low"])) {
+        throw new Error("invalid research task priority");
+      }
+      if (origin === "manual" && task.guideKey) {
+        throw new Error("invalid manual task guide key");
+      }
+      const outcomes = normalizeTaskOutcomeHistory(task.outcomes ?? []);
+      if (outcomes.length > 0 && task.status !== "done") {
+        throw new Error("invalid task outcome history for an incomplete task");
+      }
+      return {
+        ...task,
+        id: task.id || `task-${randomUUID()}`,
+        title,
+        origin,
+        priority,
+        guideKey: origin === "guide" ? task.guideKey : undefined,
+        workFingerprint: task.workFingerprint?.trim() || normalizeWorkFingerprint(title),
+        guidance: task.guidance?.trim() ?? "",
+        contextRefs: (task.contextRefs ?? []).map(normalizeResearchReference),
+        outcomes
+      };
+    })
+  };
+
+  if (normalized.tasks.filter((task) => task.status === "doing").length > 1) {
+    throw new Error("only one task in a case may be doing at a time");
+  }
+
+  for (const hypothesis of normalized.hypotheses) {
+    for (const decision of hypothesis.decisions ?? []) {
+      assertCaseOwnedReferences(normalized, decision.contextRefs);
+    }
+  }
+  for (const task of normalized.tasks) {
+    assertCaseOwnedTaskReferences(normalized, task);
+  }
+  return normalized;
+}
+
+function normalizeHypothesisDecision(decision: ResearchHypothesisDecision): ResearchHypothesisDecision {
+  if (
+    !decision.id?.trim() ||
+    !decision.requestId?.trim() ||
+    !decision.statement?.trim() ||
+    !decision.reason?.trim() ||
+    !decision.actorId?.trim() ||
+    !decision.actorName?.trim() ||
+    !isOneOf(decision.fromStatus, ["open", "supported", "weakened", "rejected"]) ||
+    !isOneOf(decision.toStatus, ["open", "supported", "weakened", "rejected"]) ||
+    !isTimestamp(decision.createdAt)
+  ) {
+    throw new Error("invalid hypothesis decision history");
+  }
+  return {
+    ...decision,
+    id: decision.id.trim(),
+    requestId: decision.requestId.trim(),
+    statement: decision.statement.trim(),
+    reason: decision.reason.trim(),
+    actorId: decision.actorId.trim(),
+    actorName: decision.actorName.trim(),
+    contextRefs: (decision.contextRefs ?? []).map(normalizeResearchReference)
+  };
+}
+
+function normalizeTaskOutcome(outcome: ResearchTaskOutcome): ResearchTaskOutcome {
+  if (
+    !outcome.id?.trim() ||
+    !outcome.requestId?.trim() ||
+    !outcome.note?.trim() ||
+    !outcome.actorId?.trim() ||
+    !outcome.actorName?.trim() ||
+    !isOneOf(outcome.type, ["found", "not_found", "inconclusive", "blocked", "already_tried"]) ||
+    !isTimestamp(outcome.createdAt) ||
+    (outcome.correctsOutcomeId !== undefined && !outcome.correctsOutcomeId.trim())
+  ) {
+    throw new Error("invalid task outcome history");
+  }
+  const searchScope = normalizeSearchScope(outcome.searchScope);
+  if ((outcome.type === "not_found" || outcome.type === "already_tried") && !searchScope) {
+    throw new Error("invalid negative task outcome search scope");
+  }
+  return {
+    ...outcome,
+    id: outcome.id.trim(),
+    requestId: outcome.requestId.trim(),
+    note: outcome.note.trim(),
+    actorId: outcome.actorId.trim(),
+    actorName: outcome.actorName.trim(),
+    searchScope,
+    correctsOutcomeId: outcome.correctsOutcomeId?.trim() || undefined
+  };
+}
+
+function assertHypothesisDecisionHistory(hypothesis: ResearchHypothesis): void {
+  const decisions = hypothesis.decisions ?? [];
+  const ids = new Set<string>();
+  const requestIds = new Set<string>();
+
+  for (const [index, decision] of decisions.entries()) {
+    if (ids.has(decision.id) || requestIds.has(decision.requestId)) {
+      throw new Error("duplicate hypothesis decision id or request id");
+    }
+    const previous = decisions[index - 1];
+    if (previous && decision.fromStatus !== previous.toStatus) {
+      throw new Error("invalid hypothesis decision chronology");
+    }
+    if (previous && Date.parse(decision.createdAt) < Date.parse(previous.createdAt)) {
+      throw new Error("invalid hypothesis decision chronology");
+    }
+    ids.add(decision.id);
+    requestIds.add(decision.requestId);
+  }
+
+  const latest = decisions.at(-1);
+  if (latest && latest.toStatus !== hypothesis.status) {
+    throw new Error("final hypothesis decision does not match hypothesis status");
+  }
+}
+
+function normalizeTaskOutcomeHistory(outcomes: ResearchTaskOutcome[]): ResearchTaskOutcome[] {
+  const normalized = outcomes.map(normalizeTaskOutcome);
+  const ids = new Set<string>();
+  const requestIds = new Set<string>();
+
+  for (const [index, outcome] of normalized.entries()) {
+    if (ids.has(outcome.id) || requestIds.has(outcome.requestId)) {
+      throw new Error("duplicate task outcome id or request id");
+    }
+    if (outcome.correctsOutcomeId && !ids.has(outcome.correctsOutcomeId)) {
+      throw new Error("outcome correction must target an earlier outcome on this task");
+    }
+    const previous = normalized[index - 1];
+    if (previous && Date.parse(outcome.createdAt) < Date.parse(previous.createdAt)) {
+      throw new Error("invalid task outcome chronology");
+    }
+    ids.add(outcome.id);
+    requestIds.add(outcome.requestId);
+  }
+
+  return normalized;
+}
+
+function isTimestamp(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0 && Number.isFinite(Date.parse(value));
+}
+
+function isOneOf<T extends string>(value: unknown, allowed: readonly T[]): value is T {
+  return typeof value === "string" && allowed.includes(value as T);
+}
+
+function normalizeResearchReference(reference: ResearchReference): ResearchReference {
+  if (!reference || !["case", "hypothesis", "evidence", "task"].includes(reference.type) || !reference.id?.trim()) {
+    throw new Error("invalid research context reference");
+  }
+  return { type: reference.type, id: reference.id.trim() };
+}
+
+function assertCaseOwnedTaskReferences(researchCase: ResearchCase, task: ResearchTask): void {
+  if (task.targetHypothesisId && !researchCase.hypotheses.some((hypothesis) => hypothesis.id === task.targetHypothesisId)) {
+    throw new Error("task target hypothesis does not belong to this case");
+  }
+  assertCaseOwnedReferences(researchCase, task.contextRefs ?? []);
+}
+
+function assertCaseOwnedReferences(researchCase: ResearchCase, references: ResearchReference[]): void {
+  const ids = {
+    case: new Set([researchCase.id]),
+    hypothesis: new Set(researchCase.hypotheses.map((hypothesis) => hypothesis.id)),
+    evidence: new Set(researchCase.evidence.map((evidence) => evidence.id)),
+    task: new Set(researchCase.tasks.map((task) => task.id))
+  };
+  for (const reference of references) {
+    if (!ids[reference.type].has(reference.id)) {
+      throw new Error(`research ${reference.type} reference does not belong to this case`);
+    }
+  }
+}
+
+function applyHypothesisUpdate(
+  current: ResearchHypothesis,
+  input: {
+    statement?: string;
+    confidence?: number;
+    expectedUpdatedAt?: string;
+    requestId?: string;
+    status?: ResearchHypothesis["status"];
+    reason?: string;
+    actorId?: string;
+    actorName?: string;
+    contextRefs?: ResearchReference[];
+  }
+): ResearchHypothesis {
+  const hasEdit = input.statement !== undefined || input.confidence !== undefined;
+  const hasDecision = input.status !== undefined;
+  const existingDecision = input.requestId
+    ? (current.decisions ?? []).find((decision) => decision.requestId === input.requestId)
+    : undefined;
+  if (existingDecision) {
+    if (
+      hasEdit ||
+      existingDecision.toStatus !== input.status ||
+      existingDecision.reason !== input.reason?.trim() ||
+      existingDecision.actorId !== input.actorId ||
+      existingDecision.actorName !== input.actorName?.trim() ||
+      !sameResearchReferences(existingDecision.contextRefs, input.contextRefs ?? [])
+    ) {
+      throw guidedResearchError("IDEMPOTENCY_CONFLICT", "request id was already used for a different decision");
+    }
+    return current;
+  }
+  if (hasEdit && hasDecision) {
+    throw guidedResearchError("INVALID_DECISION", "hypothesis edits and status decisions must be submitted separately");
+  }
+  if (!hasDecision && (input.requestId !== undefined || input.reason !== undefined || input.contextRefs !== undefined)) {
+    throw guidedResearchError("INVALID_DECISION", "decision metadata may only accompany a status decision");
+  }
+  if (current.updatedAt && input.expectedUpdatedAt !== current.updatedAt) {
+    throw guidedResearchError("STALE_RESEARCH_STATE", "hypothesis was updated by another request");
+  }
+
+  const statement = input.statement?.trim() || current.statement;
+  const confidence = input.confidence === undefined ? current.confidence : normalizeConfidence(input.confidence);
+  let decisions = current.decisions ?? [];
+  let status = current.status;
+  if (input.status !== undefined) {
+    if (!input.requestId?.trim() || !input.reason?.trim() || !input.actorId?.trim() || !input.actorName?.trim()) {
+      throw new Error("hypothesis decisions require request id, reason, and actor");
+    }
+    const createdAt = nextUpdatedAt(current.updatedAt);
+    const decision: ResearchHypothesisDecision = {
+      id: `decision-${randomUUID()}`,
+      requestId: input.requestId,
+      fromStatus: current.status,
+      toStatus: input.status,
+      statement,
+      reason: input.reason.trim(),
+      contextRefs: (input.contextRefs ?? []).map(normalizeResearchReference),
+      actorId: input.actorId,
+      actorName: input.actorName.trim(),
+      createdAt
+    };
+    decisions = [...decisions, decision];
+    status = input.status;
+  }
+
+  if (statement === current.statement && confidence === current.confidence && status === current.status && decisions === current.decisions) {
+    return current;
+  }
+  return {
+    ...current,
+    statement,
+    confidence,
+    status,
+    decisions,
+    updatedAt: nextUpdatedAt(current.updatedAt)
+  };
+}
+
+function sameResearchReferences(left: ResearchReference[], right: ResearchReference[]): boolean {
+  if (left.length !== right.length) {
+    return false;
+  }
+  const normalizedRight = right.map(normalizeResearchReference);
+  return left.every(
+    (reference, index) =>
+      reference.type === normalizedRight[index]?.type && reference.id === normalizedRight[index]?.id
+  );
+}
+
+function validateOutcomeInput(input: RecordCaseTaskOutcomeInput): void {
+  if (!input.requestId?.trim() || !input.note?.trim() || !input.actorId?.trim() || !input.actorName?.trim()) {
+    throw new Error("task outcomes require request id, note, and actor");
+  }
+  if ((input.outcome === "not_found" || input.outcome === "already_tried") && !input.searchScope?.repository?.trim()) {
+    throw new Error("negative search outcomes require a repository or search location");
+  }
+}
+
+function normalizeSearchScope(scope?: ResearchSearchScope): ResearchSearchScope | undefined {
+  if (!scope) {
+    return undefined;
+  }
+  const repository = scope.repository?.trim();
+  if (!repository) {
+    return undefined;
+  }
+  return {
+    repository,
+    collection: scope.collection?.trim() || undefined,
+    place: scope.place?.trim() || undefined,
+    dateRange: scope.dateRange?.trim() || undefined,
+    query: scope.query?.trim() || undefined
+  };
+}
+
+function sameOutcomeRequest(outcome: ResearchTaskOutcome, input: RecordCaseTaskOutcomeInput): boolean {
+  const expectedScope = normalizeSearchScope(input.searchScope);
+  return (
+    outcome.type === input.outcome &&
+    outcome.note === input.note.trim() &&
+    sameSearchScope(outcome.searchScope, expectedScope) &&
+    outcome.actorId === input.actorId &&
+    outcome.actorName === input.actorName.trim() &&
+    outcome.correctsOutcomeId === input.correctsOutcomeId
+  );
+}
+
+function assertSameOutcomeDecisionReplay(
+  researchCase: ResearchCase,
+  taskId: string,
+  input: RecordCaseTaskOutcomeInput
+): ResearchHypothesis | undefined {
+  const decisions = researchCase.hypotheses.flatMap((hypothesis) =>
+    (hypothesis.decisions ?? [])
+      .filter((decision) => decision.requestId === input.requestId)
+      .map((decision) => ({ hypothesis, decision }))
+  );
+
+  if (!input.hypothesisDecision) {
+    if (decisions.length > 0) {
+      throw guidedResearchError("IDEMPOTENCY_CONFLICT", "request id was already used with a hypothesis decision");
+    }
+    return undefined;
+  }
+
+  const match = decisions.find(({ hypothesis }) => hypothesis.id === input.hypothesisDecision?.hypothesisId);
+  if (
+    decisions.length !== 1 ||
+    !match ||
+    match.decision.toStatus !== input.hypothesisDecision.status ||
+    match.decision.reason !== input.hypothesisDecision.reason.trim() ||
+    match.decision.actorId !== input.actorId ||
+    match.decision.actorName !== input.actorName.trim() ||
+    !match.decision.contextRefs.some((reference) => reference.type === "task" && reference.id === taskId)
+  ) {
+    throw guidedResearchError("IDEMPOTENCY_CONFLICT", "request id was already used for a different hypothesis decision");
+  }
+
+  return match.hypothesis;
+}
+
+function sameSearchScope(left?: ResearchSearchScope, right?: ResearchSearchScope): boolean {
+  return (
+    left?.repository === right?.repository &&
+    left?.collection === right?.collection &&
+    left?.place === right?.place &&
+    left?.dateRange === right?.dateRange &&
+    left?.query === right?.query
+  );
+}
+
+function nextUpdatedAt(previous?: string): string {
+  const now = Date.now();
+  const previousTime = previous ? Date.parse(previous) : Number.NaN;
+  return new Date(Number.isFinite(previousTime) ? Math.max(now, previousTime + 1) : now).toISOString();
+}
+
+function guidedResearchError(code: string, message: string): Error & { code: string } {
+  return Object.assign(new Error(message), { code });
 }
 
 function createWorkspaceBackup(workspace: WorkspaceData, reason: string): WorkspaceBackup {
