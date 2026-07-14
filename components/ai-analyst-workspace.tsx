@@ -413,7 +413,7 @@ function TaskAction({
           {isCreating ? "Adding..." : "Add task"}
         </button>
         {selectedCaseId ? (
-          <a className="button-ghost" href={`/app/cases/${selectedCaseId}`}>
+          <a className="button-ghost" href={`/app/cases/${encodeURIComponent(selectedCaseId)}`}>
             View case
           </a>
         ) : null}
