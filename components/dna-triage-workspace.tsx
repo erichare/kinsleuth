@@ -696,7 +696,10 @@ export function DnaTriageWorkspace({ initialResult, initialHypotheses = [], init
                       {linkStatus === "saving" ? "Linking..." : "Add evidence"}
                     </button>
                     {linkStatus === "success" ? (
-                      <Link className="button-secondary" href={`/app/cases/${linkForm.caseId}`}>
+                      <Link
+                        className="button-secondary"
+                        href={`/app/cases/${encodeURIComponent((linkForm.caseId ?? "").replace(/[^A-Za-z0-9_-]/g, ""))}`}
+                      >
                         View case
                       </Link>
                     ) : null}
