@@ -25,6 +25,19 @@ describe("release upgrade database contract", () => {
     ).toThrow(/same database as TEST_DATABASE_URL/i);
   });
 
+  it("rejects query parameters that override PostgreSQL connection routing", () => {
+    expect(() =>
+      validateReleaseUpgradeDatabase({
+        releaseDatabaseUrl: "postgres://release-user@localhost/release_control?host=production.example.com"
+      })
+    ).toThrow(/connection query parameter.*host/i);
+    expect(() =>
+      validateReleaseUpgradeDatabase({
+        releaseDatabaseUrl: "postgres://release-user@localhost/release_control?port=6543"
+      })
+    ).toThrow(/connection query parameter.*port/i);
+  });
+
   it("accepts a distinct local control database", () => {
     expect(() =>
       validateReleaseUpgradeDatabase({

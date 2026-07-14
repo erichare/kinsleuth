@@ -474,6 +474,19 @@ describe.skipIf(!releaseDatabaseUrl)("v0.17.4 release upgrade", () => {
     });
   });
 
+  it("rejects a redundant composite unique index even when its key order is reversed", async () => {
+    await installV0174(pool, { recordInitialMigration: true });
+    await seedLegacyRows(pool);
+    await pool.query("CREATE UNIQUE INDEX sources_reversed_composite_unique ON sources (id, archive_id)");
+
+    await expect(runPendingMigrations(pool)).rejects.toThrow(/004_archive_scoped_keys.*unexpected archive-key uniqueness/i);
+
+    await expectMigration004Unrecorded(pool);
+    await expect(pool.query("SELECT to_regclass('sources_reversed_composite_unique') AS name")).resolves.toMatchObject({
+      rows: [{ name: "sources_reversed_composite_unique" }]
+    });
+  });
+
   it("rejects cross-archive legacy references and rolls the migration back", async () => {
     await installV0174(pool, { recordInitialMigration: true });
     await seedLegacyRows(pool);
