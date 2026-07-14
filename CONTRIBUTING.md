@@ -18,10 +18,24 @@ Before opening a pull request, make sure the checks pass:
 npm run lint
 npm run typecheck
 npm run test
+npm run migrations:verify
+npm run build
+npm audit --omit=dev --audit-level=high
 ```
 
-Set `TEST_DATABASE_URL` and run `npm run test:db` if your change touches the workspace
-store, GEDCOM apply flow, or the database schema.
+For workspace, import, or database changes, use disposable local databases and run the
+same fail-closed commands as product CI:
+
+```bash
+TEST_DATABASE_URL=postgres://... npm run test:db
+TEST_DATABASE_URL=postgres://... npm run test:db:large
+TEST_RELEASE_UPGRADE_DATABASE_URL=postgres://... npm run test:release-upgrade
+```
+
+`test:db` covers every suite gated by `TEST_DATABASE_URL`; do not replace it with a
+hand-maintained file list. The large-import command uses the same disposable database
+guard. The upgrade rehearsal creates and drops child databases, so its control URL must
+be local, disposable, and distinct from both `TEST_DATABASE_URL` and `DATABASE_URL`.
 
 ## Ground rules
 

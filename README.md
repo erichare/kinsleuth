@@ -135,7 +135,7 @@ Compose provisions Postgres with pgvector and a MinIO service alongside the app.
 | `AI_BASE_URL` / `AI_API_KEY` | OpenAI-compatible provider; deterministic fallback runs without a key |
 | `AI_API_MODE` | `responses` (default) or `chat` |
 | `AI_CHAT_MODEL` / `AI_EMBEDDING_MODEL` | Chat model for analysis; the embedding model is reserved for planned pgvector retrieval (not implemented yet) |
-| `APP_BASE_URL` | Base URL of the running app |
+| `APP_BASE_URL` | Canonical origin of the running app; production requires an HTTPS origin such as `https://app.kinresolve.com` |
 | `S3_*` | Reserved for object-storage-backed source uploads |
 
 Archive name and tagline are edited in **Settings → Archive branding** and flow through both the private workspace and the public site. Settings also reports live database, storage, and AI-provider health.
@@ -148,15 +148,27 @@ Archive name and tagline are edited in **Settings → Archive branding** and flo
 npm run typecheck     # TypeScript
 npm run lint          # ESLint
 npm run test          # Vitest unit tests
-npm run test:db       # Postgres integration tests (needs TEST_DATABASE_URL)
+npm run test:db       # Every Postgres-gated suite, serialized (needs TEST_DATABASE_URL)
 npm run test:db:large # 10.5+ MB / 65k-person GEDCOM load regression
+npm run test:release-upgrade # Rehearse v0.17.4 -> current (needs a local control DB)
+npm run migrations:verify   # Verify migration checksums and released history
 npm run db:migrate    # Apply pending db/migrations to DATABASE_URL (Node 22.6+)
 npm run build         # Production build
 ```
 
 Schema changes live as ordered SQL files in `db/migrations/` (`NNN_name.sql`). Applied versions are tracked in the `schema_migrations` table, each file runs in its own transaction, and concurrent runners serialize on an advisory lock. In development the app applies pending migrations at boot (`DATABASE_AUTO_MIGRATE`); in production run `npm run db:migrate` against the production `DATABASE_URL` when a release includes new migrations.
 
-Set `TEST_DATABASE_URL` to a **disposable** Postgres database before running the DB suites — never point it at real data. Stable-release CI runs both database suites against an ephemeral pgvector service before deploying.
+Set `TEST_DATABASE_URL` to a **disposable** Postgres database before running either DB
+command—never point it at real data. `test:db` intentionally runs every database-gated
+suite serially because several legacy fixture cleanups share an archive prefix. The
+command fails before Vitest when the URL is absent or identifies the same database as
+`DATABASE_URL`.
+
+The upgrade rehearsal is destructive by design: set
+`TEST_RELEASE_UPGRADE_DATABASE_URL` to a separate local disposable control database.
+It creates and drops isolated child databases and refuses remote hosts, application/test
+database reuse, and connection-routing overrides. Product CI gives the standard suite,
+large-import regression, and released-schema upgrade rehearsal separate required jobs.
 
 ## Data & privacy model
 
@@ -181,11 +193,28 @@ GEDCOM / DNA CSV ──▶ Private workspace (Postgres) ──▶ Curation gates
 
 ## Production releases
 
-Deployments are release-driven: publishing a stable GitHub Release runs `.github/workflows/vercel-release.yml`, which validates the tag, builds with the production environment, and deploys the prebuilt artifact to Vercel (Git auto-deployments are disabled in `vercel.json`).
+Deployments are release-driven: publishing a stable GitHub Release runs
+`.github/workflows/vercel-release.yml` (Git auto-deployments are disabled in
+`vercel.json`). The workflow requires the tag to match `package.json`, verifies that the
+tagged commit is the checked-out revision on `origin/main`, matches the linked Vercel
+project and organization, validates actual pulled production values, builds one prebuilt
+artifact, and probes the deployment URL emitted by Vercel.
 
 Required GitHub Actions secrets: `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`.
 
-Required Vercel production environment: `DATABASE_URL` (Supabase transaction pooler on port `6543` with `sslmode=require` — the app upgrades known Supabase pooler connections to `verify-full` with the bundled root CA), `DATABASE_POOL_MAX=2`, `DATABASE_AUTO_MIGRATE=false`, `AUTH_SECRET`, `BLOB_READ_WRITE_TOKEN`, and `CRON_SECRET`.
+Required Vercel production environment: `DATABASE_URL` (Supabase transaction pooler on
+port `6543` with `sslmode=require`—the app upgrades known Supabase pooler connections to
+`verify-full` with the bundled root CA), `DATABASE_POOL_MAX=2`,
+`DATABASE_AUTO_MIGRATE=false`, `APP_BASE_URL` set to the canonical HTTPS product origin,
+`AUTH_SECRET`, `BLOB_READ_WRITE_TOKEN`, and `CRON_SECRET`. The current product provider
+configuration is intentionally considered incomplete until `APP_BASE_URL` is present;
+the release workflow fails rather than guessing a legacy hostname.
+
+This is still the legacy post-publication deployment choreography. It does not migrate
+the production database or prove a backup/restore point, candidate smoke test, promotion,
+or database rollback. Do not publish a migration-bearing release until the candidate-first
+release slice and its runbook land; use `npm run db:migrate` only through an explicitly
+reviewed maintenance procedure.
 
 ## Project map
 

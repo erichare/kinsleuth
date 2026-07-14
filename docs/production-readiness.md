@@ -26,10 +26,17 @@ Phase 1 (persistence + read paths + identity) is essentially complete:
 | Scoped SQL search — DNA triage | #19 |
 | **Account-based auth + memberships (better-auth)** | **#20 (merged)** |
 | **Reviewed next-slice execution blueprint** | **#21 (merged)** |
+| **Marketing foundation and public-site preview** | **#22 and #23 (merged)** |
+| **Immutable migration repair + released-schema rehearsal** | **#24 (draft review)** |
 
 The app is a working single-archive vertical slice with real accounts. It is **not
 yet** multi-tenant, billable, observable, compliant, or backed by the AI
 differentiator. This document is the path to those.
+
+Active engineering workstream 1A adds complete product pull-request CI, makes migration
+history immutable, rehearses the v0.17.4 schema upgrade, and replaces legacy release
+assumptions with explicit version, project, environment, and deployment checks. It does
+not promote a release candidate or migrate production; those remain workstream 1B.
 
 ---
 
@@ -68,8 +75,10 @@ with engineering. Nothing here is code.
 
 ### B. Accounts to create (I'll wire each in once they exist) 🤝
 4. **Vercel** production project + **Supabase** production database (or your chosen
-   Postgres host) — the hosted runtime. You already have a Vercel project; confirm
-   the production env is provisioned per README.
+   Postgres host) — the hosted runtime. You already have a Vercel project. Before the
+   next stable release, add the canonical HTTPS `APP_BASE_URL` and confirm every
+   production value listed in the README; release validation intentionally fails until
+   the contract is complete.
 5. **Stripe** account (for billing). Business entity helps here — see item 9.
 6. **An AI provider account** (OpenAI-compatible) for the bundled hosted AI tier,
    plus a spend cap. BYO-key covers OSS; this is for paid hosted users.
@@ -243,8 +252,9 @@ conflict-detection pieces (enough to demonstrate the GPS wedge).
 
 ## 9. Immediate next actions
 
-- 🤖 **Engineering:** start the RBAC sweep (4.1) and the
-  object-storage adapter (5.A) — the two things blocking OSS 1.0.
+- 🤖 **Engineering:** land workstream 1A's migration and product-CI stack, then start
+  the RBAC sweep (4.1) and object-storage adapter (5.A)—the two feature slices blocking
+  OSS 1.0.
 - 🧑 **You, this week:** authorize the marketing web-DNS cutover after production
   verification, form the entity + contact privacy counsel (§3.C.9–10), and apply for
   FamilySearch API access (§3.D.12). Those items gate later arcs.
