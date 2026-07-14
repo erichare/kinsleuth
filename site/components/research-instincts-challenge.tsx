@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { createResearchInstinctsChallenge } from "@/site/shared/research-instincts-challenge";
+import { createResearchInstinctsChallenge } from "../shared/research-instincts-challenge";
 
 export const ResearchInstinctsChallenge = createResearchInstinctsChallenge({
   useEffect,

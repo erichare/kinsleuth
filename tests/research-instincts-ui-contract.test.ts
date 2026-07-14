@@ -53,11 +53,29 @@ describe("research instincts accessible interaction contract", () => {
 
   it("moves keyboard focus into reset confirmation and restores it on cancel", async () => {
     const source = await readFile(
-      path.join(process.cwd(), "components/research-instincts-challenge.tsx"),
+      path.join(process.cwd(), "site/shared/research-instincts-challenge.tsx"),
       "utf8"
     );
 
     expect(source).toContain("resetConfirmRef.current?.focus()");
     expect(source).toContain("resetTriggerRef.current?.focus()");
+  });
+
+  it("requests case-heading focus on every navigation and reset", async () => {
+    const source = await readFile(
+      path.join(process.cwd(), "site/shared/research-instincts-challenge.tsx"),
+      "utf8"
+    );
+
+    expect(source).toContain("[activeCase.id, focusCaseRequest]");
+    expect(source.match(/setFocusCaseRequest\(\(request\) => request \+ 1\)/g)).toHaveLength(2);
+  });
+
+  it("keeps the revealed answer key at full visual emphasis", async () => {
+    const css = await readFile(path.join(process.cwd(), "site/app/globals.css"), "utf8");
+
+    expect(css).toMatch(
+      /\.challenge-option:has\(input:disabled:not\(:checked\)\):has\(\.challenge-option-feedback\)\s*\{[^}]*opacity:\s*1;/s
+    );
   });
 });

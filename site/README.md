@@ -1,6 +1,6 @@
 # Kin Resolve marketing site
 
-This directory is a self-contained Next.js application for `kinresolve.com`. It has no imports from the product app, database, authentication, workspace storage, or family data.
+This directory is a self-contained static Next.js application for `kinresolve.com`. It has no imports from the product app, database, authentication, workspace storage, or family data. The fictional research challenge keeps its pure canon and browser-only interaction factory in `shared/`; tiny adapters inject each app's own React runtime so the product and marketing builds share one implementation without loading duplicate React instances.
 
 ## Local verification
 

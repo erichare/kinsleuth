@@ -4,6 +4,8 @@
 .vercel
 coverage
 node_modules
-site
+site/*
+!site/shared
+!site/shared/**
 plans
 *.log

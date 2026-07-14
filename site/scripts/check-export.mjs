@@ -43,7 +43,7 @@ for (const file of htmlFiles) {
   }
 }
 
-const requiredRoutes = ["index.html", "product/index.html", "method/index.html", "privacy/index.html", "open-source/index.html", "about/index.html", "beta/index.html", "icon.png", "manifest.webmanifest", "robots.txt", "sitemap.xml"];
+const requiredRoutes = ["index.html", "product/index.html", "method/index.html", "privacy/index.html", "open-source/index.html", "about/index.html", "beta/index.html", "challenge/index.html", "icon.png", "manifest.webmanifest", "robots.txt", "sitemap.xml"];
 for (const route of requiredRoutes) {
   if (!existsSync(join(outputRoot, route))) problems.push(`Missing required export: ${route}`);
 }
@@ -56,6 +56,7 @@ for (const metadata of ["og:image", "twitter:image", "canonical", "rel=\"icon\""
 const pageUrls = new Map([
   ["about/index.html", "https://kinresolve.com/about/"],
   ["beta/index.html", "https://kinresolve.com/beta/"],
+  ["challenge/index.html", "https://kinresolve.com/challenge/"],
   ["method/index.html", "https://kinresolve.com/method/"],
   ["open-source/index.html", "https://kinresolve.com/open-source/"],
   ["privacy/index.html", "https://kinresolve.com/privacy/"],
@@ -69,6 +70,17 @@ for (const [page, expectedUrl] of pageUrls) {
   if (!html.includes(`<meta property="og:url" content="${expectedUrl}"`)) {
     problems.push(`${page}: Open Graph URL does not match ${expectedUrl}`);
   }
+}
+
+const challenge = readFileSync(join(outputRoot, "challenge/index.html"), "utf8");
+if (!challenge.includes('<meta name="robots" content="noindex, nofollow"')) {
+  problems.push("Challenge export must remain noindex and nofollow.");
+}
+if (!/Everything here is fictional/i.test(challenge) || !/Hartwell[–-]Mercer/i.test(challenge)) {
+  problems.push("Challenge export is missing its fictional Hartwell–Mercer disclosure.");
+}
+if (!home.includes('href="/challenge/"')) {
+  problems.push("Homepage is missing the research challenge discovery link.");
 }
 
 const beta = readFileSync(join(outputRoot, "beta/index.html"), "utf8");

@@ -113,7 +113,17 @@ export default function ProductPage() {
         </div>
       </section>
 
-      <div className="shell section"><CtaStrip title="Start with the fictional Hartwell–Mercer mystery." body="Explore the demo before bringing private records, then tell us where the import, evidence, case, DNA, or publishing flow breaks down." /></div>
+      <div className="shell section">
+        <CtaStrip
+          body="Work five evidence-led mini-cases before bringing private records, then tell us where the reasoning or workflow breaks down."
+          eyebrow="Fictional interactive demo"
+          primaryHref="/challenge"
+          primaryLabel="Start the challenge"
+          secondaryHref="/beta"
+          secondaryLabel="Apply for the private beta"
+          title="Start with the fictional Hartwell–Mercer mystery."
+        />
+      </div>
     </>
   );
 }

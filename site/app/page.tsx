@@ -59,6 +59,15 @@ export default function HomePage() {
         <strong>Fictional demo universe.</strong> Every Hartwell–Mercer name, date, place, record, photograph, story, and DNA match shown on this site is invented. No real family data is used.
       </div>
 
+      <section className="shell challenge-invite" aria-labelledby="challenge-invite-title">
+        <div>
+          <span className="eyebrow">A small archive mystery</span>
+          <h2 id="challenge-invite-title">Think like a researcher.</h2>
+          <p>Follow five fictional Hartwell–Mercer cases, choose the evidence that matters, and see where certainty outruns the record.</p>
+        </div>
+        <Link className="button" href="/challenge">Test your research instincts</Link>
+      </section>
+
       <section className="signal-strip" aria-label="Product principles">
         <div className="shell signal-strip-inner">
           <span><strong>Private</strong> research workspace</span>
