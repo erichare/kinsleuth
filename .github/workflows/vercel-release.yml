@@ -32,9 +32,6 @@ jobs:
           --health-retries 10
     env:
       RELEASE_TAG: ${{ github.event.release.tag_name }}
-      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
 
     steps:
       - name: Check out the released revision
@@ -43,11 +40,30 @@ jobs:
           ref: ${{ github.event.release.tag_name }}
           fetch-depth: 0
 
+      - name: Fetch protected main and the release tag
+        run: |
+          git fetch origin main:refs/remotes/origin/main --no-tags
+          git fetch origin "refs/tags/${RELEASE_TAG}:refs/tags/${RELEASE_TAG}" --force --no-tags
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
+
+      - name: Verify release provenance before running repository code
+        run: |
+          release_commit="$(git rev-parse --verify "refs/tags/${RELEASE_TAG}^{commit}")"
+          checked_out_commit="$(git rev-parse --verify 'HEAD^{commit}')"
+          test "$release_commit" = "$checked_out_commit"
+          git merge-base --is-ancestor "$release_commit" origin/main
+          package_version="$(node -e '
+            const { readFileSync } = require("node:fs");
+            const value = JSON.parse(readFileSync("package.json", "utf8")).version;
+            if (typeof value !== "string" || value.length === 0) process.exit(1);
+            process.stdout.write(value);
+          ')"
+          test "$RELEASE_TAG" = "v$package_version"
 
       - name: Install dependencies
         run: npm ci
@@ -85,22 +101,34 @@ jobs:
       - name: Audit production dependencies
         run: npm audit --omit=dev --audit-level=high
 
-      - name: Fetch the protected main branch
-        run: git fetch origin main:refs/remotes/origin/main --no-tags
-
       - name: Pull Vercel production settings
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: npx --yes vercel@56.1.0 pull --yes --environment=production
 
       - name: Verify stable release and production settings
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
         run: |
           test -s .vercel/.env.production.local
           node --experimental-strip-types scripts/validate-release-contract.mjs
 
       - name: Build production artifact
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: npx --yes vercel@56.1.0 build --prod
 
       - name: Deploy production artifact
         id: deploy
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
           deployment_url="$(npx --yes vercel@56.1.0 deploy --prebuilt --prod --yes)"
           DEPLOYMENT_URL="$deployment_url" node -e '

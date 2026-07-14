@@ -1,8 +1,12 @@
 #!/usr/bin/env node
+import nextEnvironment from "@next/env";
 import { Pool } from "pg";
 import { validateTestDatabase } from "../lib/test-database-contract.ts";
 import { getDatabaseConnectionString } from "../lib/connection-string.ts";
 import { runPendingMigrations } from "../lib/migrations.ts";
+
+const { loadEnvConfig } = nextEnvironment;
+loadEnvConfig(process.cwd(), process.env.NODE_ENV !== "production");
 
 const testDatabaseUrl = process.env.TEST_DATABASE_URL;
 let pool;

@@ -38,7 +38,13 @@ function parsePostgresUrl(value: string, variableName: string): URL {
 function databaseIdentity(value: string, variableName: string): string {
   const url = parsePostgresUrl(value, variableName);
   const hostname = canonicalHostname(url.hostname);
-  return `${hostname}:${url.port || "5432"}${url.pathname}`;
+  let databasePath: string;
+  try {
+    databasePath = decodeURIComponent(url.pathname);
+  } catch (error) {
+    throw new Error(`${variableName} must contain a valid encoded database name.`, { cause: error });
+  }
+  return `${hostname}:${url.port || "5432"}${databasePath}`;
 }
 
 export function validateTestDatabase(options: TestDatabaseOptions): void {

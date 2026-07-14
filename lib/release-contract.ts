@@ -69,10 +69,11 @@ function validateHttpsOrigin(value: string, variableName: string): URL {
 }
 
 function validateSecret(name: string, value: string, minimumLength: number): void {
-  if (/^(change|replace|placeholder|example|todo|xxx|your[-_])/i.test(value)) {
+  const normalized = value.trim();
+  if (/^(change|replace|placeholder|example|todo|xxx|your[-_])/i.test(normalized)) {
     throw new Error(`${name} must not use a placeholder value.`);
   }
-  if (value.length < minimumLength) {
+  if (normalized.length < minimumLength) {
     throw new Error(`${name} must be at least ${minimumLength} characters.`);
   }
 }
