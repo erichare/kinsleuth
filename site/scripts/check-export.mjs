@@ -79,6 +79,11 @@ if (!challenge.includes('<meta name="robots" content="noindex, nofollow"')) {
 if (!/Everything here is fictional/i.test(challenge) || !/Hartwell[–-]Mercer/i.test(challenge)) {
   problems.push("Challenge export is missing its fictional Hartwell–Mercer disclosure.");
 }
+for (const region of ["record-inspector", "transcript", "clue-notebook", "conclusion"]) {
+  if (!challenge.includes(`data-challenge-region="${region}"`)) {
+    problems.push(`Challenge export is missing the immersive ${region} region.`);
+  }
+}
 if (!home.includes('href="/challenge/"')) {
   problems.push("Homepage is missing the research challenge discovery link.");
 }

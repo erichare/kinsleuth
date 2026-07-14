@@ -7,6 +7,11 @@ import { describe, expect, it } from "vitest";
 import ChallengePage, { metadata } from "@/app/challenge/page";
 import { ResearchInstinctsChallenge } from "@/components/research-instincts-challenge";
 
+import {
+  EXPECTED_IMMERSIVE_RECORDS,
+  IMMERSIVE_CHALLENGE_REGIONS
+} from "./research-instincts-immersive-contract";
+
 describe("public research instincts route", () => {
   it("is explicitly excluded from search indexing", () => {
     expect(metadata).toMatchObject({
@@ -27,6 +32,38 @@ describe("public research instincts route", () => {
 });
 
 describe("research instincts accessible interaction contract", () => {
+  it("server-renders the immersive record inspector and six-record navigation", () => {
+    const html = renderToStaticMarkup(createElement(ResearchInstinctsChallenge));
+    const navigation = html.match(/<nav\b[^>]*aria-label="Case records"[^>]*>([\s\S]*?)<\/nav>/)?.[1];
+
+    expect(html).toContain('data-challenge-region="record-inspector"');
+    expect(navigation, "Case records navigation").toBeDefined();
+    expect(navigation?.match(/<button\b/g) ?? [], "record navigation controls").toHaveLength(6);
+    for (const { catalogId } of EXPECTED_IMMERSIVE_RECORDS) {
+      expect(navigation, `navigation includes ${catalogId}`).toContain(catalogId);
+    }
+
+    expect(html).toMatch(/<figure\b/);
+    expect(html).toContain(`src="${EXPECTED_IMMERSIVE_RECORDS[0].assetPath}"`);
+  });
+
+  it("exposes deterministic zoom, transcript, notebook, and conclusion regions", () => {
+    const firstRender = renderToStaticMarkup(createElement(ResearchInstinctsChallenge));
+    const secondRender = renderToStaticMarkup(createElement(ResearchInstinctsChallenge));
+
+    expect(secondRender).toBe(firstRender);
+    for (const region of IMMERSIVE_CHALLENGE_REGIONS) {
+      expect(firstRender, region).toContain(`data-challenge-region="${region}"`);
+    }
+    for (const accessibleName of ["Zoom out", "Zoom in", "Reset zoom"]) {
+      expect(firstRender, accessibleName).toMatch(
+        new RegExp(`<button\\b[^>]*aria-label="${accessibleName}"[^>]*>`)
+      );
+    }
+    expect(firstRender).toMatch(/<h[2-6]\b[^>]*>Transcript<\/h[2-6]>/i);
+    expect(firstRender).toMatch(/<h[2-6]\b[^>]*>Clue notebook<\/h[2-6]>/i);
+  });
+
   it("server-renders one case as three labelled question groups", () => {
     const html = renderToStaticMarkup(createElement(ResearchInstinctsChallenge));
     const fieldsets = [...html.matchAll(/<fieldset\b[\s\S]*?<\/fieldset>/g)].map((match) => match[0]);

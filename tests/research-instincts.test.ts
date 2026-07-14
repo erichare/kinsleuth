@@ -13,6 +13,12 @@ import {
   scoreResearchInstinctsChallenge
 } from "@/lib/research-instincts";
 
+import {
+  EXPECTED_IMMERSIVE_RECORDS,
+  IMMERSIVE_CASE_ID,
+  type ImmersiveCaseContract
+} from "./research-instincts-immersive-contract";
+
 const expectedCaseIds = [
   "mercer-march-identity",
   "blue-tin-timeline",
@@ -68,6 +74,115 @@ describe("research instincts fictional challenge data", () => {
 
     expect(ids).toEqual(expectedCaseIds);
     expect(new Set(ids).size).toBe(5);
+  });
+
+  it("defines the six canonical records for the immersive Mercer–March case", () => {
+    const challengeCase = researchInstinctsCases.find(({ id }) => id === IMMERSIVE_CASE_ID) as
+      | (ChallengeCase & ImmersiveCaseContract)
+      | undefined;
+    const records = challengeCase?.records ?? [];
+
+    expect(challengeCase, IMMERSIVE_CASE_ID).toBeDefined();
+    expect(records).toHaveLength(EXPECTED_IMMERSIVE_RECORDS.length);
+    expect(records.map(({ catalogId }) => catalogId)).toEqual(
+      EXPECTED_IMMERSIVE_RECORDS.map(({ catalogId }) => catalogId)
+    );
+    expect(records.map(({ image }) => image.src)).toEqual(
+      EXPECTED_IMMERSIVE_RECORDS.map(({ assetPath }) => assetPath)
+    );
+    expect(new Set(records.map(({ id }) => id)).size, "record ids").toBe(records.length);
+    expect(new Set(records.map(({ catalogId }) => catalogId)).size, "catalog ids").toBe(records.length);
+
+    records.forEach((record, index) => {
+      const expected = EXPECTED_IMMERSIVE_RECORDS[index];
+      expect(record.id.trim(), `${record.catalogId} id`).not.toBe("");
+      expect(record.title, `${record.catalogId} title`).toMatch(expected.titlePattern);
+      expect(record.kind.trim(), `${record.catalogId} kind`).not.toBe("");
+      expect(record.date.trim(), `${record.catalogId} date`).not.toBe("");
+      expect(record.image.alt.trim(), `${record.catalogId} image alt`).not.toBe("");
+      expect(record.image.width, `${record.catalogId} image width`).toBeGreaterThan(0);
+      expect(record.image.height, `${record.catalogId} image height`).toBeGreaterThan(0);
+      expect(record.transcript.kind, `${record.catalogId} transcript kind`).toBe(expected.transcriptKind);
+    });
+  });
+
+  it("provides complete metadata and structurally valid transcripts for every immersive record", () => {
+    const challengeCase = researchInstinctsCases.find(({ id }) => id === IMMERSIVE_CASE_ID) as
+      | (ChallengeCase & ImmersiveCaseContract)
+      | undefined;
+    const records = challengeCase?.records ?? [];
+
+    expect(records).toHaveLength(EXPECTED_IMMERSIVE_RECORDS.length);
+    for (const record of records) {
+      expect(record.metadata.length, `${record.catalogId} metadata`).toBeGreaterThan(0);
+      for (const item of record.metadata) {
+        expect(item.label.trim(), `${record.catalogId} metadata label`).not.toBe("");
+        expect(item.value.trim(), `${record.catalogId}/${item.label} metadata value`).not.toBe("");
+      }
+
+      if (record.transcript.kind === "letter") {
+        expect(record.transcript.paragraphs.length, `${record.catalogId} transcript paragraphs`).toBeGreaterThan(0);
+        expect(
+          record.transcript.paragraphs.every((paragraph) => paragraph.trim().length > 0),
+          `${record.catalogId} transcript paragraphs`
+        ).toBe(true);
+      } else {
+        expect(record.transcript.kind, `${record.catalogId} transcript kind`).toBe("table");
+        expect(record.transcript.columns.length, `${record.catalogId} transcript columns`).toBeGreaterThan(0);
+        expect(record.transcript.rows.length, `${record.catalogId} transcript rows`).toBeGreaterThan(0);
+        expect(
+          record.transcript.columns.every((column) => column.trim().length > 0),
+          `${record.catalogId} transcript columns`
+        ).toBe(true);
+        for (const row of record.transcript.rows) {
+          expect(row, `${record.catalogId} transcript row width`).toHaveLength(record.transcript.columns.length);
+          expect(
+            row.every((cell) => cell.trim().length > 0),
+            `${record.catalogId} transcript row cells`
+          ).toBe(true);
+        }
+      }
+    }
+  });
+
+  it("keeps record clues and notebook references unique, resolvable, and bidirectional", () => {
+    const challengeCase = researchInstinctsCases.find(({ id }) => id === IMMERSIVE_CASE_ID) as
+      | (ChallengeCase & ImmersiveCaseContract)
+      | undefined;
+    const records = challengeCase?.records ?? [];
+    const notebookClues = challengeCase?.notebookClues ?? [];
+
+    expect(records).toHaveLength(EXPECTED_IMMERSIVE_RECORDS.length);
+    expect(notebookClues.length, "notebook clues").toBeGreaterThan(0);
+
+    const recordsById = new Map(records.map((record) => [record.id, record]));
+    const cluesById = new Map(notebookClues.map((clue) => [clue.id, clue]));
+    expect(recordsById.size, "unique record ids").toBe(records.length);
+    expect(cluesById.size, "unique notebook clue ids").toBe(notebookClues.length);
+
+    for (const record of records) {
+      expect(record.clueIds.length, `${record.catalogId} clue references`).toBeGreaterThan(0);
+      expect(new Set(record.clueIds).size, `${record.catalogId} unique clue references`).toBe(
+        record.clueIds.length
+      );
+      for (const clueId of record.clueIds) {
+        const clue = cluesById.get(clueId);
+        expect(clue, `${record.catalogId} references known notebook clue ${clueId}`).toBeDefined();
+        expect(clue?.recordIds, `${clueId} links back to ${record.id}`).toContain(record.id);
+      }
+    }
+
+    for (const clue of notebookClues) {
+      expect(clue.id.trim(), "notebook clue id").not.toBe("");
+      expect(clue.label.trim(), `${clue.id} label`).not.toBe("");
+      expect(clue.recordIds.length, `${clue.id} record references`).toBeGreaterThan(0);
+      expect(new Set(clue.recordIds).size, `${clue.id} unique record references`).toBe(clue.recordIds.length);
+      for (const recordId of clue.recordIds) {
+        const record = recordsById.get(recordId);
+        expect(record, `${clue.id} references known record ${recordId}`).toBeDefined();
+        expect(record?.clueIds, `${recordId} links back to ${clue.id}`).toContain(clue.id);
+      }
+    }
   });
 
   it("keeps every case anchored to the fictional Hartwell–Mercer lore", () => {

@@ -1,10 +1,8 @@
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-const implementationPaths = [
-  "site/shared/research-instincts.ts",
-  "site/shared/research-instincts-challenge.tsx",
+const adapterAndRoutePaths = [
   "site/components/research-instincts-challenge.tsx",
   "lib/research-instincts.ts",
   "components/research-instincts-challenge.tsx",
@@ -12,13 +10,38 @@ const implementationPaths = [
   "site/app/challenge/page.tsx"
 ] as const;
 
+async function sharedModulePaths(directory = path.join(process.cwd(), "site/shared")): Promise<string[]> {
+  const entries = await readdir(directory, { withFileTypes: true });
+  const paths = await Promise.all(
+    entries.map(async (entry) => {
+      const absolutePath = path.join(directory, entry.name);
+      if (entry.isDirectory()) return sharedModulePaths(absolutePath);
+      if (!entry.isFile() || !/\.[cm]?[jt]sx?$/.test(entry.name)) return [];
+      return [path.relative(process.cwd(), absolutePath)];
+    })
+  );
+
+  return paths.flat().sort();
+}
+
+async function implementationPaths() {
+  return [...(await sharedModulePaths()), ...adapterAndRoutePaths];
+}
+
 function importSpecifiers(source: string): string[] {
   return [...source.matchAll(/(?:from\s+|import\s*)["']([^"']+)["']/g)].map((match) => match[1]);
 }
 
 describe("research instincts static public boundary", () => {
+  it("recursively discovers every shared implementation module", async () => {
+    const sharedPaths = await sharedModulePaths();
+
+    expect(sharedPaths).toContain("site/shared/research-instincts.ts");
+    expect(sharedPaths).toContain("site/shared/research-instincts-challenge.tsx");
+  });
+
   it("does not import private auth, database, session, or workspace modules", async () => {
-    for (const relativePath of implementationPaths) {
+    for (const relativePath of await implementationPaths()) {
       const source = await readFile(path.join(process.cwd(), relativePath), "utf8");
       const imports = importSpecifiers(source);
 
@@ -33,16 +56,21 @@ describe("research instincts static public boundary", () => {
     }
   });
 
-  it("uses browser-local progress without API or network mutation", async () => {
-    const source = await readFile(
-      path.join(process.cwd(), "site/shared/research-instincts-challenge.tsx"),
-      "utf8"
+  it("keeps every shared module browser-local without API or network mutation", async () => {
+    const sharedPaths = await sharedModulePaths();
+    const sources = await Promise.all(
+      sharedPaths.map(async (relativePath) => ({
+        relativePath,
+        source: await readFile(path.join(process.cwd(), relativePath), "utf8")
+      }))
     );
 
-    expect(source).not.toMatch(/\bfetch\s*\(/);
-    expect(source).not.toMatch(/\bXMLHttpRequest\b/);
-    expect(source).not.toMatch(/["'`]\/api\//);
-    expect(source).toContain("RESEARCH_INSTINCTS_STORAGE_KEY");
+    for (const { relativePath, source } of sources) {
+      expect(source, relativePath).not.toMatch(/\bfetch\s*\(/);
+      expect(source, relativePath).not.toMatch(/\bXMLHttpRequest\b/);
+      expect(source, relativePath).not.toMatch(/["'`]\/api\//);
+    }
+    expect(sources.map(({ source }) => source).join("\n")).toContain("RESEARCH_INSTINCTS_STORAGE_KEY");
   });
 
   it("links to the easter egg from both public discovery surfaces", async () => {
