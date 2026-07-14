@@ -1,15 +1,16 @@
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { Pool, type PoolClient } from "pg";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { V0174_INITIAL_SHA256 } from "@/lib/migration-history";
 import { runPendingMigrations } from "@/lib/migrations";
 import { replacePersonFacts, upsertCaseRow, upsertPeopleRows, upsertTaskRow } from "@/lib/store/rows";
 
 const releaseDatabaseUrl = process.env.TEST_RELEASE_UPGRADE_DATABASE_URL;
+const allowedDatabaseHosts = new Set(["localhost", "127.0.0.1", "[::1]", "postgres", "release-postgres"]);
 const archiveScopedTables = [
   "people",
   "person_facts",
@@ -33,6 +34,12 @@ function databaseIdentity(connectionString: string): string {
 }
 
 function assertDedicatedReleaseDatabase(connectionString: string): void {
+  const hostname = new URL(connectionString).hostname.toLowerCase();
+  if (!allowedDatabaseHosts.has(hostname)) {
+    throw new Error(
+      "TEST_RELEASE_UPGRADE_DATABASE_URL must use localhost or the dedicated CI PostgreSQL service; remote databases are refused."
+    );
+  }
   const releaseIdentity = databaseIdentity(connectionString);
   for (const name of ["TEST_DATABASE_URL", "DATABASE_URL"] as const) {
     const other = process.env[name];
@@ -54,10 +61,46 @@ function historicalInitialSql(): string {
   return contents.toString("utf8");
 }
 
-async function resetDatabase(pool: Pool): Promise<void> {
-  await pool.query("DROP SCHEMA IF EXISTS extensions CASCADE");
-  await pool.query("DROP SCHEMA IF EXISTS public CASCADE");
-  await pool.query("CREATE SCHEMA public");
+function derivedDatabaseUrl(controlUrl: string, databaseName: string): string {
+  const url = new URL(controlUrl);
+  url.pathname = `/${databaseName}`;
+  return url.toString();
+}
+
+async function createScratchDatabase(
+  controlPool: Pool,
+  controlUrl: string,
+  label: string,
+  trackedDatabases: Set<string>
+): Promise<{ name: string; url: string; pool: Pool }> {
+  const safeLabel = label.toLowerCase().replace(/[^a-z0-9]+/g, "_").slice(0, 20);
+  const name = `kr_upgrade_${process.pid}_${safeLabel}_${randomBytes(4).toString("hex")}`;
+  if (!/^[a-z0-9_]+$/.test(name)) {
+    throw new Error("Generated an invalid release rehearsal database name.");
+  }
+  await controlPool.query(`CREATE DATABASE "${name}"`);
+  trackedDatabases.add(name);
+  const url = derivedDatabaseUrl(controlUrl, name);
+  return { name, url, pool: new Pool({ connectionString: url, max: 4 }) };
+}
+
+async function dropScratchDatabase(controlPool: Pool, name: string, trackedDatabases: Set<string>): Promise<void> {
+  if (!trackedDatabases.has(name) || !/^kr_upgrade_[a-z0-9_]+$/.test(name)) {
+    throw new Error(`Refusing to drop untracked release rehearsal database: ${name}.`);
+  }
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    const connections = await controlPool.query<{ count: number }>(
+      "SELECT count(*)::integer AS count FROM pg_stat_activity WHERE datname = $1",
+      [name]
+    );
+    if (connections.rows[0].count === 0) {
+      await controlPool.query(`DROP DATABASE IF EXISTS "${name}"`);
+      trackedDatabases.delete(name);
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  throw new Error(`Release rehearsal database ${name} still has active connections after its pool was closed.`);
 }
 
 async function installV0174(pool: Pool, options: { recordInitialMigration: boolean }): Promise<void> {
@@ -325,20 +368,34 @@ async function expectMigration004Unrecorded(pool: Pool): Promise<void> {
 }
 
 describe.skipIf(!releaseDatabaseUrl)("v0.17.4 release upgrade", () => {
+  const trackedDatabases = new Set<string>();
+  let controlPool: Pool;
   let pool: Pool;
+  let scratchDatabaseName: string;
+  let scratchDatabaseUrl: string;
 
   beforeAll(() => {
     assertDedicatedReleaseDatabase(releaseDatabaseUrl!);
-    pool = new Pool({ connectionString: releaseDatabaseUrl, max: 4 });
+    controlPool = new Pool({ connectionString: releaseDatabaseUrl, max: 2 });
   });
 
   beforeEach(async () => {
-    await resetDatabase(pool);
+    const scratch = await createScratchDatabase(controlPool, releaseDatabaseUrl!, "scenario", trackedDatabases);
+    scratchDatabaseName = scratch.name;
+    scratchDatabaseUrl = scratch.url;
+    pool = scratch.pool;
+  });
+
+  afterEach(async () => {
+    await pool.end();
+    await dropScratchDatabase(controlPool, scratchDatabaseName, trackedDatabases);
   });
 
   afterAll(async () => {
-    await resetDatabase(pool);
-    await pool.end();
+    for (const name of [...trackedDatabases]) {
+      await dropScratchDatabase(controlPool, name, trackedDatabases);
+    }
+    await controlPool.end();
   });
 
   it("upgrades the exact unrecorded v0.17.4 install without data loss and matches a fresh catalog", async () => {
@@ -363,9 +420,15 @@ describe.skipIf(!releaseDatabaseUrl)("v0.17.4 release upgrade", () => {
     await exerciseCompositeKeyWriters(pool);
     const upgradedCatalog = await catalogSnapshot(pool);
 
-    await resetDatabase(pool);
-    await runPendingMigrations(pool);
-    const freshCatalog = await catalogSnapshot(pool);
+    const fresh = await createScratchDatabase(controlPool, releaseDatabaseUrl!, "fresh", trackedDatabases);
+    let freshCatalog: Record<string, unknown[]>;
+    try {
+      await runPendingMigrations(fresh.pool);
+      freshCatalog = await catalogSnapshot(fresh.pool);
+    } finally {
+      await fresh.pool.end();
+      await dropScratchDatabase(controlPool, fresh.name, trackedDatabases);
+    }
 
     expect(upgradedCatalog).toEqual(freshCatalog);
   });
@@ -429,7 +492,7 @@ describe.skipIf(!releaseDatabaseUrl)("v0.17.4 release upgrade", () => {
     await applyRecordedMigration(pool, "002_search_unaccent.sql");
     await applyRecordedMigration(pool, "003_auth_accounts.sql");
     const holder = await pool.connect();
-    const contender = new Pool({ connectionString: releaseDatabaseUrl, max: 1 });
+    const contender = new Pool({ connectionString: scratchDatabaseUrl, max: 1 });
 
     try {
       await holder.query("BEGIN");

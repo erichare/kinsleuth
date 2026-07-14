@@ -149,9 +149,10 @@ needs correction after release, add `005`; do not rewrite `004`.
 
 ### Context brief
 
-A fresh database is insufficient evidence because it never reproduces a recorded legacy
-`001`. The regression must start with the exact v0.17.4 migration, mark it applied, seed
-representative rows and relationships, then run the current migration set.
+A fresh database is insufficient evidence because it never reproduces the released legacy
+schema. v0.17.4 executed `001` directly and had no migration ledger, so the regression
+must cover both that exact shipped path and an intermediate installation where the current
+runner later recorded legacy `001` before this repair landed.
 
 ### Tasks
 
@@ -159,10 +160,11 @@ representative rows and relationships, then run the current migration set.
    or `DATABASE_URL`, and derive isolated fresh/legacy/negative databases from it. A URL
    guard proves shape, separation, and CI locality—not that an arbitrary remote database
    is disposable.
-2. Reproduce the v0.17.4 runner order exactly: create the legacy ledger shape, begin one
-   transaction, insert `001_initial`, execute the hash-verified restored `001` bytes,
-   and commit both together. Roll both back on error. Only then seed legacy data and
-   invoke the current runner.
+2. Reproduce the v0.17.4 runner exactly by executing the hash-verified tagged `001` bytes
+   without a ledger, seed legacy data, and then invoke the current runner. Add a second
+   recorded-legacy fixture that executes the same tagged bytes, creates the current ledger,
+   records `001_initial`, and proves the current runner safely skips immutable `001` while
+   applying the forward repair.
 3. Seed synthetic rows in **all fourteen** converted tables: `people`, `person_facts`,
    `import_snapshots`, `raw_records`, `workspace_backups`, `sources`, `research_cases`,
    `hypotheses`, `evidence_items`, `tasks`, `dna_matches`, `dna_hypotheses`, `embeddings`,

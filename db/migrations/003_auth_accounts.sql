@@ -6,9 +6,19 @@
 -- snake_case tables. Do not rename them without configuring better-auth
 -- field mappings to match.
 
--- The users table from 001 was scaffolding that no code ever read or wrote;
--- account identity now lives in better-auth's "user" table.
-DROP TABLE IF EXISTS users;
+-- Preserve the legacy users table for operator review instead of silently
+-- deleting rows during an upgrade. These records cannot be converted into
+-- better-auth accounts because the old table never stored credentials.
+DO $$
+BEGIN
+  IF to_regclass('public.users') IS NOT NULL THEN
+    IF to_regclass('public.legacy_users') IS NOT NULL THEN
+      RAISE EXCEPTION 'Cannot preserve legacy users because public.users and public.legacy_users both exist';
+    END IF;
+    ALTER TABLE public.users RENAME TO legacy_users;
+  END IF;
+END
+$$;
 
 CREATE TABLE IF NOT EXISTS "user" (
   "id" text PRIMARY KEY,
