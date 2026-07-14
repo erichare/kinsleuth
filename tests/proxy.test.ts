@@ -43,6 +43,18 @@ describe("private workspace proxy", () => {
     expect(response.headers.get("location")).toBe("https://kinsleuth.example/login?next=%2Fapp%2Fcases%3Fview%3Dopen");
   });
 
+  it("uses the canonical application origin for production login redirects", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("AUTH_SECRET", "a-long-production-secret");
+    vi.stubEnv("APP_BASE_URL", "https://app.kinresolve.com");
+    authMocks.getSessionContext.mockResolvedValue(null);
+
+    const response = await proxy(new NextRequest("https://kinresolve-release.vercel.app/app"));
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe("https://app.kinresolve.com/login?next=%2Fapp");
+  });
+
   it("returns an API error instead of redirecting", async () => {
     vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("AUTH_SECRET", "a-long-production-secret");

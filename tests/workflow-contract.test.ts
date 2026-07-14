@@ -72,8 +72,11 @@ describe("stable release workflow contract", () => {
 
   it("uses environment authentication and smokes the deployment it created", async () => {
     const contents = await workflow("vercel-release.yml");
+    const jobConfiguration = contents.slice(0, contents.indexOf("    steps:"));
 
     expect(contents).not.toContain("--token");
+    expect(jobConfiguration).not.toContain("VERCEL_TOKEN");
+    expect(contents).toContain("VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}");
     expect(contents).not.toContain("KINSLEUTH_APP_PASSWORD");
     expect(contents).not.toContain("kinsleuth.vercel.app");
     expect(contents).not.toMatch(/^\s*PRODUCTION_URL:/m);
