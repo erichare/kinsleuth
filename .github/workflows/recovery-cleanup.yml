@@ -148,21 +148,22 @@ jobs:
           echo "The exact source attempt never published a cleanup lease, so no later protected mutation could run." \
             >> "${GITHUB_STEP_SUMMARY}"
 
-      - name: Check out the exact failed recovery revision
+      - name: Check out the immutable trusted cleanup implementation
         if: steps.discover.outputs.lease_present == 'true'
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
-          fetch-depth: 1
+          ref: ${{ github.sha }}
+          fetch-depth: 0
           persist-credentials: false
 
-      - name: Verify exact protected-main provenance
+      - name: Verify trusted implementation and exact source provenance
         if: steps.discover.outputs.lease_present == 'true'
         shell: bash
         run: |
           set -euo pipefail
           git fetch origin main:refs/remotes/origin/main --force --no-tags
-          test "$(git rev-parse --verify 'HEAD^{commit}')" = "${SOURCE_HEAD_SHA}"
+          test "$(git rev-parse --verify 'HEAD^{commit}')" = "${GITHUB_SHA}"
+          git merge-base --is-ancestor HEAD origin/main
           git merge-base --is-ancestor "${SOURCE_HEAD_SHA}" origin/main
 
       - name: Set up the pinned Node runtime
@@ -170,7 +171,6 @@ jobs:
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
-          cache: npm
 
       - name: Install exact authorization dependencies
         if: steps.discover.outputs.lease_present == 'true'
@@ -269,26 +269,26 @@ jobs:
           install -d -m 700 "${work}"
           echo "RECOVERY_CLEANUP_WORK=${work}" >> "${GITHUB_ENV}"
 
-      - name: Check out the exact failed recovery revision
+      - name: Check out the immutable trusted cleanup implementation
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
-          fetch-depth: 1
+          ref: ${{ github.sha }}
+          fetch-depth: 0
           persist-credentials: false
 
-      - name: Verify exact protected-main provenance again
+      - name: Verify trusted implementation and exact source provenance again
         shell: bash
         run: |
           set -euo pipefail
           git fetch origin main:refs/remotes/origin/main --force --no-tags
-          test "$(git rev-parse --verify 'HEAD^{commit}')" = "${SOURCE_HEAD_SHA}"
+          test "$(git rev-parse --verify 'HEAD^{commit}')" = "${GITHUB_SHA}"
+          git merge-base --is-ancestor HEAD origin/main
           git merge-base --is-ancestor "${SOURCE_HEAD_SHA}" origin/main
 
       - name: Set up the pinned Node runtime
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
-          cache: npm
 
       - name: Install exact cleanup dependencies
         id: install

@@ -50,6 +50,13 @@ describe("failed recovery target janitor", () => {
     expect(authorize).toContain('publicationSteps[0]?.conclusion === "success"');
     expect(authorize).toContain("never published a cleanup lease");
     expect(authorize).toContain("actions/artifacts/${ARTIFACT_ID}/zip");
+    expect(authorize).toContain("Check out the immutable trusted cleanup implementation");
+    expect(authorize).toContain("ref: ${{ github.sha }}");
+    expect(authorize).not.toContain("ref: ${{ github.event.workflow_run.head_sha }}");
+    expect(authorize).not.toContain("cache: npm");
+    expect(authorize).toContain('test "$(git rev-parse --verify \'HEAD^{commit}\')" = "${GITHUB_SHA}"');
+    expect(authorize).toContain('git merge-base --is-ancestor HEAD origin/main');
+    expect(authorize).toContain('git merge-base --is-ancestor "${SOURCE_HEAD_SHA}" origin/main');
     expect(authorize).toContain("scripts/recovery-cleanup-lease.mjs validate-source");
   });
 
@@ -64,7 +71,12 @@ describe("failed recovery target janitor", () => {
     expect(identities).toBeGreaterThan(-1);
     expect(identities).toBeLessThan(checkout);
     expect(checkout).toBeLessThan(firstSecret);
-    expect(protectedJob).toContain('test "$(git rev-parse --verify \'HEAD^{commit}\')" = "${SOURCE_HEAD_SHA}"');
+    expect(protectedJob).toContain("Check out the immutable trusted cleanup implementation");
+    expect(protectedJob).toContain("ref: ${{ github.sha }}");
+    expect(protectedJob).not.toContain("ref: ${{ github.event.workflow_run.head_sha }}");
+    expect(protectedJob).not.toContain("cache: npm");
+    expect(protectedJob).toContain('test "$(git rev-parse --verify \'HEAD^{commit}\')" = "${GITHUB_SHA}"');
+    expect(protectedJob).toContain('git merge-base --is-ancestor HEAD origin/main');
     expect(protectedJob).toContain('git merge-base --is-ancestor "${SOURCE_HEAD_SHA}" origin/main');
     expect(protectedJob).toContain("artifact?.name !== process.env.RECOVERY_CLEANUP_LEASE_ARTIFACT_NAME");
   });
