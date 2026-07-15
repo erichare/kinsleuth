@@ -9,7 +9,10 @@ const requiredProductionSettings = [
   "CRON_SECRET",
   "DATABASE_AUTO_MIGRATE",
   "DATABASE_POOL_MAX",
-  "DATABASE_URL"
+  "DATABASE_URL",
+  "KINRESOLVE_DEPLOYMENT_MODE",
+  "KINRESOLVE_DATASET_MODE",
+  "KINSLEUTH_ARCHIVE_ID"
 ] as const;
 
 export type ReleaseContractInput = {
@@ -122,6 +125,15 @@ export function validateReleaseContract(input: ReleaseContractInput): ReleaseCon
   }
   if (environment.DATABASE_AUTO_MIGRATE !== "false") {
     throw new Error("DATABASE_AUTO_MIGRATE must be exactly false for production releases.");
+  }
+  if (environment.KINRESOLVE_DEPLOYMENT_MODE !== "hosted") {
+    throw new Error("KINRESOLVE_DEPLOYMENT_MODE must be exactly hosted for production releases.");
+  }
+  if (!["empty", "demo", "pilot"].includes(environment.KINRESOLVE_DATASET_MODE)) {
+    throw new Error("KINRESOLVE_DATASET_MODE must be empty, demo, or pilot.");
+  }
+  if (!/^[a-z0-9][a-z0-9_-]{0,62}$/.test(environment.KINSLEUTH_ARCHIVE_ID)) {
+    throw new Error("KINSLEUTH_ARCHIVE_ID must be a safe lowercase archive identifier of at most 63 characters.");
   }
 
   const appUrl = validateHttpsOrigin(environment.APP_BASE_URL, "APP_BASE_URL");
