@@ -4,14 +4,19 @@ import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { withPermission } from "@/lib/api-authorization";
 import { capabilityUnavailableResponse } from "@/lib/api-capabilities";
+import type { SourceDocument } from "@/lib/models";
 import { readWorkspace, saveSourceDocument } from "@/lib/workspace-store";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export const GET = withPermission("archive:read-private", async (_request, authorization) => {
+  const binaryUnavailable = capabilityUnavailableResponse("evidenceBinaryUploads");
+  if (binaryUnavailable?.status === 503) return binaryUnavailable;
   const workspace = await readWorkspace({ archiveId: authorization.archiveId });
-  return NextResponse.json(workspace.sources);
+  return NextResponse.json(
+    binaryUnavailable ? workspace.sources.map(withoutBinarySourceMetadata) : workspace.sources
+  );
 });
 
 export const POST = withPermission("sources:write", async (request, authorization) => {
@@ -138,4 +143,13 @@ function parseConfidence(value: string): number {
     return 0.5;
   }
   return Math.max(0, Math.min(1, parsed));
+}
+
+function withoutBinarySourceMetadata(source: SourceDocument): SourceDocument {
+  const projected = { ...source };
+  delete projected.fileName;
+  delete projected.storageKey;
+  delete projected.mimeType;
+  delete projected.size;
+  return projected;
 }
