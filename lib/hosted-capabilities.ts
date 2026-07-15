@@ -92,7 +92,14 @@ export function validateHostedGedcomFile(
   const contentType = file.contentType?.trim().toLowerCase() ?? "";
   if (
     !/\.(?:ged|gedcom)$/i.test(fileName)
-    || !["", "text/plain", "application/octet-stream", "application/x-gedcom"].includes(contentType)
+    || ![
+      "",
+      "text/plain",
+      "text/x-gedcom",
+      "application/gedcom",
+      "application/octet-stream",
+      "application/x-gedcom"
+    ].includes(contentType)
   ) {
     throw new HostedCapabilityError(
       "Only a plain GEDCOM file ending in .ged or .gedcom is available for this deployment.",

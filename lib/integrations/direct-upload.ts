@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 
 import { query, withTransaction, type DatabaseOptions } from "../db";
+import { validateHostedGedcomFile } from "../hosted-capabilities";
 import {
   createConfiguredArchiveObjectStorage,
   type ArchiveObjectStorage,
@@ -109,6 +110,10 @@ export async function stageDirectIntegrationUpload(
   const archiveId = required(options.archiveId, "archiveId");
   const normalizedConnectionId = required(connectionId, "connection id");
   const file = validateUploadDeclaration(input);
+  const featureFlags = options.featureFlags ?? getIntegrationFeatureFlags();
+  if (featureFlags.plainGedcomOnly) {
+    validateHostedGedcomFile(file);
+  }
   const now = currentTime(options);
   const lifetime = normalizeIntentLifetime(options.intentLifetimeMilliseconds);
   const expiresAt = new Date(now.getTime() + lifetime);
@@ -122,7 +127,7 @@ export async function stageDirectIntegrationUpload(
       provider,
       fileName: file.fileName,
       acknowledgement: input.mediaRightsAcknowledgement,
-      featureFlags: options.featureFlags ?? getIntegrationFeatureFlags(),
+      featureFlags,
       acknowledgedAt: now
     });
     const inserted = await client.query<UploadIntentRow>(
@@ -187,6 +192,18 @@ export async function completeDirectIntegrationUpload(
   if (intent.status !== "pending") {
     throw directUploadError("INVALID_STATE", "Upload intent has already been consumed");
   }
+
+  const featureFlags = options.featureFlags ?? getIntegrationFeatureFlags();
+  if (featureFlags.plainGedcomOnly) {
+    validateHostedGedcomFile({
+      fileName: intent.file_name,
+      contentType: intent.content_type,
+      size: Number(intent.declared_size_bytes)
+    });
+  }
+  await withTransaction(options, (client) =>
+    requireEnabledConnection(client, archiveId, normalizedConnectionId, { ...options, featureFlags })
+  );
 
   const storage = configuredObjectStorage(options);
   if (isExpired(intent, currentTime(options))) {
