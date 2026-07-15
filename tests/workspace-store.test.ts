@@ -84,6 +84,9 @@ describeIfDatabase("workspace store", () => {
       await expect(updateDnaMatch(match.id, { notes: "bypass" }, storeOptions)).rejects.toMatchObject({
         code: "CAPABILITY_DISABLED"
       });
+      await expect(deleteDnaMatch(match.id, storeOptions)).rejects.toMatchObject({
+        code: "CAPABILITY_DISABLED"
+      });
       await expect(linkDnaMatchToCase(researchCase.id, match.id, {}, storeOptions)).rejects.toMatchObject({
         code: "CAPABILITY_DISABLED"
       });

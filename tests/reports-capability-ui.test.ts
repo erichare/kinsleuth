@@ -2,15 +2,25 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const workspaceMocks = vi.hoisted(() => ({ readWorkspace: vi.fn() }));
+const authMocks = vi.hoisted(() => ({ getSessionContext: vi.fn() }));
 
 vi.mock("@/lib/workspace-store", () => workspaceMocks);
+vi.mock("@/lib/auth-session", () => authMocks);
 
+import { GET as getQualityReport } from "@/app/api/reports/quality/route";
 import ReportsPage from "@/app/app/reports/page";
 import { demoCases, demoDnaMatches, demoPeople } from "@/lib/demo-data";
 
 beforeEach(() => {
   vi.unstubAllEnvs();
   vi.clearAllMocks();
+  authMocks.getSessionContext.mockResolvedValue({
+    userId: "owner-private-beta",
+    email: "owner@example.test",
+    name: "Owner",
+    role: "owner",
+    archiveId: "archive-private-beta"
+  });
   workspaceMocks.readWorkspace.mockResolvedValue({
     archiveName: "Synthetic archive",
     people: demoPeople,
@@ -38,6 +48,24 @@ describe("quality report capability UI", () => {
 
     expect(html).toMatch(/DNA gaps/i);
     expect(html).toMatch(/meaningful DNA match/i);
+  });
+
+  it("omits disabled DNA from the hosted quality-report API and scopes the archive read", async () => {
+    stubHostedPrivateBeta();
+
+    const response = await getQualityReport(
+      new Request("https://app.kinresolve.com/api/reports/quality")
+    );
+    const report = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(report.summary.dnaGaps).toBe(0);
+    expect(report.issues.items).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ area: "dna" })
+    ]));
+    expect(workspaceMocks.readWorkspace).toHaveBeenCalledWith({
+      archiveId: "archive-private-beta"
+    });
   });
 });
 
