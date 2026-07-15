@@ -277,9 +277,13 @@ export async function createIntegrationConnection(
     throw integrationError("INVALID_INPUT", "unsupported integration provider");
   }
   const provider = input.provider as IntegrationProvider;
+  const featureFlags = getIntegrationFeatureFlags();
+  if (!isIntegrationProviderEnabled(provider, featureFlags)) {
+    throw integrationError("FEATURE_DISABLED", "this data-source provider is disabled");
+  }
   const authority = requireAuthoritativeEditor(input.authority);
   const displayName = requireValue(input.displayName, "display name");
-  const capabilities = getProviderCapabilities(provider);
+  const capabilities = getProviderCapabilities(provider, featureFlags);
   const id = `integration-${randomUUID()}`;
   const result = await query<ConnectionRow>(
     `INSERT INTO integration_connections (
