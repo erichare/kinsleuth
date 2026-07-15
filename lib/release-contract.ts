@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { parseEnv } from "node:util";
+import { hostedCapabilityEnvironmentNames } from "./hosted-capabilities";
 
 const requiredProductionSettings = [
   "APP_BASE_URL",
@@ -12,6 +13,7 @@ const requiredProductionSettings = [
   "DATABASE_URL",
   "KINRESOLVE_DEPLOYMENT_MODE",
   "KINRESOLVE_DATASET_MODE",
+  ...hostedCapabilityEnvironmentNames,
   "KINSLEUTH_ARCHIVE_ID"
 ] as const;
 
@@ -134,6 +136,20 @@ export function validateReleaseContract(input: ReleaseContractInput): ReleaseCon
   }
   if (!/^[a-z0-9][a-z0-9_-]{0,62}$/.test(environment.KINSLEUTH_ARCHIVE_ID)) {
     throw new Error("KINSLEUTH_ARCHIVE_ID must be a safe lowercase archive identifier of at most 63 characters.");
+  }
+  const cohortOneCapabilities = {
+    KINRESOLVE_DNA_ENABLED: "false",
+    KINRESOLVE_EXTERNAL_AI_ENABLED: "false",
+    KINRESOLVE_PUBLIC_ARCHIVE_ENABLED: "false",
+    KINRESOLVE_PUBLIC_PUBLISHING_ENABLED: "false",
+    KINRESOLVE_EVIDENCE_BINARY_UPLOADS_ENABLED: "false",
+    KINRESOLVE_PACKAGE_MEDIA_ENABLED: "false",
+    KINRESOLVE_PLAIN_GEDCOM_ENABLED: "true"
+  } as const;
+  for (const [name, expected] of Object.entries(cohortOneCapabilities)) {
+    if (environment[name as keyof typeof environment] !== expected) {
+      throw new Error(`${name} must be exactly ${expected} for the cohort-one production release.`);
+    }
   }
 
   const appUrl = validateHttpsOrigin(environment.APP_BASE_URL, "APP_BASE_URL");
