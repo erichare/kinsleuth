@@ -26,6 +26,18 @@ const databaseDestruction = readFileSync(
   path.join(process.cwd(), "scripts", "destroy-recovery-database-target.mjs"),
   "utf8"
 );
+const recoveryHealth = readFileSync(
+  path.join(process.cwd(), "scripts", "validate-recovery-health.mjs"),
+  "utf8"
+);
+const runtimeGrant = readFileSync(
+  path.join(process.cwd(), "scripts", "grant-beta-operations-runtime-role.mjs"),
+  "utf8"
+);
+const evidenceAssembler = readFileSync(
+  path.join(process.cwd(), "scripts", "assemble-recovery-evidence.mjs"),
+  "utf8"
+);
 
 describe("protected production recovery evidence workflow", () => {
   it("dispatches only an exact main SHA and version through the protected environment", () => {
@@ -115,12 +127,27 @@ describe("protected production recovery evidence workflow", () => {
       "scripts/validate-recovery-health.mjs",
       'KINRESOLVE_SCHEDULED_WRITES_ENABLED: "true"'
     ]) expect(`${workflow}\n${databaseTool}\n${databaseCommand}\n${objectOperations}`).toContain(marker);
+    expect(recoveryHealth).toContain('expectedReleaseCommit: gitSha(required("RELEASE_COMMIT"))');
     expect(workflow).toContain('test "${KINRESOLVE_DATABASE_IDENTITY}" != "${RECOVERY_TARGET_DATABASE_IDENTITY}"');
     expect(workflow).toContain('test "${KINRESOLVE_OBJECT_STORAGE_IDENTITY}" != "${RECOVERY_TARGET_OBJECT_STORAGE_IDENTITY}"');
     expect(workflow).toContain('test "${KINRESOLVE_OBJECT_STORAGE_PROVIDER_ID}" != "${RECOVERY_TARGET_OBJECT_STORAGE_PROVIDER_ID}"');
     expect(workflow).toContain('test "${SUPABASE_PROJECT_REF}" != "${RECOVERY_TARGET_SUPABASE_PROJECT_REF}"');
     expect(workflow).toContain('DATABASE_URL: ${{ secrets.RECOVERY_TARGET_RUNTIME_DATABASE_URL }}');
     expect(databaseTool).not.toContain("--no-privileges");
+    expect(workflow).toContain("RECOVERY_BACKUP_S3_MIN_RETENTION_DAYS");
+    expect(workflow).toContain("database_version=$(jq -er '.storage.versionId'");
+    expect(workflow).toContain("objects_version=$(jq -er '.storage.versionId'");
+    expect(workflow).toContain(
+      '"${database_version}" "${RECOVERY_WORK}/database-restored.dump.age"'
+    );
+    expect(workflow).toContain(
+      '"${objects_version}" "${RECOVERY_WORK}/objects-restored.tar.age"'
+    );
+    expect(evidenceAssembler).toContain(
+      '["completedAt", "operation", "sha256", "size", "storage"]'
+    );
+    expect(evidenceAssembler).toContain("offsite backup exact-version locator is invalid");
+    expect(evidenceAssembler).toContain("offsite backup COMPLIANCE retention proof is invalid");
     expect(workflow).toContain('RECOVERY_TARGET_DATABASE_REPLACEMENT_POLICY: ${{ vars.RECOVERY_TARGET_DATABASE_REPLACEMENT_POLICY }}');
     expect(databaseTool).toContain("identity-bound-disposable-v1");
     expect(databaseTool).toContain("validateConfiguredDatabaseIdentity");
@@ -158,6 +185,30 @@ describe("protected production recovery evidence workflow", () => {
     expect(runtimeAttestation).toContain('runtime.rolsuper !== false');
     expect(runtimeAttestation).toContain('runtime.owns_database !== false');
     expect(runtimeAttestation).not.toContain('runtime.rolbypassrls !== false');
+  });
+
+  it("grants and re-attests the exact beta operations contract on the restored runtime role", () => {
+    const migrationComplete = workflow.indexOf("migration-completed-at.txt");
+    const grant = workflow.indexOf("Grant and re-attest recovery beta operations runtime access");
+    const runtimeAttest = workflow.indexOf(
+      "Attest a distinct bounded-privilege runtime credential on the exact target"
+    );
+    expect(grant).toBeGreaterThan(migrationComplete);
+    expect(grant).toBeLessThan(runtimeAttest);
+    const grantStep = workflow.slice(grant, runtimeAttest);
+    expect(grantStep).toContain("secrets.RECOVERY_TARGET_DATABASE_URL");
+    expect(grantStep).toContain("secrets.RECOVERY_TARGET_RUNTIME_DATABASE_URL");
+    expect(grantStep).toContain("db:runtime-role:grant-beta-operations");
+    expect(grantStep).toContain("--recovery-target");
+    expect(grantStep).toContain('grantContract == "beta-operations-v1"');
+    expect(grantStep).toContain("beta_data_operations");
+    expect(grantStep).toContain("beta_worker_heartbeats");
+    expect(runtimeGrant).toContain("RECOVERY_TARGET_DATABASE_URL");
+    expect(runtimeGrant).toContain("RECOVERY_TARGET_RUNTIME_DATABASE_URL");
+  });
+
+  it("requires non-null, well-formed operational diagnostics from restored protected health", () => {
+    expect(recoveryHealth).toContain("requireOperationalDiagnostics: true");
   });
 
   it("restores the exact evidenced prefix before applying only remaining candidate migrations", () => {

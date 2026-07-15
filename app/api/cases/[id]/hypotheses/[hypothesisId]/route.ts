@@ -8,6 +8,7 @@ import {
 } from "@/lib/api-case-projection";
 import { isGuidedResearchEnabled } from "@/lib/guided-research-config";
 import { updateCaseHypothesis } from "@/lib/workspace-store";
+import { captureOperationalError } from "@/lib/observability";
 
 export const dynamic = "force-dynamic";
 
@@ -103,7 +104,11 @@ export const PATCH = withPermission("cases:write", async (request, authorization
       return knownResponse;
     }
 
-    console.error("Hypothesis update failed", error);
+    await captureOperationalError({
+      event: "api_error",
+      requestId: authorization.requestId,
+      route: "/api/cases/[id]/hypotheses/[hypothesisId]"
+    }, error);
     return NextResponse.json({ error: "Unable to update the hypothesis" }, { status: 500 });
   }
 });

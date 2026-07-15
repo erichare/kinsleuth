@@ -33,8 +33,18 @@ describe("recovery evidence operations", () => {
   it("uses exact archive-bound prefixes and excludes identity sentinels", () => {
     expect(recoveryNamespacePrefix("pilot-01", "archive-private")).toBe("archives/pilot-01/");
     expect(recoveryNamespacePrefix("pilot-01", "legacy-gedcom")).toBe("gedcom-imports/pilot-01/");
-    expect(isRecoveryIdentitySentinel("pilot-01", `archives/pilot-01/release-readiness/${"a".repeat(64)}`)).toBe(true);
-    expect(isRecoveryIdentitySentinel("pilot-01", "archives/pilot-01/evidence/a")).toBe(false);
+    const identity = "a".repeat(64);
+    expect(isRecoveryIdentitySentinel(
+      "pilot-01",
+      `archives/pilot-01/release-readiness/${identity}`,
+      identity
+    )).toBe(true);
+    expect(isRecoveryIdentitySentinel("pilot-01", "archives/pilot-01/evidence/a", identity)).toBe(false);
+    expect(() => isRecoveryIdentitySentinel(
+      "pilot-01",
+      `archives/pilot-01/release-readiness/${"b".repeat(64)}`,
+      identity
+    )).toThrow(/unexpected reserved readiness object/i);
   });
 
   it("accepts only a fresh completed Supabase backup or PITR point", () => {

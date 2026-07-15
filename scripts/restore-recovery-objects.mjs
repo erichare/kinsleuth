@@ -62,7 +62,7 @@ try {
 
   for (const manifest of manifests) {
     const existing = (await listAll(token, manifest.prefix)).filter(
-      (blob) => !isRecoveryIdentitySentinel(archiveId, blob.pathname)
+      (blob) => !isRecoveryIdentitySentinel(archiveId, blob.pathname, targetIdentity)
     );
     if (existing.length !== 0) {
       throw new Error("The recovery target object namespace must be empty before restore.");
@@ -95,7 +95,7 @@ try {
   for (const manifest of manifests) {
     const restoredEntries = [];
     const blobs = (await listAll(token, manifest.prefix)).filter(
-      (blob) => !isRecoveryIdentitySentinel(archiveId, blob.pathname)
+      (blob) => !isRecoveryIdentitySentinel(archiveId, blob.pathname, targetIdentity)
     );
     for (const blob of blobs) {
       const result = await get(blob.pathname, { access: "private", token, useCache: false });

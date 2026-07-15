@@ -889,6 +889,59 @@ export async function cleanupBetaInvitationState(
   }
 }
 
+export async function consumeBetaOperatorRequest(
+  operator: VerifiedOperatorRequest,
+  options: BetaInvitationServiceOptions
+): Promise<void> {
+  const context = serviceContext(options, false);
+  validateOperator(operator);
+  try {
+    await withTransaction(options, (client) => consumeOperatorNonce(client, operator, context.secret));
+  } catch (error) {
+    throw safeServiceError(error);
+  }
+}
+
+export async function cleanupExpiredBetaStateForSystem(
+  input: { limit?: number; requestId: string },
+  options: BetaInvitationServiceOptions
+): Promise<Readonly<{
+  expiredInvitations: number;
+  expiredRateLimits: number;
+  expiredVerificationTokens: number;
+  removedOperatorNonces: number;
+}>> {
+  serviceContext(options, false);
+  validateRequestId(input.requestId);
+  const limit = input.limit ?? 500;
+  validateCleanupLimit(limit);
+  try {
+    return await withTransaction(options, async (client) => {
+      const expiredInvitations = await closeExpiredInvitations(client, {
+        archiveId: options.archiveId,
+        limit,
+        requestId: input.requestId
+      });
+      const expiredVerificationTokens = await closeExpiredVerifications(
+        client,
+        options.archiveId,
+        limit,
+        input.requestId
+      );
+      const expiredRateLimits = await cleanupExpiredAuthRateLimitsInTransaction(client, limit);
+      const removedOperatorNonces = await cleanupOperatorNonces(client, limit);
+      return {
+        expiredInvitations,
+        expiredRateLimits,
+        expiredVerificationTokens,
+        removedOperatorNonces
+      };
+    });
+  } catch (error) {
+    throw safeServiceError(error);
+  }
+}
+
 export type BetaSecurityAuditEventType =
   | "password-changed"
   | "password-recovery-completed"

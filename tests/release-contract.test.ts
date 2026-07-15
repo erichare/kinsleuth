@@ -60,6 +60,7 @@ function validInput(overrides: Partial<ReleaseContractInput> = {}): ReleaseContr
       KINRESOLVE_GUIDED_RESEARCH_ENABLED: "true",
       KINRESOLVE_OBJECT_STORAGE_BACKEND: "vercel-blob",
       KINRESOLVE_OBJECT_STORAGE_IDENTITY: "b".repeat(64),
+      KINRESOLVE_OBSERVABILITY_ENDPOINT: "https://events.example.test/kinresolve",
       KINRESOLVE_SCHEDULED_WRITES_ENABLED: "true",
       KINRESOLVE_TRANSACTIONAL_EMAIL_FROM: "Kin Resolve <beta@kinresolve.com>",
       KINRESOLVE_TRANSACTIONAL_EMAIL_PROVIDER: "resend",

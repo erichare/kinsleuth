@@ -2,6 +2,7 @@ import { Pool, type PoolClient, type QueryResult, type QueryResultRow } from "pg
 
 import { getDatabaseConnectionString } from "./connection-string";
 import { runPendingMigrations } from "./migrations";
+import { captureOperationalError } from "./observability";
 
 export { getDatabaseConnectionString, isDatabaseTransportVerified } from "./connection-string";
 
@@ -53,7 +54,10 @@ export function getPool(options: DatabaseOptions = {}): Pool {
   // Without a listener, an idle client's backend error is an unhandled 'error'
   // event that crashes the process; the pool already discards the broken client.
   pool.on("error", (error) => {
-    console.error("Postgres pool idle-client error", error);
+    void captureOperationalError({
+      event: "api_error",
+      route: "/internal/database-pool"
+    }, error);
   });
   pools.set(connectionString, pool);
   return pool;

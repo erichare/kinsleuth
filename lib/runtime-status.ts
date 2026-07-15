@@ -66,6 +66,23 @@ export type RuntimeStatus = {
   };
 };
 
+export function isRuntimeReady(status: RuntimeStatus): boolean {
+  return status.capabilities.valid
+    && status.scheduledWrites.valid
+    && status.database.connected
+    && status.database.provisioned
+    && status.database.datasetModeMatches
+    && (status.capabilities.deploymentMode !== "hosted" || (
+      status.database.identityConfigured
+      && status.database.identityMatchesConfigured
+      && status.database.transportVerified
+    ))
+    && status.storage.configured
+    && (status.capabilities.deploymentMode !== "hosted" || (
+      status.storage.identityConfigured && status.storage.identityVerified
+    ));
+}
+
 export async function getRuntimeStatus(): Promise<RuntimeStatus> {
   const databaseUrl = process.env.DATABASE_URL;
   const archiveId = getArchiveId();
@@ -79,9 +96,9 @@ export async function getRuntimeStatus(): Promise<RuntimeStatus> {
   )
     ? capabilities.datasetMode
     : null;
-  const identityStatus = await getDatabaseIdentityStatus(databaseUrl);
 
   if (!capabilities.valid) {
+    const identityStatus = configuredDatabaseIdentityStatus(databaseUrl);
     return {
       product: "KinSleuth",
       version: APP_VERSION,
@@ -109,6 +126,8 @@ export async function getRuntimeStatus(): Promise<RuntimeStatus> {
       }
     };
   }
+
+  const identityStatus = await getDatabaseIdentityStatus(databaseUrl);
 
   if (!databaseUrl) {
     return {
@@ -238,15 +257,10 @@ async function getDatabaseIdentityStatus(databaseUrl: string | undefined): Promi
   identityMatchesConfigured: boolean;
   transportVerified: boolean;
 }> {
+  const configured = configuredDatabaseIdentityStatus(databaseUrl);
   const configuredIdentity = process.env.KINRESOLVE_DATABASE_IDENTITY?.trim() ?? "";
-  const identityConfigured = databaseIdentityPattern.test(configuredIdentity);
   if (!databaseUrl) {
-    return {
-      identityConfigured,
-      identity: null,
-      identityMatchesConfigured: false,
-      transportVerified: false
-    };
+    return configured;
   }
 
   let identity: string | null = null;
@@ -256,10 +270,25 @@ async function getDatabaseIdentityStatus(databaseUrl: string | undefined): Promi
     // The public health contract reports only the safe readiness booleans below.
   }
   return {
-    identityConfigured,
+    identityConfigured: configured.identityConfigured,
     identity,
-    identityMatchesConfigured: identityConfigured && identity === configuredIdentity,
-    transportVerified: isDatabaseTransportVerified(databaseUrl)
+    identityMatchesConfigured: configured.identityConfigured && identity === configuredIdentity,
+    transportVerified: configured.transportVerified
+  };
+}
+
+function configuredDatabaseIdentityStatus(databaseUrl: string | undefined): {
+  identityConfigured: boolean;
+  identity: null;
+  identityMatchesConfigured: false;
+  transportVerified: boolean;
+} {
+  const configuredIdentity = process.env.KINRESOLVE_DATABASE_IDENTITY?.trim() ?? "";
+  return {
+    identityConfigured: databaseIdentityPattern.test(configuredIdentity),
+    identity: null,
+    identityMatchesConfigured: false,
+    transportVerified: Boolean(databaseUrl && isDatabaseTransportVerified(databaseUrl))
   };
 }
 

@@ -4,10 +4,12 @@ type HealthValidationInput = {
   status: number;
   contentType: string | null;
   body: string;
+  expectedReleaseCommit: string;
   expectedVersion: string;
   expectedDatasetMode: DatasetMode;
   expectedDatabaseIdentity: string;
   expectedScheduledWritesEnabled?: boolean;
+  requireOperationalDiagnostics?: boolean;
 };
 
 type HtmlValidationInput = {
@@ -18,7 +20,7 @@ type HtmlValidationInput = {
 
 export const releaseSmokeRequests = [
   { path: "/login", method: "GET", expectation: "html" },
-  { path: "/api/health", method: "GET", expectation: "health" },
+  { path: "/api/internal/health", method: "GET", expectation: "authenticated-health" },
   { path: "/app", method: "GET", expectation: "canonical-login-redirect" },
   { path: "/api/people", method: "GET", expectation: "anonymous-denial" },
   { path: "/api/cron/integration-jobs", method: "GET", expectation: "unsigned-cron-denial" },
@@ -34,6 +36,24 @@ const cohortOneCapabilities = {
   packageMedia: false,
   plainGedcom: true
 } as const;
+
+const operationalWorkerKinds = new Set([
+  "import-upload-cleanup",
+  "integration-jobs",
+  "retention-cleanup"
+]);
+const workerOutcomes = new Set(["failed", "missing", "running", "succeeded"]);
+const freshnessValues = new Set(["critical", "healthy", "warning"]);
+const workerFailureCodes = new Set([
+  "AUTHORIZATION_ERROR",
+  "CONFIGURATION_ERROR",
+  "DATABASE_ERROR",
+  "NETWORK_ERROR",
+  "STORAGE_ERROR",
+  "TEST_ALERT",
+  "TIMEOUT",
+  "UNEXPECTED_ERROR"
+]);
 
 const requiredPrivateHeaders = {
   "content-security-policy": undefined,
@@ -75,6 +95,7 @@ export function validateReleaseHealth(input: HealthValidationInput): {
   if (health.status !== "ok") throw new Error("Release health status must be ok.");
   if (health.product !== "KinSleuth") throw new Error("Release health product identity is invalid.");
   if (health.version !== input.expectedVersion) throw new Error("Release health version does not match the candidate.");
+  validateReleaseCommit(health, input.expectedReleaseCommit);
 
   const database = record(health.database, "Release health database");
   for (const field of ["configured", "connected", "provisioned", "datasetModeMatches"] as const) {
@@ -130,6 +151,8 @@ export function validateReleaseHealth(input: HealthValidationInput): {
     throw new Error("Release health scheduled-write value does not match the release cell.");
   }
 
+  if (input.requireOperationalDiagnostics) validateOperationalDiagnostics(health);
+
   return {
     version: input.expectedVersion,
     datasetMode: input.expectedDatasetMode,
@@ -137,10 +160,84 @@ export function validateReleaseHealth(input: HealthValidationInput): {
   };
 }
 
+function validateOperationalDiagnostics(health: Record<string, unknown>): void {
+  if (!Array.isArray(health.workers) || health.workers.length !== operationalWorkerKinds.size) {
+    throw new Error("Release health operational workers must contain the exact worker set.");
+  }
+  const observedKinds = new Set<string>();
+  for (const value of health.workers) {
+    const worker = record(value, "Release health operational worker");
+    const expectedFields = new Set(["ageSeconds", "freshness", "outcome", "workerKind"]);
+    if (worker.lastFailureCode !== undefined) expectedFields.add("lastFailureCode");
+    requireExactFields(worker, expectedFields, "Release health operational worker");
+    if (
+      typeof worker.workerKind !== "string"
+      || !operationalWorkerKinds.has(worker.workerKind)
+      || observedKinds.has(worker.workerKind)
+      || typeof worker.outcome !== "string"
+      || !workerOutcomes.has(worker.outcome)
+      || typeof worker.freshness !== "string"
+      || !freshnessValues.has(worker.freshness)
+      || (worker.outcome === "missing"
+        ? worker.ageSeconds !== null
+        : !isNonnegativeInteger(worker.ageSeconds))
+      || (worker.lastFailureCode !== undefined && (
+        typeof worker.lastFailureCode !== "string"
+        || !workerFailureCodes.has(worker.lastFailureCode)
+      ))
+    ) {
+      throw new Error("Release health operational worker diagnostics are malformed.");
+    }
+    observedKinds.add(worker.workerKind);
+  }
+
+  const jobLag = record(health.jobLag, "Release health operational job lag");
+  requireExactFields(jobLag, new Set([
+    "eligibleCount",
+    "eligibleCountCapped",
+    "freshness",
+    "oldestEligibleAgeSeconds",
+    "recentFailedCount",
+    "recentFailedCountCapped"
+  ]), "Release health operational job lag");
+  if (
+    !isBoundedCount(jobLag.eligibleCount)
+    || typeof jobLag.eligibleCountCapped !== "boolean"
+    || (jobLag.oldestEligibleAgeSeconds !== null
+      && !isNonnegativeInteger(jobLag.oldestEligibleAgeSeconds))
+    || !isBoundedCount(jobLag.recentFailedCount)
+    || typeof jobLag.recentFailedCountCapped !== "boolean"
+    || typeof jobLag.freshness !== "string"
+    || !freshnessValues.has(jobLag.freshness)
+  ) {
+    throw new Error("Release health operational job lag diagnostics are malformed.");
+  }
+}
+
+function requireExactFields(
+  value: Record<string, unknown>,
+  expected: Set<string>,
+  label: string
+): void {
+  const actual = Object.keys(value);
+  if (actual.length !== expected.size || actual.some((field) => !expected.has(field))) {
+    throw new Error(`${label} fields are malformed.`);
+  }
+}
+
+function isNonnegativeInteger(value: unknown): value is number {
+  return Number.isSafeInteger(value) && (value as number) >= 0;
+}
+
+function isBoundedCount(value: unknown): value is number {
+  return isNonnegativeInteger(value) && value <= 1_000;
+}
+
 export function validateReleaseDatabaseIdentity(input: {
   status: number;
   contentType: string | null;
   body: string;
+  expectedReleaseCommit: string;
   expectedVersion: string;
   expectedDatabaseIdentity: string;
 }): { databaseIdentity: string } {
@@ -160,9 +257,19 @@ export function validateReleaseDatabaseIdentity(input: {
   if (health.product !== "KinSleuth" || health.version !== input.expectedVersion) {
     throw new Error("Release identity product or version does not match the candidate.");
   }
+  validateReleaseCommit(health, input.expectedReleaseCommit);
   const database = record(health.database, "Release identity database");
   validateDatabaseIdentityFields(database, input.expectedDatabaseIdentity);
   return { databaseIdentity: input.expectedDatabaseIdentity };
+}
+
+function validateReleaseCommit(health: Record<string, unknown>, expectedReleaseCommit: string): void {
+  if (!/^[a-f0-9]{40}$/.test(expectedReleaseCommit)) {
+    throw new Error("The expected release commit is invalid.");
+  }
+  if (health.releaseCommitSha !== expectedReleaseCommit) {
+    throw new Error("Release health commit does not match the exact candidate artifact.");
+  }
 }
 
 function validateDatabaseIdentityFields(

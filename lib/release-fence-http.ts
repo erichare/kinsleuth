@@ -2,6 +2,7 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 
 import { createApiRequestId } from "./api-response";
+import { captureOperationalError } from "./observability";
 import {
   acquireReleaseFence,
   assertReleaseFence,
@@ -57,7 +58,10 @@ export function createReleaseFenceControlHandler(
         if (error.code === "CONFLICT") return controlError(409, "Release fence transition conflict");
         return controlError(400, "The release fence request is invalid");
       }
-      console.error("Release fence control failed", { action });
+      await captureOperationalError({
+        event: "api_error",
+        route: `/api/release/fence/${action}`
+      }, error);
       return controlError(503, "Release fence control is unavailable");
     }
   };

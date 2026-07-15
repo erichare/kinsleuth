@@ -19,6 +19,12 @@ try {
     throw new Error("Usage: assemble-recovery-evidence.mjs <work-directory> <recovery-evidence.json>.");
   }
   const repository = required("GITHUB_REPOSITORY");
+  const githubRunId = pattern(required("GITHUB_RUN_ID"), /^[1-9][0-9]{0,19}$/, "GitHub run ID");
+  const githubRunAttempt = pattern(
+    required("GITHUB_RUN_ATTEMPT"),
+    /^[1-9][0-9]{0,19}$/,
+    "GitHub run attempt"
+  );
   const releaseCommit = required("RELEASE_COMMIT");
   const releaseVersion = required("RELEASE_VERSION");
   const archiveId = required("EXPECTED_ARCHIVE_ID");
@@ -157,17 +163,42 @@ try {
   }
 
   provider(providerPoint);
-  offsite(databaseUpload, "upload");
-  offsite(databaseDownload, "download");
-  offsite(objectsUpload, "upload");
-  offsite(objectsDownload, "download");
+  const databaseUploadStorage = offsite(databaseUpload, "upload", {
+    releaseCommit,
+    githubRunId,
+    githubRunAttempt,
+    fileName: "database.dump.age"
+  });
+  const databaseDownloadStorage = offsite(databaseDownload, "download", {
+    releaseCommit,
+    githubRunId,
+    githubRunAttempt,
+    fileName: "database.dump.age"
+  });
+  const objectsUploadStorage = offsite(objectsUpload, "upload", {
+    releaseCommit,
+    githubRunId,
+    githubRunAttempt,
+    fileName: "objects.tar.age"
+  });
+  const objectsDownloadStorage = offsite(objectsDownload, "download", {
+    releaseCommit,
+    githubRunId,
+    githubRunAttempt,
+    fileName: "objects.tar.age"
+  });
   if (
     databaseDownload.sha256 !== databaseUpload.sha256
     || databaseDownload.size !== databaseUpload.size
     || objectsDownload.sha256 !== objectsUpload.sha256
     || objectsDownload.size !== objectsUpload.size
+    || JSON.stringify(databaseDownloadStorage) !== JSON.stringify(databaseUploadStorage)
+    || JSON.stringify(objectsDownloadStorage) !== JSON.stringify(objectsUploadStorage)
+    || databaseUploadStorage.bucketDigest !== objectsUploadStorage.bucketDigest
   ) {
-    throw new Error("An offsite recovery download does not match its uploaded ciphertext.");
+    throw new Error(
+      "An offsite recovery download does not match its exact uploaded ciphertext version."
+    );
   }
   const healthCheckedAt = exactTimestamp(health.checkedAt, "restored health checkedAt");
   if (
@@ -350,7 +381,8 @@ function databaseCapture(
 ) {
   exactKeys(value, [
     "activeJobLeases", "archiveId", "candidateSemanticsVerified", "capturePhase",
-    "databaseIdentity", "fenceActivatedAt", "fenceId", "manifestSha256", "migrationVersions", "releaseCommitSha",
+    "databaseIdentity", "demoPurgeProductManifestSha256", "fenceActivatedAt", "fenceId",
+    "manifestSha256", "migrationVersions", "releaseCommitSha",
     "stragglerTransactions", "stragglerVisibilityVerified", "unexpiredUploadIntents"
   ], "database capture");
   if (
@@ -361,6 +393,7 @@ function databaseCapture(
     || value.releaseCommitSha !== expectedFence.releaseCommitSha
     || value.fenceActivatedAt !== expectedFence.activatedAt
     || !/^[a-f0-9]{64}$/.test(value.manifestSha256)
+    || !/^[a-f0-9]{64}$/.test(value.demoPurgeProductManifestSha256)
     || !Array.isArray(value.migrationVersions)
     || typeof value.stragglerVisibilityVerified !== "boolean"
     || ![value.activeJobLeases, value.unexpiredUploadIntents, value.stragglerTransactions]
@@ -491,15 +524,84 @@ function provider(value) {
   exactTimestamp(value.createdAt, "provider recovery point createdAt");
 }
 
-function offsite(value, operation) {
-  exactKeys(value, ["completedAt", "operation", "sha256", "size"], "offsite backup result");
+function offsite(value, operation, expected) {
+  exactKeys(
+    value,
+    ["completedAt", "operation", "sha256", "size", "storage"],
+    "offsite backup result"
+  );
   if (
     value.operation !== operation
     || !/^[a-f0-9]{64}$/.test(value.sha256)
     || !Number.isSafeInteger(value.size)
     || value.size <= 0
   ) throw new Error("An offsite backup result is invalid.");
-  exactTimestamp(value.completedAt, "offsite backup completedAt");
+  const completedAt = exactTimestamp(value.completedAt, "offsite backup completedAt");
+  return offsiteStorage(value.storage, expected, completedAt);
+}
+
+function offsiteStorage(value, expected, completedAt) {
+  exactKeys(
+    value,
+    ["bucketDigest", "key", "versionId", "bucketProtection", "objectRetention"],
+    "offsite backup storage proof"
+  );
+  const expectedKey = `production-recovery/${expected.releaseCommit}/`
+    + `${expected.githubRunId}-${expected.githubRunAttempt}/${expected.fileName}`;
+  if (
+    !/^[a-f0-9]{64}$/.test(value.bucketDigest)
+    || value.key !== expectedKey
+    || typeof value.versionId !== "string"
+    || !/^[^\u0000-\u0020\u007f]{1,1024}$/u.test(value.versionId)
+  ) throw new Error("An offsite backup exact-version locator is invalid.");
+
+  exactKeys(
+    value.bucketProtection,
+    ["versioning", "objectLock", "defaultRetention"],
+    "offsite backup bucket protection"
+  );
+  exactKeys(
+    value.bucketProtection.defaultRetention,
+    ["mode", "unit", "value"],
+    "offsite backup default retention"
+  );
+  const defaultRetention = value.bucketProtection.defaultRetention;
+  const defaultDays = defaultRetention.unit === "days"
+    ? defaultRetention.value
+    : defaultRetention.value * 365;
+  exactKeys(
+    value.objectRetention,
+    ["mode", "retainUntil", "validatedMinimumDays"],
+    "offsite backup object retention"
+  );
+  const retention = value.objectRetention;
+  const retainedUntil = exactTimestamp(retention.retainUntil, "offsite backup retention");
+  if (
+    value.bucketProtection.versioning !== "Enabled"
+    || value.bucketProtection.objectLock !== "Enabled"
+    || defaultRetention.mode !== "COMPLIANCE"
+    || !["days", "years"].includes(defaultRetention.unit)
+    || !Number.isSafeInteger(defaultRetention.value)
+    || defaultRetention.value < 1
+    || !Number.isSafeInteger(defaultDays)
+    || retention.mode !== "COMPLIANCE"
+    || !Number.isSafeInteger(retention.validatedMinimumDays)
+    || retention.validatedMinimumDays < 1
+    || retention.validatedMinimumDays > 3_650
+    || defaultDays < retention.validatedMinimumDays
+    || retainedUntil.getTime()
+      < completedAt.getTime() + retention.validatedMinimumDays * 24 * 60 * 60_000 - 5 * 60_000
+  ) throw new Error("An offsite backup COMPLIANCE retention proof is invalid.");
+  return {
+    bucketDigest: value.bucketDigest,
+    key: value.key,
+    versionId: value.versionId,
+    bucketProtection: value.bucketProtection,
+    objectRetention: {
+      ...retention,
+      retainUntil: retainedUntil.toISOString()
+    }
+  };
 }
 
 function sameNamespaces(left, right) {
@@ -549,6 +651,11 @@ function exactKeys(value, keys, label) {
 function required(name) {
   const value = process.env[name]?.trim();
   if (!value) throw new Error(`${name} is required.`);
+  return value;
+}
+
+function pattern(value, expected, label) {
+  if (!expected.test(value)) throw new Error(`${label} is invalid.`);
   return value;
 }
 

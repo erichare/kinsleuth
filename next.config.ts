@@ -1,6 +1,11 @@
 import type { NextConfig } from "next";
 
+const buildReleaseCommitSha = validatedBuildReleaseCommitSha();
+
 const nextConfig: NextConfig = {
+  ...(buildReleaseCommitSha
+    ? { env: { KINRESOLVE_BUILD_COMMIT_SHA: buildReleaseCommitSha } }
+    : {}),
   poweredByHeader: false,
   output: "standalone",
   outputFileTracingIncludes: {
@@ -19,6 +24,11 @@ const nextConfig: NextConfig = {
     ];
   }
 };
+
+function validatedBuildReleaseCommitSha(): string | undefined {
+  const value = process.env.KINRESOLVE_BUILD_COMMIT_SHA?.trim().toLowerCase();
+  return value && /^[a-f0-9]{40}$/.test(value) ? value : undefined;
+}
 
 function securityHeaders(): Array<{ key: string; value: string }> {
   const development = process.env.NODE_ENV !== "production";

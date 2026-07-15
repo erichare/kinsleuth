@@ -46,7 +46,7 @@ try {
     if (
       typeof object?.pathname !== "string"
       || !recoveryObjectNamespaceNames.some((name) => object.pathname.startsWith(recoveryNamespacePrefix(archiveId, name)))
-      || isRecoveryIdentitySentinel(archiveId, object.pathname)
+      || isRecoveryIdentitySentinel(archiveId, object.pathname, identity)
       || !/^[a-f0-9]{64}$/.test(object.sha256)
       || expected.has(object.pathname)
     ) throw new Error("The recovery cleanup manifest contains an invalid or duplicate object.");
@@ -55,7 +55,7 @@ try {
   const actual = [];
   for (const name of recoveryObjectNamespaceNames) {
     actual.push(...(await listAll(token, recoveryNamespacePrefix(archiveId, name))).filter(
-      (blob) => !isRecoveryIdentitySentinel(archiveId, blob.pathname)
+      (blob) => !isRecoveryIdentitySentinel(archiveId, blob.pathname, identity)
     ));
   }
   if (actual.some((blob) => !expected.has(blob.pathname))) {
@@ -73,7 +73,7 @@ try {
   if (actual.length > 0) await del(actual.map((blob) => blob.pathname), { token });
   for (const name of recoveryObjectNamespaceNames) {
     const remaining = (await listAll(token, recoveryNamespacePrefix(archiveId, name))).filter(
-      (blob) => !isRecoveryIdentitySentinel(archiveId, blob.pathname)
+      (blob) => !isRecoveryIdentitySentinel(archiveId, blob.pathname, identity)
     );
     if (remaining.length !== 0) throw new Error("Recovery target cleanup did not leave an empty namespace.");
   }

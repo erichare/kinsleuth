@@ -8,6 +8,7 @@ import {
 } from "@/lib/api-case-projection";
 import { isGuidedResearchEnabled } from "@/lib/guided-research-config";
 import { recordCaseTaskOutcome } from "@/lib/workspace-store";
+import { captureOperationalError } from "@/lib/observability";
 
 export const dynamic = "force-dynamic";
 
@@ -102,7 +103,11 @@ export const POST = withPermission("cases:write", async (request, authorization,
       return knownResponse;
     }
 
-    console.error("Task outcome recording failed", error);
+    await captureOperationalError({
+      event: "api_error",
+      requestId: authorization.requestId,
+      route: "/api/cases/[id]/tasks/[taskId]/outcome"
+    }, error);
     return NextResponse.json({ error: "Unable to record the task outcome" }, { status: 500 });
   }
 });

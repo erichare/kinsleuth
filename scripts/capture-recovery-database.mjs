@@ -7,6 +7,10 @@ import { Pool } from "pg";
 import { getDatabaseConnectionString, isDatabaseTransportVerified } from "../lib/connection-string.ts";
 import { readDatabaseIdentity, validateConfiguredDatabaseIdentity } from "../lib/database-attestation.ts";
 import {
+  demoPurgeProductManifestSha256
+} from "../lib/demo-purge.ts";
+import { readDemoPurgeProductManifests } from "../lib/demo-purge-product-manifest.ts";
+import {
   validateProductionMigrationLedger,
   validateProductionMigrationLedgerPrefix
 } from "../lib/production-migration.ts";
@@ -132,6 +136,9 @@ try {
       );
     }
     const databaseManifestSha256 = await databaseManifest(pool);
+    const databaseProductManifestSha256 = demoPurgeProductManifestSha256(
+      await readDemoPurgeProductManifests(pool, expectedArchiveId)
+    );
 
     await writePrivateJson(outputPath, {
       capturePhase,
@@ -146,7 +153,8 @@ try {
       stragglerTransactions,
       stragglerVisibilityVerified,
       candidateSemanticsVerified: capturePhase === "candidate-final",
-      manifestSha256: databaseManifestSha256
+      manifestSha256: databaseManifestSha256,
+      demoPurgeProductManifestSha256: databaseProductManifestSha256
     });
     console.log("Captured privacy-safe recovery database manifest.");
   } finally {

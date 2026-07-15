@@ -8,9 +8,15 @@ const workerMocks = vi.hoisted(() => ({
 const releaseFenceMocks = vi.hoisted(() => ({
   getActiveReleaseFence: vi.fn().mockResolvedValue(null)
 }));
+const operationMocks = vi.hoisted(() => ({
+  recordWorkerFailed: vi.fn(),
+  recordWorkerStarted: vi.fn(),
+  recordWorkerSucceeded: vi.fn()
+}));
 
 vi.mock("@/lib/integrations/worker", () => workerMocks);
 vi.mock("@/lib/release-fence", () => releaseFenceMocks);
+vi.mock("@/lib/beta-operations", () => operationMocks);
 
 import { GET } from "@/app/api/cron/integration-jobs/route";
 
@@ -18,7 +24,11 @@ const originalEnvironment = { ...process.env };
 
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.spyOn(console, "info").mockImplementation(() => undefined);
   releaseFenceMocks.getActiveReleaseFence.mockResolvedValue(null);
+  operationMocks.recordWorkerFailed.mockResolvedValue(true);
+  operationMocks.recordWorkerStarted.mockResolvedValue(undefined);
+  operationMocks.recordWorkerSucceeded.mockResolvedValue(true);
   process.env.CRON_SECRET = "synthetic-cron-secret";
   process.env.KINRESOLVE_DEPLOYMENT_MODE = "self-hosted";
   delete process.env.KINRESOLVE_SCHEDULED_WRITES_ENABLED;
@@ -46,6 +56,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.useRealTimers();
+  vi.restoreAllMocks();
   process.env = { ...originalEnvironment };
 });
 
@@ -142,6 +153,16 @@ describe("hosted integration worker invocation", () => {
       leaseDurationMs: 120_000,
       deadlineAt: new Date("2026-07-14T20:04:30.000Z")
     });
+    expect(operationMocks.recordWorkerStarted).toHaveBeenCalledWith(
+      "integration-jobs",
+      expect.any(String),
+      { archiveId: expect.any(String) }
+    );
+    expect(operationMocks.recordWorkerSucceeded).toHaveBeenCalledWith(
+      "integration-jobs",
+      expect.any(String),
+      { archiveId: expect.any(String) }
+    );
     vi.useRealTimers();
   });
 
@@ -190,18 +211,32 @@ describe("hosted integration worker invocation", () => {
   it("logs only a structured code when a scheduled invocation fails", async () => {
     const secret = "postgres://private-user:private-password@db.internal/family";
     workerMocks.runIntegrationWorkerMaintenance.mockRejectedValueOnce(
-      Object.assign(new Error(secret), { code: "DATABASE_UNAVAILABLE" })
+      Object.assign(new Error(secret), { code: "DATABASE_ERROR" })
     );
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
 
     const response = await GET(request("synthetic-cron-secret"));
 
     expect(response.status).toBe(500);
-    expect(consoleError).toHaveBeenCalledExactlyOnceWith({
-      event: "integration_worker_error",
-      code: "DATABASE_UNAVAILABLE"
+    expect(consoleError).toHaveBeenCalledOnce();
+    const payload = consoleError.mock.calls[0][0] as Record<string, unknown>;
+    expect(payload).toMatchObject({
+      schemaVersion: 1,
+      event: "integration_worker_failed",
+      severity: "error",
+      code: "DATABASE_ERROR",
+      environment: "test",
+      route: "/api/cron/integration-jobs",
+      workerKind: "integration-jobs"
     });
+    expect(payload.requestId).toEqual(expect.any(String));
     expect(JSON.stringify(consoleError.mock.calls)).not.toContain(secret);
+    expect(operationMocks.recordWorkerFailed).toHaveBeenCalledExactlyOnceWith(
+      "integration-jobs",
+      payload.requestId,
+      "DATABASE_ERROR",
+      { archiveId: expect.any(String) }
+    );
     expect(workerMocks.runIntegrationWorkerBatch).toHaveBeenCalledTimes(1);
     consoleError.mockRestore();
   });

@@ -12,6 +12,7 @@ export type ApiRequestPolicy =
   | "read-only"
   | "same-origin-cookie"
   | "better-auth-managed"
+  | "internal-probe"
   | "service-bearer"
   | "operator-signature"
   | "release-fence-control";
@@ -138,10 +139,22 @@ export const apiRouteAccessRegistry: readonly ApiRouteAccess[] = [
     methods: { GET: register(permission("dna:read"), "read-only") }
   },
   {
+    path: "/api/data-operations/deletion-request",
+    methods: { POST: register(permission("archive:data-portability"), "same-origin-cookie") }
+  },
+  {
     path: "/api/exports/gedcom",
     methods: { GET: register(permission("archive:export"), "read-only") }
   },
+  {
+    path: "/api/exports/research-archive",
+    methods: { POST: register(permission("archive:data-portability"), "same-origin-cookie") }
+  },
   { path: "/api/health", methods: { GET: register(publicAccess, "read-only") } },
+  {
+    path: "/api/internal/health",
+    methods: { GET: register(serviceAccess, "internal-probe") }
+  },
   {
     path: "/api/release/fence/acquire",
     methods: { POST: register(serviceAccess, "release-fence-control") }
@@ -247,6 +260,14 @@ export const apiRouteAccessRegistry: readonly ApiRouteAccess[] = [
     methods: { POST: register(serviceAccess, "operator-signature") }
   },
   {
+    path: "/api/operator/observability",
+    methods: { POST: register(serviceAccess, "operator-signature") }
+  },
+  {
+    path: "/api/observability/client-errors",
+    methods: { POST: register(permission("archive:read-private"), "same-origin-cookie") }
+  },
+  {
     path: "/api/people",
     methods: { GET: register(permission("archive:read-private"), "read-only") }
   },
@@ -300,7 +321,11 @@ export function isApiWriteBlockedByReleaseFence(pathname: string, method: string
   }
   // Service-bearer handlers authenticate before checking the fence so an
   // unsigned request cannot discover release-control state.
-  if (registration.requestPolicy === "service-bearer" || registration.requestPolicy === "operator-signature") {
+  if (
+    registration.requestPolicy === "internal-probe"
+    || registration.requestPolicy === "service-bearer"
+    || registration.requestPolicy === "operator-signature"
+  ) {
     return false;
   }
   if (registration.requestPolicy === "better-auth-managed") {

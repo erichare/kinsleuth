@@ -1,14 +1,25 @@
 import { NextResponse } from "next/server";
 
+import { createApiRequestId } from "@/lib/api-response";
+import {
+  recordWorkerFailed,
+  recordWorkerStarted,
+  recordWorkerSucceeded
+} from "@/lib/beta-operations";
 import {
   integrationWorkerConfiguration,
   runIntegrationWorkerBatch,
   runIntegrationWorkerMaintenance
 } from "@/lib/integrations/worker";
-import { logRedactedIntegrationError } from "@/lib/integrations/error-reporting";
+import {
+  captureOperationalError,
+  emitOperationalEvent,
+  operationalErrorCode
+} from "@/lib/observability";
 import { getActiveReleaseFence } from "@/lib/release-fence";
 import { releaseFenceLockedResponse } from "@/lib/release-fence-http";
 import { getScheduledWritesStatus } from "@/lib/scheduled-writes";
+import { getArchiveId } from "@/lib/workspace-store";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -29,9 +40,19 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Scheduled work is unavailable." }, { status: 503 });
   }
 
+  const requestId = createApiRequestId();
+  const operationOptions = { archiveId: getArchiveId() };
   try {
     const activeFence = await getActiveReleaseFence();
     if (activeFence) return releaseFenceLockedResponse(activeFence, { discloseControlIdentity: true });
+    await recordWorkerStarted("integration-jobs", requestId, operationOptions);
+    await emitOperationalEvent({
+      event: "worker_started",
+      severity: "info",
+      requestId,
+      route: "/api/cron/integration-jobs",
+      workerKind: "integration-jobs"
+    });
     const configuration = integrationWorkerConfiguration();
     // Cleanup is independent of parse-queue discovery, so a cron invocation
     // still performs bounded maintenance when there are no jobs or archives
@@ -50,9 +71,33 @@ export async function GET(request: Request) {
         ...(configuration.malwareScanner ? { malwareScanner: configuration.malwareScanner } : {})
       })
     ]);
+    await recordWorkerSucceeded("integration-jobs", requestId, operationOptions);
+    await emitOperationalEvent({
+      event: "worker_succeeded",
+      severity: "info",
+      requestId,
+      route: "/api/cron/integration-jobs",
+      workerKind: "integration-jobs"
+    });
     return NextResponse.json({ ...result, maintenance });
   } catch (error) {
-    logRedactedIntegrationError("integration_worker_error", error);
+    try {
+      await recordWorkerFailed(
+        "integration-jobs",
+        requestId,
+        operationalErrorCode(error),
+        operationOptions
+      );
+    } catch {
+      // The privacy-safe tracker below remains available when the database is
+      // the failed dependency.
+    }
+    await captureOperationalError({
+      event: "integration_worker_failed",
+      requestId,
+      route: "/api/cron/integration-jobs",
+      workerKind: "integration-jobs"
+    }, error);
     return NextResponse.json({ error: "Scheduled integration work failed." }, { status: 500 });
   }
 }

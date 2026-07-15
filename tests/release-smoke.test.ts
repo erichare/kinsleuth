@@ -10,6 +10,7 @@ import {
 } from "@/lib/release-smoke";
 
 const expectedVersion = "0.18.0";
+const expectedReleaseCommit = "c".repeat(40);
 
 describe("non-mutating hosted release smoke contract", () => {
   it("accepts only a missing application health route on the static holding deployment", () => {
@@ -23,6 +24,7 @@ describe("non-mutating hosted release smoke contract", () => {
       status: 503,
       contentType: "application/json",
       body: JSON.stringify(healthyResponse({ status: "degraded" })),
+      expectedReleaseCommit,
       expectedVersion,
       expectedDatabaseIdentity: "a".repeat(64)
     })).toEqual({ databaseIdentity: "a".repeat(64) });
@@ -33,6 +35,7 @@ describe("non-mutating hosted release smoke contract", () => {
       status: 200,
       contentType: "application/json; charset=utf-8",
       body: JSON.stringify(healthyResponse()),
+      expectedReleaseCommit,
       expectedVersion,
       expectedDatasetMode: "pilot",
       expectedDatabaseIdentity: "a".repeat(64),
@@ -44,6 +47,46 @@ describe("non-mutating hosted release smoke contract", () => {
     });
   });
 
+  it("accepts well-formed protected operational diagnostics when recovery requires them", () => {
+    expect(() => validateReleaseHealth({
+      status: 200,
+      contentType: "application/json; charset=utf-8",
+      body: JSON.stringify(healthyResponse()),
+      expectedReleaseCommit,
+      expectedVersion,
+      expectedDatasetMode: "pilot",
+      expectedDatabaseIdentity: "a".repeat(64),
+      requireOperationalDiagnostics: true
+    })).not.toThrow();
+  });
+
+  it.each([
+    ["null workers", { workers: null }],
+    ["an incomplete worker set", {
+      workers: healthyResponse().workers.slice(0, 2)
+    }],
+    ["a malformed worker", {
+      workers: healthyResponse().workers.map((worker, index) => index === 0
+        ? { ...worker, ageSeconds: "15" }
+        : worker)
+    }],
+    ["null job lag", { jobLag: null }],
+    ["malformed job lag", {
+      jobLag: { ...healthyResponse().jobLag, eligibleCount: "0" }
+    }]
+  ])("rejects %s when recovery requires operational diagnostics", (_label, overrides) => {
+    expect(() => validateReleaseHealth({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(healthyResponse(overrides)),
+      expectedReleaseCommit,
+      expectedVersion,
+      expectedDatasetMode: "pilot",
+      expectedDatabaseIdentity: "a".repeat(64),
+      requireOperationalDiagnostics: true
+    })).toThrow(/operational|worker|job lag/i);
+  });
+
   it.each([
     ["non-200 status", { status: 503 }],
     ["HTML holding page", { contentType: "text/html", body: "<html>200</html>" }],
@@ -51,6 +94,9 @@ describe("non-mutating hosted release smoke contract", () => {
     ["wrong status body", { body: JSON.stringify(healthyResponse({ status: "degraded" })) }],
     ["wrong product", { body: JSON.stringify(healthyResponse({ product: "Holding page" })) }],
     ["wrong version", { body: JSON.stringify(healthyResponse({ version: "0.17.4" })) }],
+    ["wrong release commit", {
+      body: JSON.stringify(healthyResponse({ releaseCommitSha: "d".repeat(40) }))
+    }],
     ["database disconnected", {
       body: JSON.stringify(healthyResponse({ database: { ...healthyResponse().database, connected: false } }))
     }],
@@ -89,6 +135,7 @@ describe("non-mutating hosted release smoke contract", () => {
       status: 200,
       contentType: "application/json",
       body: JSON.stringify(healthyResponse()),
+      expectedReleaseCommit,
       expectedVersion,
       expectedDatasetMode: "pilot",
       expectedDatabaseIdentity: "a".repeat(64),
@@ -134,7 +181,7 @@ describe("non-mutating hosted release smoke contract", () => {
     expect(releaseSmokeRequests.every((request) => request.method === "GET" || request.method === "HEAD")).toBe(true);
     expect(releaseSmokeRequests.map((request) => request.path)).toEqual([
       "/login",
-      "/api/health",
+      "/api/internal/health",
       "/app",
       "/api/people",
       "/api/cron/integration-jobs",
@@ -148,6 +195,7 @@ function healthyResponse(overrides: Record<string, unknown> = {}) {
     status: "ok",
     product: "KinSleuth",
     version: expectedVersion,
+    releaseCommitSha: expectedReleaseCommit,
     database: {
       configured: true,
       connected: true,
@@ -176,6 +224,34 @@ function healthyResponse(overrides: Record<string, unknown> = {}) {
       plainGedcom: true,
       gedcomFileLimitBytes: 10 * 1024 * 1024,
       gedcomPersonLimit: 40_000
+    },
+    workers: [
+      {
+        workerKind: "import-upload-cleanup",
+        outcome: "succeeded",
+        freshness: "healthy",
+        ageSeconds: 60
+      },
+      {
+        workerKind: "integration-jobs",
+        outcome: "succeeded",
+        freshness: "healthy",
+        ageSeconds: 15
+      },
+      {
+        workerKind: "retention-cleanup",
+        outcome: "missing",
+        freshness: "critical",
+        ageSeconds: null
+      }
+    ],
+    jobLag: {
+      eligibleCount: 0,
+      eligibleCountCapped: false,
+      oldestEligibleAgeSeconds: null,
+      recentFailedCount: 0,
+      recentFailedCountCapped: false,
+      freshness: "healthy"
     },
     ...overrides
   };

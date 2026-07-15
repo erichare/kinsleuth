@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { apiErrorResponse, createApiRequestId } from "./api-response";
 import { getSessionContext, type SessionContext } from "./auth-session";
 import { hasPermission, type Permission } from "./rbac";
+import { captureOperationalError } from "./observability";
 
 export type AuthorizedRequestContext = SessionContext & {
   requestId: string;
@@ -35,7 +36,11 @@ export async function requirePermission(
       }
     };
   } catch (error) {
-    console.error("API authorization failed", { requestId, error });
+    await captureOperationalError({
+      event: "api_error",
+      requestId,
+      route: "/api/authorization"
+    }, error);
     return deniedResponse(500, "Authorization check failed", requestId);
   }
 }

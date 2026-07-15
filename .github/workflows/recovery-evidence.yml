@@ -93,6 +93,7 @@ jobs:
       RECOVERY_BACKUP_S3_BUCKET: ${{ vars.RECOVERY_BACKUP_S3_BUCKET }}
       RECOVERY_BACKUP_S3_REGION: ${{ vars.RECOVERY_BACKUP_S3_REGION }}
       RECOVERY_BACKUP_S3_ENDPOINT: ${{ vars.RECOVERY_BACKUP_S3_ENDPOINT }}
+      RECOVERY_BACKUP_S3_MIN_RETENTION_DAYS: ${{ vars.RECOVERY_BACKUP_S3_MIN_RETENTION_DAYS }}
 
     steps:
       - name: Require exact main dispatch and protected configuration
@@ -119,8 +120,11 @@ jobs:
             RECOVERY_TARGET_OBJECT_STORAGE_PROVIDER_ID SUPABASE_PROJECT_REF
             RECOVERY_TARGET_SUPABASE_PROJECT_REF RECOVERY_AGE_RECIPIENT
             RECOVERY_BACKUP_S3_BUCKET RECOVERY_BACKUP_S3_REGION
+            RECOVERY_BACKUP_S3_MIN_RETENTION_DAYS
           )
           for name in "${required[@]}"; do test -n "${!name}"; done
+          [[ "${RECOVERY_BACKUP_S3_MIN_RETENTION_DAYS}" =~ ^[1-9][0-9]{0,3}$ ]]
+          test "${RECOVERY_BACKUP_S3_MIN_RETENTION_DAYS}" -le 3650
           test "${KINRESOLVE_DATABASE_IDENTITY}" != "${RECOVERY_TARGET_DATABASE_IDENTITY}"
           test "${KINRESOLVE_OBJECT_STORAGE_IDENTITY}" != "${RECOVERY_TARGET_OBJECT_STORAGE_IDENTITY}"
           test "${KINRESOLVE_OBJECT_STORAGE_PROVIDER_ID}" != "${RECOVERY_TARGET_OBJECT_STORAGE_PROVIDER_ID}"
@@ -285,6 +289,7 @@ jobs:
       - name: Build the exact-SHA unaliased production recovery candidate
         shell: bash
         env:
+          KINRESOLVE_BUILD_COMMIT_SHA: ${{ env.RELEASE_COMMIT }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
         run: vercel build --prod
@@ -516,12 +521,14 @@ jobs:
             "${RECOVERY_WORK}/objects.tar.age" "${RECOVERY_WORK}/objects-upload.json"
           database_sha=$(jq -er '.sha256' "${RECOVERY_WORK}/database-upload.json")
           objects_sha=$(jq -er '.sha256' "${RECOVERY_WORK}/objects-upload.json")
+          database_version=$(jq -er '.storage.versionId' "${RECOVERY_WORK}/database-upload.json")
+          objects_version=$(jq -er '.storage.versionId' "${RECOVERY_WORK}/objects-upload.json")
           rm -f "${RECOVERY_WORK}/database.dump.age" "${RECOVERY_WORK}/objects.tar.age"
           node scripts/recovery-offsite.mjs download "${prefix}/database.dump.age" \
-            "${RECOVERY_WORK}/database-restored.dump.age" "${database_sha}" \
+            "${database_version}" "${RECOVERY_WORK}/database-restored.dump.age" "${database_sha}" \
             "${RECOVERY_WORK}/database-download.json"
           node scripts/recovery-offsite.mjs download "${prefix}/objects.tar.age" \
-            "${RECOVERY_WORK}/objects-restored.tar.age" "${objects_sha}" \
+            "${objects_version}" "${RECOVERY_WORK}/objects-restored.tar.age" "${objects_sha}" \
             "${RECOVERY_WORK}/objects-download.json"
 
       - name: Decrypt only the provider-round-tripped backups
@@ -589,6 +596,54 @@ jobs:
             "${RECOVERY_WORK}/post-migration-database.json" > /dev/null
           node scripts/record-recovery-time.mjs "${RECOVERY_WORK}/migration-completed-at.txt"
 
+      - name: Grant and re-attest recovery beta operations runtime access
+        shell: bash
+        env:
+          EXPECTED_DATABASE_IDENTITY: ${{ env.RECOVERY_TARGET_DATABASE_IDENTITY }}
+          RECOVERY_TARGET_DATABASE_URL: ${{ secrets.RECOVERY_TARGET_DATABASE_URL }}
+          RECOVERY_TARGET_RUNTIME_DATABASE_URL: ${{ secrets.RECOVERY_TARGET_RUNTIME_DATABASE_URL }}
+        run: |
+          set -euo pipefail
+          output="${RECOVERY_WORK}/runtime-beta-operations-grants.json"
+          npm run db:runtime-role:grant-beta-operations -- "${output}" --recovery-target
+          jq -e --arg database_identity "${EXPECTED_DATABASE_IDENTITY}" '
+            (. | keys | sort) == ([
+              "credentialsDistinct", "databaseCreate", "databaseIdentity", "exactPrivilegesAttested",
+              "grantContract", "managedTablePrivileges", "persistentDataMutation",
+              "protectedTablePrivileges", "publicSchemaCreate", "publicSchemaUsage",
+              "representativeAppWriteRolledBack", "runtimeRoleIdentitySha256",
+              "safeRuntimeRoleReattested", "sameDatabaseSessionVerified", "schemaVersion"
+            ] | sort) and
+            .schemaVersion == 1 and .grantContract == "beta-operations-v1" and
+            .databaseIdentity == $database_identity and
+            (.runtimeRoleIdentitySha256 | test("^[a-f0-9]{64}$")) and
+            .credentialsDistinct == true and .sameDatabaseSessionVerified == true and
+            .safeRuntimeRoleReattested == true and .databaseCreate == false and
+            .publicSchemaUsage == true and
+            .publicSchemaCreate == false and .exactPrivilegesAttested == true and
+            .representativeAppWriteRolledBack == true and .persistentDataMutation == false and
+            (.managedTablePrivileges | map(.table)) == [
+              "beta_data_operations", "beta_worker_heartbeats"
+            ] and
+            all(.managedTablePrivileges[];
+              (. | keys | sort) == ([
+                "delete", "grantOptions", "insert", "maintain", "references",
+                "select", "table", "trigger", "truncate", "update"
+              ] | sort) and .select == true and .insert == true and .update == true and
+              .delete == false and .truncate == false and .references == false and
+              .trigger == false and .maintain == false and .grantOptions == false) and
+            (.protectedTablePrivileges | map(.table)) == [
+              "release_write_fences", "schema_migrations"
+            ] and
+            all(.protectedTablePrivileges[];
+              (. | keys | sort) == ([
+                "delete", "grantOptions", "insert", "maintain", "references",
+                "select", "table", "trigger", "truncate", "update"
+              ] | sort) and .select == true and .insert == false and .update == false and
+              .delete == false and .truncate == false and .references == false and
+              .trigger == false and .maintain == false and .grantOptions == false)
+          ' "${output}" > /dev/null
+
       - name: Attest a distinct bounded-privilege runtime credential on the exact target
         shell: bash
         env:
@@ -628,6 +683,8 @@ jobs:
           KINRESOLVE_DEPLOYMENT_MODE: hosted
           KINRESOLVE_DATASET_MODE: pilot
           KINRESOLVE_SCHEDULED_WRITES_ENABLED: "true"
+          KINRESOLVE_BUILD_COMMIT_SHA: ${{ env.RELEASE_COMMIT }}
+          KINRESOLVE_OBSERVABILITY_PROBE_SECRET: ${{ secrets.KINRESOLVE_OBSERVABILITY_PROBE_SECRET }}
           KINSLEUTH_ALLOW_SIGNUPS: "false"
           KINRESOLVE_DNA_ENABLED: "false"
           KINRESOLVE_EXTERNAL_AI_ENABLED: "false"

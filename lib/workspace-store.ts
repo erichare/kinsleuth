@@ -347,6 +347,15 @@ export async function readWorkspace(options: WorkspaceStoreOptions = {}): Promis
   });
 }
 
+export async function readWorkspaceSnapshot(
+  client: PoolClient,
+  options: WorkspaceStoreOptions = {}
+): Promise<WorkspaceData> {
+  const archiveId = getArchiveId(options);
+  await requireProvisionedArchiveRow(client, archiveId, options);
+  return loadWorkspace(client, archiveId);
+}
+
 // Scoped SQL readers call this before querying archive-owned rows. It validates
 // provisioning without creating or loading a workspace.
 export async function ensureWorkspaceProvisioned(options: WorkspaceStoreOptions = {}): Promise<void> {

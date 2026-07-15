@@ -39,10 +39,19 @@ export function recoveryNamespacePrefix(
 
 export function isRecoveryIdentitySentinel(
   archiveId: string,
-  pathname: string
+  pathname: string,
+  expectedIdentity: string
 ): boolean {
   validateArchiveId(archiveId);
-  return pathname.startsWith(`archives/${archiveId}/release-readiness/`);
+  if (!digestPattern.test(expectedIdentity)) {
+    throw new Error("Recovery object-storage identity is invalid.");
+  }
+  const reservedPrefix = `archives/${archiveId}/release-readiness/`;
+  if (!pathname.startsWith(reservedPrefix)) return false;
+  if (pathname !== `${reservedPrefix}${expectedIdentity}`) {
+    throw new Error("The recovery object namespace contains an unexpected reserved readiness object.");
+  }
+  return true;
 }
 
 export function summarizeRecoveryObjectManifest(

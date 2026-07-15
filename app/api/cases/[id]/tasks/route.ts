@@ -7,6 +7,7 @@ import {
   unavailableCaseMutationResponse
 } from "@/lib/api-case-projection";
 import { addCaseTask } from "@/lib/workspace-store";
+import { captureOperationalError } from "@/lib/observability";
 
 export const dynamic = "force-dynamic";
 
@@ -47,7 +48,11 @@ export const POST = withPermission("cases:write", async (request, authorization,
       return knownResponse;
     }
 
-    console.error("Task creation failed", error);
+    await captureOperationalError({
+      event: "api_error",
+      requestId: authorization.requestId,
+      route: "/api/cases/[id]/tasks"
+    }, error);
     return NextResponse.json({ error: "Unable to create the task" }, { status: 500 });
   }
 });

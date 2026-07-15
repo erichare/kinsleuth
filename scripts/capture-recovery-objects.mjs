@@ -33,7 +33,7 @@ try {
   for (const name of recoveryObjectNamespaceNames) {
     const prefix = recoveryNamespacePrefix(archiveId, name);
     const blobs = (await listAll(token, prefix)).filter(
-      (blob) => !isRecoveryIdentitySentinel(archiveId, blob.pathname)
+      (blob) => !isRecoveryIdentitySentinel(archiveId, blob.pathname, expectedIdentity)
     );
     const entries = [];
     for (const blob of blobs) {

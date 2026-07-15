@@ -6,22 +6,42 @@ const storageMocks = vi.hoisted(() => ({
 const releaseFenceMocks = vi.hoisted(() => ({
   getActiveReleaseFence: vi.fn().mockResolvedValue(null)
 }));
+const operationMocks = vi.hoisted(() => ({
+  recordWorkerFailed: vi.fn(),
+  recordWorkerStarted: vi.fn(),
+  recordWorkerSucceeded: vi.fn()
+}));
+const invitationMocks = vi.hoisted(() => ({
+  cleanupExpiredBetaStateForSystem: vi.fn()
+}));
 
 vi.mock("@/lib/gedcom/blob-storage", () => storageMocks);
 vi.mock("@/lib/release-fence", () => releaseFenceMocks);
+vi.mock("@/lib/beta-operations", () => operationMocks);
+vi.mock("@/lib/beta-invitations", () => invitationMocks);
 
 import { GET } from "@/app/api/cron/import-uploads/route";
 
 const originalEnvironment = { ...process.env };
 
 beforeEach(() => {
+  vi.clearAllMocks();
+  vi.spyOn(console, "info").mockImplementation(() => undefined);
+  releaseFenceMocks.getActiveReleaseFence.mockResolvedValue(null);
+  operationMocks.recordWorkerFailed.mockResolvedValue(true);
+  operationMocks.recordWorkerStarted.mockResolvedValue(undefined);
+  operationMocks.recordWorkerSucceeded.mockResolvedValue(true);
+  invitationMocks.cleanupExpiredBetaStateForSystem.mockResolvedValue({
+    expiredInvitations: 0,
+    expiredVerifications: 0,
+    staleRateLimits: 0
+  });
   process.env.KINRESOLVE_DEPLOYMENT_MODE = "self-hosted";
   delete process.env.KINRESOLVE_SCHEDULED_WRITES_ENABLED;
 });
 
 afterEach(() => {
-  vi.clearAllMocks();
-  releaseFenceMocks.getActiveReleaseFence.mockResolvedValue(null);
+  vi.restoreAllMocks();
   process.env = { ...originalEnvironment };
 });
 
@@ -92,8 +112,49 @@ describe("scheduled GEDCOM upload cleanup", () => {
     const response = await GET(cleanupRequest("expected-secret"));
 
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({ deleted: 3 });
+    await expect(response.json()).resolves.toEqual({ deleted: 3, retention: null });
     expect(storageMocks.cleanupAllStaleGedcomUploads).toHaveBeenCalledOnce();
+    expect(operationMocks.recordWorkerStarted).toHaveBeenCalledWith(
+      "import-upload-cleanup",
+      expect.any(String),
+      { archiveId: expect.any(String) }
+    );
+    expect(operationMocks.recordWorkerSucceeded).toHaveBeenCalledWith(
+      "import-upload-cleanup",
+      expect.any(String),
+      { archiveId: expect.any(String) }
+    );
+    expect(invitationMocks.cleanupExpiredBetaStateForSystem).not.toHaveBeenCalled();
+  });
+
+  it("records both upload and retention cleanup heartbeats in hosted mode", async () => {
+    process.env.CRON_SECRET = "expected-secret";
+    setHostedScheduledWrites("true");
+    storageMocks.cleanupAllStaleGedcomUploads.mockResolvedValue(2);
+
+    const response = await GET(cleanupRequest("expected-secret"));
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      deleted: 2,
+      retention: {
+        expiredInvitations: 0,
+        expiredVerifications: 0,
+        staleRateLimits: 0
+      }
+    });
+    expect(invitationMocks.cleanupExpiredBetaStateForSystem).toHaveBeenCalledWith(
+      { requestId: expect.any(String) },
+      { archiveId: expect.any(String) }
+    );
+    expect(operationMocks.recordWorkerStarted.mock.calls.map(([kind]) => kind)).toEqual([
+      "import-upload-cleanup",
+      "retention-cleanup"
+    ]);
+    expect(operationMocks.recordWorkerSucceeded.mock.calls.map(([kind]) => kind)).toEqual([
+      "import-upload-cleanup",
+      "retention-cleanup"
+    ]);
   });
 
   it("returns 423 with the exact active fence before cleanup starts", async () => {

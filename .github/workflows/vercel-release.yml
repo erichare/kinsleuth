@@ -428,6 +428,7 @@ jobs:
 
       - name: Build the staging production artifact
         env:
+          KINRESOLVE_BUILD_COMMIT_SHA: ${{ inputs.release_commit }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
         run: vercel build --prod
@@ -514,9 +515,11 @@ jobs:
           APP_BASE_URL: ${{ steps.staging-release-contract.outputs.app_base_url }}
           KINRESOLVE_DATABASE_IDENTITY: ${{ steps.staging-release-contract.outputs.database_identity }}
           KINRESOLVE_DATASET_MODE: ${{ steps.staging-release-contract.outputs.dataset_mode }}
+          RELEASE_COMMIT: ${{ inputs.release_commit }}
           RELEASE_VERSION: ${{ inputs.release_version }}
           SMOKE_ORIGIN: ${{ steps.staging-candidate.outputs.deployment_url }}
           SMOKE_PHASE: "identity"
+          KINRESOLVE_OBSERVABILITY_PROBE_SECRET: ${{ secrets.KINRESOLVE_OBSERVABILITY_PROBE_SECRET }}
           VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
         run: node --experimental-strip-types scripts/smoke-release.mjs
 
@@ -589,15 +592,63 @@ jobs:
           MIGRATION_DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
         run: npm run db:migrations:verify-production
 
+      - name: Grant and re-attest staging beta operations runtime access
+        env:
+          EXPECTED_DATABASE_IDENTITY: ${{ steps.staging-release-contract.outputs.database_identity }}
+          MIGRATION_DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
+        run: |
+          set -euo pipefail
+          output="$RUNNER_TEMP/staging-beta-operations-runtime-grants.json"
+          npm run db:runtime-role:grant-beta-operations -- "$output"
+          jq -e --arg database_identity "$EXPECTED_DATABASE_IDENTITY" '
+            (. | keys | sort) == ([
+              "credentialsDistinct", "databaseCreate", "databaseIdentity", "exactPrivilegesAttested",
+              "grantContract", "managedTablePrivileges", "persistentDataMutation",
+              "protectedTablePrivileges", "publicSchemaCreate", "publicSchemaUsage",
+              "representativeAppWriteRolledBack", "runtimeRoleIdentitySha256",
+              "safeRuntimeRoleReattested", "sameDatabaseSessionVerified", "schemaVersion"
+            ] | sort) and
+            .schemaVersion == 1 and .grantContract == "beta-operations-v1" and
+            .databaseIdentity == $database_identity and
+            (.runtimeRoleIdentitySha256 | test("^[a-f0-9]{64}$")) and
+            .credentialsDistinct == true and .sameDatabaseSessionVerified == true and
+            .safeRuntimeRoleReattested == true and .databaseCreate == false and
+            .publicSchemaUsage == true and
+            .publicSchemaCreate == false and .exactPrivilegesAttested == true and
+            .representativeAppWriteRolledBack == true and .persistentDataMutation == false and
+            (.managedTablePrivileges | map(.table)) == [
+              "beta_data_operations", "beta_worker_heartbeats"
+            ] and
+            all(.managedTablePrivileges[];
+              (. | keys | sort) == ([
+                "delete", "grantOptions", "insert", "maintain", "references",
+                "select", "table", "trigger", "truncate", "update"
+              ] | sort) and .select == true and .insert == true and .update == true and
+              .delete == false and .truncate == false and .references == false and
+              .trigger == false and .maintain == false and .grantOptions == false) and
+            (.protectedTablePrivileges | map(.table)) == [
+              "release_write_fences", "schema_migrations"
+            ] and
+            all(.protectedTablePrivileges[];
+              (. | keys | sort) == ([
+                "delete", "grantOptions", "insert", "maintain", "references",
+                "select", "table", "trigger", "truncate", "update"
+              ] | sort) and .select == true and .insert == false and .update == false and
+              .delete == false and .truncate == false and .references == false and
+              .trigger == false and .maintain == false and .grantOptions == false)
+          ' "$output" > /dev/null
+
       - name: Smoke the staging candidate
         env:
           APP_BASE_URL: ${{ steps.staging-release-contract.outputs.app_base_url }}
           KINRESOLVE_DATABASE_IDENTITY: ${{ steps.staging-release-contract.outputs.database_identity }}
           KINRESOLVE_DATASET_MODE: ${{ steps.staging-release-contract.outputs.dataset_mode }}
+          RELEASE_COMMIT: ${{ inputs.release_commit }}
           RELEASE_VERSION: ${{ inputs.release_version }}
           SMOKE_ORIGIN: ${{ steps.staging-candidate.outputs.deployment_url }}
           SMOKE_PHASE: "full"
           KINRESOLVE_SCHEDULED_WRITES_ENABLED: "false"
+          KINRESOLVE_OBSERVABILITY_PROBE_SECRET: ${{ secrets.KINRESOLVE_OBSERVABILITY_PROBE_SECRET }}
           VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
         run: node --experimental-strip-types scripts/smoke-release.mjs
 
@@ -607,6 +658,7 @@ jobs:
           rm -f .vercel/.env.production.local
           rm -f "$RUNNER_TEMP/staging-environment.json"
           rm -f "$RUNNER_TEMP/staging-runtime-database-role.json"
+          rm -f "$RUNNER_TEMP/staging-beta-operations-runtime-grants.json"
           rm -rf .vercel/output
 
   production:
@@ -898,6 +950,7 @@ jobs:
 
       - name: Build the production artifact before database mutation
         env:
+          KINRESOLVE_BUILD_COMMIT_SHA: ${{ inputs.release_commit }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
         run: vercel build --prod
@@ -984,9 +1037,11 @@ jobs:
           APP_BASE_URL: ${{ steps.production-release-contract.outputs.app_base_url }}
           KINRESOLVE_DATABASE_IDENTITY: ${{ steps.production-release-contract.outputs.database_identity }}
           KINRESOLVE_DATASET_MODE: ${{ steps.production-release-contract.outputs.dataset_mode }}
+          RELEASE_COMMIT: ${{ inputs.release_commit }}
           RELEASE_VERSION: ${{ inputs.release_version }}
           SMOKE_ORIGIN: ${{ steps.production-candidate.outputs.deployment_url }}
           SMOKE_PHASE: "identity"
+          KINRESOLVE_OBSERVABILITY_PROBE_SECRET: ${{ secrets.KINRESOLVE_OBSERVABILITY_PROBE_SECRET }}
           VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
         run: node --experimental-strip-types scripts/smoke-release.mjs
 
@@ -1094,6 +1149,52 @@ jobs:
           MIGRATION_DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
         run: npm run db:migrations:verify-production
 
+      - name: Grant and re-attest production beta operations runtime access
+        env:
+          EXPECTED_DATABASE_IDENTITY: ${{ steps.production-release-contract.outputs.database_identity }}
+          MIGRATION_DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
+        run: |
+          set -euo pipefail
+          output="$RUNNER_TEMP/production-beta-operations-runtime-grants.json"
+          npm run db:runtime-role:grant-beta-operations -- "$output"
+          jq -e --arg database_identity "$EXPECTED_DATABASE_IDENTITY" '
+            (. | keys | sort) == ([
+              "credentialsDistinct", "databaseCreate", "databaseIdentity", "exactPrivilegesAttested",
+              "grantContract", "managedTablePrivileges", "persistentDataMutation",
+              "protectedTablePrivileges", "publicSchemaCreate", "publicSchemaUsage",
+              "representativeAppWriteRolledBack", "runtimeRoleIdentitySha256",
+              "safeRuntimeRoleReattested", "sameDatabaseSessionVerified", "schemaVersion"
+            ] | sort) and
+            .schemaVersion == 1 and .grantContract == "beta-operations-v1" and
+            .databaseIdentity == $database_identity and
+            (.runtimeRoleIdentitySha256 | test("^[a-f0-9]{64}$")) and
+            .credentialsDistinct == true and .sameDatabaseSessionVerified == true and
+            .safeRuntimeRoleReattested == true and .databaseCreate == false and
+            .publicSchemaUsage == true and
+            .publicSchemaCreate == false and .exactPrivilegesAttested == true and
+            .representativeAppWriteRolledBack == true and .persistentDataMutation == false and
+            (.managedTablePrivileges | map(.table)) == [
+              "beta_data_operations", "beta_worker_heartbeats"
+            ] and
+            all(.managedTablePrivileges[];
+              (. | keys | sort) == ([
+                "delete", "grantOptions", "insert", "maintain", "references",
+                "select", "table", "trigger", "truncate", "update"
+              ] | sort) and .select == true and .insert == true and .update == true and
+              .delete == false and .truncate == false and .references == false and
+              .trigger == false and .maintain == false and .grantOptions == false) and
+            (.protectedTablePrivileges | map(.table)) == [
+              "release_write_fences", "schema_migrations"
+            ] and
+            all(.protectedTablePrivileges[];
+              (. | keys | sort) == ([
+                "delete", "grantOptions", "insert", "maintain", "references",
+                "select", "table", "trigger", "truncate", "update"
+              ] | sort) and .select == true and .insert == false and .update == false and
+              .delete == false and .truncate == false and .references == false and
+              .trigger == false and .maintain == false and .grantOptions == false)
+          ' "$output" > /dev/null
+
       - name: Reassert the production write fence after migration
         id: assert-write-fence-after-migration
         timeout-minutes: 5
@@ -1136,10 +1237,12 @@ jobs:
           APP_BASE_URL: ${{ steps.production-release-contract.outputs.app_base_url }}
           KINRESOLVE_DATABASE_IDENTITY: ${{ steps.production-release-contract.outputs.database_identity }}
           KINRESOLVE_DATASET_MODE: ${{ steps.production-release-contract.outputs.dataset_mode }}
+          RELEASE_COMMIT: ${{ inputs.release_commit }}
           RELEASE_VERSION: ${{ inputs.release_version }}
           SMOKE_ORIGIN: ${{ steps.production-candidate.outputs.deployment_url }}
           SMOKE_PHASE: "full"
           KINRESOLVE_SCHEDULED_WRITES_ENABLED: "true"
+          KINRESOLVE_OBSERVABILITY_PROBE_SECRET: ${{ secrets.KINRESOLVE_OBSERVABILITY_PROBE_SECRET }}
           VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
         run: node --experimental-strip-types scripts/smoke-release.mjs
 
@@ -1282,10 +1385,12 @@ jobs:
           APP_BASE_URL: ${{ steps.production-release-contract.outputs.app_base_url }}
           KINRESOLVE_DATABASE_IDENTITY: ${{ steps.production-release-contract.outputs.database_identity }}
           KINRESOLVE_DATASET_MODE: ${{ steps.production-release-contract.outputs.dataset_mode }}
+          RELEASE_COMMIT: ${{ inputs.release_commit }}
           RELEASE_VERSION: ${{ inputs.release_version }}
           SMOKE_ORIGIN: ${{ steps.production-release-contract.outputs.app_base_url }}
           SMOKE_PHASE: "full"
           KINRESOLVE_SCHEDULED_WRITES_ENABLED: "true"
+          KINRESOLVE_OBSERVABILITY_PROBE_SECRET: ${{ secrets.KINRESOLVE_OBSERVABILITY_PROBE_SECRET }}
           VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
         run: node --experimental-strip-types scripts/smoke-release.mjs
 
@@ -1340,10 +1445,12 @@ jobs:
           APP_BASE_URL: ${{ steps.production-release-contract.outputs.app_base_url }}
           KINRESOLVE_DATABASE_IDENTITY: ${{ steps.production-release-contract.outputs.database_identity }}
           KINRESOLVE_DATASET_MODE: ${{ steps.production-release-contract.outputs.dataset_mode }}
+          RELEASE_COMMIT: ${{ inputs.release_commit }}
           RELEASE_VERSION: ${{ inputs.release_version }}
           SMOKE_ORIGIN: ${{ steps.production-release-contract.outputs.app_base_url }}
           SMOKE_PHASE: "full"
           KINRESOLVE_SCHEDULED_WRITES_ENABLED: "true"
+          KINRESOLVE_OBSERVABILITY_PROBE_SECRET: ${{ secrets.KINRESOLVE_OBSERVABILITY_PROBE_SECRET }}
           VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
         run: node --experimental-strip-types scripts/smoke-release.mjs
 
@@ -1584,6 +1691,7 @@ jobs:
           rm -f .vercel/.env.production.local
           rm -f "$RUNNER_TEMP/production-environment.json"
           rm -f "$RUNNER_TEMP/production-runtime-database-role.json"
+          rm -f "$RUNNER_TEMP/production-beta-operations-runtime-grants.json"
           rm -rf .vercel/output
 
   publish-release:

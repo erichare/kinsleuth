@@ -17,6 +17,7 @@ const permissions = [
   "archive:read-private",
   "archive:publish",
   "archive:export",
+  "archive:data-portability",
   "imports:manage",
   "cases:read",
   "cases:write",
@@ -31,7 +32,7 @@ const permissions = [
 
 const allowedByRole: Record<Role, readonly Permission[]> = {
   owner: permissions,
-  admin: permissions,
+  admin: permissions.filter((permission) => permission !== "archive:data-portability"),
   editor: [
     "archive:read-private",
     "archive:publish",

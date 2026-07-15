@@ -1,13 +1,21 @@
+import { headers } from "next/headers";
+
 import { AppShell } from "@/components/app-shell";
 import { AccountSecurityControl } from "@/components/account-security-control";
 import { ArchiveBrandingForm } from "@/components/archive-branding-form";
+import { DataPortabilityControl } from "@/components/data-portability-control";
 import { Status } from "@/components/ui";
+import { getSessionContext } from "@/lib/auth-session";
+import { hasPermission } from "@/lib/rbac";
 import { getRuntimeStatus } from "@/lib/runtime-status";
 
 export const dynamic = "force-dynamic";
 
 export default async function SettingsPage() {
-  const runtime = await getRuntimeStatus();
+  const [runtime, session] = await Promise.all([
+    getRuntimeStatus(),
+    getSessionContext(await headers())
+  ]);
   const archiveName = runtime.database.archiveName || "Private archive";
   const hosted = runtime.capabilities.deploymentMode === "hosted";
   const capabilityRows = [
@@ -112,6 +120,10 @@ export default async function SettingsPage() {
 
       <AccountSecurityControl />
 
+      {session && hasPermission(session.role, "archive:data-portability")
+        ? <DataPortabilityControl />
+        : null}
+
       <section className="app-card" style={{ marginTop: 20 }}>
         <div className="app-card-header">
           <div>
@@ -146,7 +158,9 @@ export default async function SettingsPage() {
             <input readOnly value={runtime.database.aiRunCount.toLocaleString()} />
           </label>
         </div>
-        {runtime.database.error ? <p className="form-error" role="alert">{runtime.database.error}</p> : null}
+        {runtime.database.error
+          ? <p className="form-error" role="alert">Runtime storage is unavailable. No archive data was changed.</p>
+          : null}
       </section>
 
       <section className="app-card" style={{ marginTop: 20 }}>

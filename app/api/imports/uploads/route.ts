@@ -9,6 +9,7 @@ import {
   maximumGedcomFileSizeBytes,
   validateGedcomUploadRequest
 } from "@/lib/gedcom/upload-policy";
+import { captureOperationalError, emitOperationalEvent } from "@/lib/observability";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -56,10 +57,22 @@ export const POST = withPermission("imports:manage", async (request, authorizati
         try {
           await cleanupStaleGedcomUploadsForArchive(authorization.archiveId);
         } catch (error) {
-          console.error("Unable to clean stale GEDCOM uploads", error);
+          await captureOperationalError({
+            event: "api_error",
+            severity: "warning",
+            requestId: authorization.requestId,
+            route: "/api/imports/uploads"
+          }, error);
         }
       });
     }
+
+    await emitOperationalEvent({
+      event: "import_staged",
+      severity: "info",
+      requestId: authorization.requestId,
+      route: "/api/imports/uploads"
+    });
 
     return NextResponse.json(response);
   } catch (error) {

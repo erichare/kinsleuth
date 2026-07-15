@@ -6,6 +6,7 @@ import {
   resolveHostedCapabilities,
   type HostedCapabilityName
 } from "./hosted-capabilities";
+import { captureOperationalError } from "./observability";
 
 type Environment = Record<string, string | undefined>;
 
@@ -20,7 +21,10 @@ export function capabilityUnavailableResponse(
     if (error instanceof HostedCapabilityError) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
-    console.error("Hosted capability configuration is invalid", { capability, error });
+    void captureOperationalError({
+      event: "api_error",
+      route: "/api/capability"
+    }, error);
     return NextResponse.json({ error: "Service unavailable" }, { status: 503 });
   }
 }
@@ -34,7 +38,10 @@ export function hostedDeploymentUnavailableResponse(
     }
     return undefined;
   } catch (error) {
-    console.error("Hosted capability configuration is invalid", { error });
+    void captureOperationalError({
+      event: "api_error",
+      route: "/api/capability"
+    }, error);
     return NextResponse.json({ error: "Service unavailable" }, { status: 503 });
   }
 }

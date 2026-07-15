@@ -14,7 +14,8 @@
     "011_integration_change_search.sql": "da2f8e0b06f6df05fc6c0731305ac9981ad03318b63924ae18877d3774dda852",
     "012_archive_dataset_mode.sql": "c33c80290cc547a49f6bd81e4c7e40e5adbf69a10e282870f69e1d003334f54c",
     "013_release_write_fence.sql": "b747527b637d3fee8a3e4fc9834360bb467c5acb88bb6b2de854e91918d7ed82",
-    "014_beta_invitations.sql": "8f8cb6a692f5cf7dfe1582ef8668c4d1a0efa1e448963d5890de0e7b46d2a88a"
+    "014_beta_invitations.sql": "8f8cb6a692f5cf7dfe1582ef8668c4d1a0efa1e448963d5890de0e7b46d2a88a",
+    "015_beta_operations.sql": "92cf51032274239d63ea0b2aa821a66829e31e03d7242245dfd749d2ddbd3337"
   },
   "releaseAnchors": {
     "v0.17.4": {

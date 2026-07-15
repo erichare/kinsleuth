@@ -12,6 +12,7 @@ import {
   type GedcomUploadReference
 } from "@/lib/gedcom/upload-policy";
 import { applyPreparedGedcomImport } from "@/lib/workspace-store";
+import { captureOperationalError, emitOperationalEvent } from "@/lib/observability";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -25,7 +26,7 @@ export const POST = withPermission("imports:manage", async (request, authorizati
   try {
     body = await readImportRequest(request, authorization.archiveId);
   } catch (error) {
-    return importErrorResponse(error);
+    return importErrorResponse(error, authorization.requestId);
   }
 
   if (!body.sourceName || !body.content) {
@@ -53,9 +54,21 @@ export const POST = withPermission("imports:manage", async (request, authorizati
       try {
         await deleteStagedGedcomUploads(body.stagedPathnames, authorization.archiveId);
       } catch (error) {
-        console.error("GEDCOM import applied, but staged upload cleanup failed", error);
+        await captureOperationalError({
+          event: "api_error",
+          severity: "warning",
+          requestId: authorization.requestId,
+          route: "/api/imports"
+        }, error);
       }
     }
+
+    await emitOperationalEvent({
+      event: applied ? "import_applied" : "import_completed",
+      severity: "info",
+      requestId: authorization.requestId,
+      route: "/api/imports"
+    });
 
     return NextResponse.json({
       snapshot: {
@@ -70,7 +83,7 @@ export const POST = withPermission("imports:manage", async (request, authorizati
       warnings: body.warnings
     }, { status: applied ? 201 : 200 });
   } catch (error) {
-    return importErrorResponse(error);
+    return importErrorResponse(error, authorization.requestId);
   }
 });
 
@@ -172,7 +185,7 @@ function validateCombinedImportSize(currentSize: number, previousSize: number): 
   }
 }
 
-function importErrorResponse(error: unknown) {
+async function importErrorResponse(error: unknown, requestId: string) {
   const message = error instanceof Error ? error.message : String(error);
   if (error instanceof GedcomUploadError) {
     return NextResponse.json({ error: message }, { status: error.status });
@@ -180,6 +193,10 @@ function importErrorResponse(error: unknown) {
   if (/Invalid GEDCOM line|sourceName and content are required|GEDCOM/i.test(message)) {
     return NextResponse.json({ error: message }, { status: 400 });
   }
-  console.error("GEDCOM import failed", error);
+  await captureOperationalError({
+    event: "api_error",
+    requestId,
+    route: "/api/imports"
+  }, error);
   return NextResponse.json({ error: "GEDCOM import failed. Please retry or check the server logs." }, { status: 500 });
 }

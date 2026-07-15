@@ -3,6 +3,7 @@ import { z } from "zod";
 import { runAIAnalysis } from "@/lib/ai";
 import { withPermission } from "@/lib/api-authorization";
 import { resolveHostedCapabilities } from "@/lib/hosted-capabilities";
+import { captureOperationalError } from "@/lib/observability";
 import { createWorkspaceDnaHypotheses, readWorkspace, saveAIAnalysisRun } from "@/lib/workspace-store";
 
 export const dynamic = "force-dynamic";
@@ -69,7 +70,11 @@ export const POST = withPermission("ai:whole-tree", async (request, authorizatio
       return NextResponse.json({ error: message }, { status: 502 });
     }
 
-    console.error("AI analysis failed", error);
+    await captureOperationalError({
+      event: "api_error",
+      requestId: authorization.requestId,
+      route: "/api/ai/analyze"
+    }, error);
     return NextResponse.json({ error: "AI analysis failed. Check the server logs for details." }, { status: 500 });
   }
 });

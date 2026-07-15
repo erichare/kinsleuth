@@ -1,0 +1,303 @@
+name: Production encrypted backup
+run-name: Kin Resolve production backup ${{ github.run_id }} attempt ${{ github.run_attempt }}
+
+on:
+  schedule:
+    - cron: "17 09 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kinresolve-beta-release
+  queue: max
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    name: Capture and round-trip the isolated production cell
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    environment: production-backup
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    env:
+      PRODUCTION_APP_BASE_URL: ${{ vars.PRODUCTION_APP_BASE_URL }}
+      EXPECTED_ARCHIVE_ID: ${{ vars.EXPECTED_ARCHIVE_ID }}
+      KINRESOLVE_DATABASE_IDENTITY: ${{ vars.KINRESOLVE_DATABASE_IDENTITY }}
+      KINRESOLVE_OBJECT_STORAGE_IDENTITY: ${{ vars.KINRESOLVE_OBJECT_STORAGE_IDENTITY }}
+      KINRESOLVE_OBJECT_STORAGE_PROVIDER_ID: ${{ vars.KINRESOLVE_OBJECT_STORAGE_PROVIDER_ID }}
+      SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+      RECOVERY_AGE_RECIPIENT: ${{ vars.RECOVERY_AGE_RECIPIENT }}
+      RECOVERY_BACKUP_S3_BUCKET: ${{ vars.RECOVERY_BACKUP_S3_BUCKET }}
+      RECOVERY_BACKUP_S3_REGION: ${{ vars.RECOVERY_BACKUP_S3_REGION }}
+      RECOVERY_BACKUP_S3_ENDPOINT: ${{ vars.RECOVERY_BACKUP_S3_ENDPOINT }}
+      RECOVERY_BACKUP_S3_MIN_RETENTION_DAYS: ${{ vars.RECOVERY_BACKUP_S3_MIN_RETENTION_DAYS }}
+      SOURCE_HEAD_SHA: ${{ github.sha }}
+      SOURCE_RUN_ATTEMPT: ${{ github.run_attempt }}
+      SOURCE_RUN_ID: ${{ github.run_id }}
+
+    steps:
+      - name: Check out the trusted workflow source from main
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Require the protected production backup configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${GITHUB_REF}" = "refs/heads/main"
+          [[ "${PRODUCTION_APP_BASE_URL}" =~ ^https://[^/]+$ ]]
+          [[ "${EXPECTED_ARCHIVE_ID}" =~ ^[a-z0-9][a-z0-9_-]{0,62}$ ]]
+          [[ "${KINRESOLVE_DATABASE_IDENTITY}" =~ ^[a-f0-9]{64}$ ]]
+          [[ "${KINRESOLVE_OBJECT_STORAGE_IDENTITY}" =~ ^[a-f0-9]{64}$ ]]
+          [[ "${KINRESOLVE_OBJECT_STORAGE_PROVIDER_ID}" =~ ^[a-z0-9][a-z0-9-]{7,63}$ ]]
+          [[ "${SUPABASE_PROJECT_REF}" =~ ^[a-z0-9]{20}$ ]]
+          [[ "${RECOVERY_AGE_RECIPIENT}" =~ ^age1[0-9a-z]{58}$ ]]
+          test -n "${RECOVERY_BACKUP_S3_BUCKET}"
+          test -n "${RECOVERY_BACKUP_S3_REGION}"
+          [[ "${RECOVERY_BACKUP_S3_MIN_RETENTION_DAYS}" =~ ^[1-9][0-9]{0,3}$ ]]
+          test "${RECOVERY_BACKUP_S3_MIN_RETENTION_DAYS}" -le 3650
+          work="${RUNNER_TEMP}/kinresolve-production-backup"
+          install -d -m 700 "${work}"
+          echo "BACKUP_WORK=${work}" >> "${GITHUB_ENV}"
+
+      - name: Bind the backup to the exact healthy deployed commit
+        shell: bash
+        env:
+          KINRESOLVE_OBSERVABILITY_PROBE_SECRET: ${{ secrets.KINRESOLVE_OBSERVABILITY_PROBE_SECRET }}
+        run: |
+          set -euo pipefail
+          [[ "${KINRESOLVE_OBSERVABILITY_PROBE_SECRET}" =~ ^[A-Za-z0-9_-]{43,128}$ ]]
+          status=$(curl --silent --show-error --connect-timeout 10 --max-time 45 \
+            --header "Authorization: Bearer ${KINRESOLVE_OBSERVABILITY_PROBE_SECRET}" \
+            --header "Accept: application/json" \
+            --output "${BACKUP_WORK}/production-health.json" \
+            --write-out '%{http_code}' \
+            "${PRODUCTION_APP_BASE_URL}/api/internal/health")
+          test "${status}" = "200"
+          jq -e \
+            --arg databaseIdentity "${KINRESOLVE_DATABASE_IDENTITY}" \
+            '.status == "ok" and .product == "KinSleuth" and
+             (.releaseCommitSha | type) == "string" and
+             (.releaseCommitSha | test("^[a-f0-9]{40}$")) and
+             .database.connected == true and .database.provisioned == true and
+             .database.identityMatchesConfigured == true and
+             .database.identity == $databaseIdentity and
+             .storage.configured == true and .storage.identityVerified == true' \
+            "${BACKUP_WORK}/production-health.json" > /dev/null
+          release_commit=$(jq -er '.releaseCommitSha' "${BACKUP_WORK}/production-health.json")
+          git fetch --no-tags origin main
+          git cat-file -e "${release_commit}^{commit}"
+          git merge-base --is-ancestor "${release_commit}" origin/main
+          git checkout --detach "${release_commit}"
+          test "$(git rev-parse HEAD)" = "${release_commit}"
+          echo "RELEASE_COMMIT=${release_commit}" >> "${GITHUB_ENV}"
+          fence_id="fence-backup-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          [[ "${fence_id}" =~ ^fence-[a-z0-9][a-z0-9-]{7,63}$ ]]
+          echo "RECOVERY_FENCE_ID=${fence_id}" >> "${GITHUB_ENV}"
+          echo "RELEASE_FENCE_ID=${fence_id}" >> "${GITHUB_ENV}"
+
+      - name: Set up the exact backup toolchain
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install exact dependencies and operating-system backup tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          sudo apt-get update
+          sudo apt-get install --yes age postgresql-client
+
+      - name: Create the immutable attempt-bound backup cleanup lease
+        shell: bash
+        env:
+          EXPECTED_DATABASE_IDENTITY: ${{ env.KINRESOLVE_DATABASE_IDENTITY }}
+        run: |
+          set -euo pipefail
+          node --experimental-strip-types scripts/production-backup-cleanup-lease.mjs create \
+            "${BACKUP_WORK}/production-backup-cleanup-lease.json"
+
+      - name: Publish the immutable backup cleanup lease before fence acquisition
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: production-backup-cleanup-lease-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/kinresolve-production-backup/production-backup-cleanup-lease.json
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
+
+      - name: Acquire the exact production write fence
+        shell: bash
+        env:
+          EXPECTED_DATABASE_IDENTITY: ${{ env.KINRESOLVE_DATABASE_IDENTITY }}
+          RELEASE_FENCE_DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
+        run: |
+          set -euo pipefail
+          install -m 600 /dev/null "${BACKUP_WORK}/fence-release-required"
+          npm run --silent release:fence:control -- acquire > "${BACKUP_WORK}/fence-acquire.json"
+          jq -e \
+            '.found == true and (.transition == "acquired" or .transition == "already-active") and
+             .fence.fenceId == env.RECOVERY_FENCE_ID and
+             .fence.releaseCommitSha == env.RELEASE_COMMIT and .fence.state == "active"' \
+            "${BACKUP_WORK}/fence-acquire.json" > /dev/null
+          activated_at=$(jq -er '.fence.activatedAt' "${BACKUP_WORK}/fence-acquire.json")
+          echo "FENCE_ACTIVATED_AT=${activated_at}" >> "${GITHUB_ENV}"
+
+      - name: Drain bounded in-flight writes
+        shell: bash
+        run: sleep 360
+
+      - name: Capture exact database and both private object namespaces
+        shell: bash
+        env:
+          RECOVERY_DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
+          RECOVERY_DATABASE_CAPTURE_PHASE: candidate-final
+          EXPECTED_DATABASE_IDENTITY: ${{ env.KINRESOLVE_DATABASE_IDENTITY }}
+          RECOVERY_REQUIRE_STRAGGLER_PROOF: "true"
+          RECOVERY_BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
+          EXPECTED_OBJECT_STORAGE_IDENTITY: ${{ env.KINRESOLVE_OBJECT_STORAGE_IDENTITY }}
+          EXPECTED_OBJECT_STORAGE_PROVIDER_ID: ${{ env.KINRESOLVE_OBJECT_STORAGE_PROVIDER_ID }}
+        run: |
+          set -euo pipefail
+          node --experimental-strip-types scripts/capture-recovery-database.mjs \
+            "${BACKUP_WORK}/database-state.json"
+          jq -e \
+            '.activeJobLeases == 0 and .unexpiredUploadIntents == 0 and
+             .stragglerTransactions == 0 and .stragglerVisibilityVerified == true and
+             .candidateSemanticsVerified == true' \
+            "${BACKUP_WORK}/database-state.json" > /dev/null
+          node --experimental-strip-types scripts/capture-recovery-objects.mjs \
+            "${BACKUP_WORK}/object-backup" "${BACKUP_WORK}/object-state.json"
+
+      - name: Require a fresh provider database recovery point
+        shell: bash
+        env:
+          RECOVERY_DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          curl --fail-with-body --silent --show-error \
+            --header "Authorization: Bearer ${SUPABASE_ACCESS_TOKEN}" \
+            --output "${BACKUP_WORK}/supabase-backups.json" \
+            "https://api.supabase.com/v1/projects/${SUPABASE_PROJECT_REF}/database/backups"
+          node --experimental-strip-types scripts/validate-supabase-recovery-point.mjs \
+            "${BACKUP_WORK}/supabase-backups.json" "${BACKUP_WORK}/provider-recovery-point.json"
+
+      - name: Create encrypted logical database and object backups
+        shell: bash
+        env:
+          RECOVERY_DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
+        run: |
+          set -euo pipefail
+          node --experimental-strip-types scripts/recovery-database-tool.mjs \
+            dump "${BACKUP_WORK}/database.dump"
+          age --recipient "${RECOVERY_AGE_RECIPIENT}" \
+            --output "${BACKUP_WORK}/database.dump.age" "${BACKUP_WORK}/database.dump"
+          tar --create --sort=name --mtime='UTC 1970-01-01' --owner=0 --group=0 --numeric-owner \
+            --file "${BACKUP_WORK}/objects.tar" \
+            --directory "${BACKUP_WORK}/object-backup" manifests objects
+          age --recipient "${RECOVERY_AGE_RECIPIENT}" \
+            --output "${BACKUP_WORK}/objects.tar.age" "${BACKUP_WORK}/objects.tar"
+          rm -f "${BACKUP_WORK}/database.dump" "${BACKUP_WORK}/objects.tar"
+          rm -rf "${BACKUP_WORK}/object-backup"
+
+      - name: Round-trip both ciphertexts through immutable off-provider storage
+        shell: bash
+        env:
+          RECOVERY_BACKUP_S3_ACCESS_KEY_ID: ${{ secrets.RECOVERY_BACKUP_S3_ACCESS_KEY_ID }}
+          RECOVERY_BACKUP_S3_SECRET_ACCESS_KEY: ${{ secrets.RECOVERY_BACKUP_S3_SECRET_ACCESS_KEY }}
+        run: |
+          set -euo pipefail
+          prefix="production-backup/$(date -u +%F)/${RELEASE_COMMIT}/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          node scripts/recovery-offsite.mjs upload "${prefix}/database.dump.age" \
+            "${BACKUP_WORK}/database.dump.age" "${BACKUP_WORK}/database-upload.json"
+          node scripts/recovery-offsite.mjs upload "${prefix}/objects.tar.age" \
+            "${BACKUP_WORK}/objects.tar.age" "${BACKUP_WORK}/objects-upload.json"
+          database_sha=$(jq -er '.sha256' "${BACKUP_WORK}/database-upload.json")
+          objects_sha=$(jq -er '.sha256' "${BACKUP_WORK}/objects-upload.json")
+          database_version=$(jq -er '.storage.versionId' "${BACKUP_WORK}/database-upload.json")
+          objects_version=$(jq -er '.storage.versionId' "${BACKUP_WORK}/objects-upload.json")
+          rm -f "${BACKUP_WORK}/database.dump.age" "${BACKUP_WORK}/objects.tar.age"
+          node scripts/recovery-offsite.mjs download "${prefix}/database.dump.age" \
+            "${database_version}" "${BACKUP_WORK}/database-roundtrip.dump.age" "${database_sha}" \
+            "${BACKUP_WORK}/database-download.json"
+          node scripts/recovery-offsite.mjs download "${prefix}/objects.tar.age" \
+            "${objects_version}" "${BACKUP_WORK}/objects-roundtrip.tar.age" "${objects_sha}" \
+            "${BACKUP_WORK}/objects-download.json"
+          rm -f "${BACKUP_WORK}/database-roundtrip.dump.age" "${BACKUP_WORK}/objects-roundtrip.tar.age"
+
+      - name: Release the production write fence
+        shell: bash
+        env:
+          EXPECTED_DATABASE_IDENTITY: ${{ env.KINRESOLVE_DATABASE_IDENTITY }}
+          RELEASE_FENCE_DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
+        run: |
+          set -euo pipefail
+          npm run --silent release:fence:control -- release > "${BACKUP_WORK}/fence-release.json"
+          jq -e \
+            '.found == true and (.transition == "released" or .transition == "already-released") and
+             .fence.fenceId == env.RECOVERY_FENCE_ID and
+             .fence.releaseCommitSha == env.RELEASE_COMMIT and .fence.state == "released"' \
+            "${BACKUP_WORK}/fence-release.json" > /dev/null
+          rm -f "${BACKUP_WORK}/fence-release-required"
+
+      - name: Assemble the privacy-safe backup receipt
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/assemble-production-backup-evidence.mjs \
+            "${BACKUP_WORK}" "${BACKUP_WORK}/production-backup-evidence.json"
+
+      - name: Attest the backup receipt with GitHub Artifact Attestations
+        uses: actions/attest@a1948c3f048ba23858d222213b7c278aabede763 # v4
+        with:
+          subject-path: ${{ runner.temp }}/kinresolve-production-backup/production-backup-evidence.json
+
+      - name: Upload only the privacy-safe backup receipt
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: production-backup-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/kinresolve-production-backup/production-backup-evidence.json
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
+
+      - name: Signal the backup dead-man monitor only after verified completion
+        shell: bash
+        env:
+          BACKUP_DEADMAN_URL: ${{ secrets.BACKUP_DEADMAN_URL }}
+        run: |
+          set -euo pipefail
+          if test -z "${BACKUP_DEADMAN_URL}"; then exit 0; fi
+          [[ "${BACKUP_DEADMAN_URL}" =~ ^https:// ]]
+          curl --fail --silent --show-error --connect-timeout 10 --max-time 30 \
+            --retry 3 --retry-all-errors --request POST \
+            --data-urlencode "status=ok" \
+            --data-urlencode "run_id=${GITHUB_RUN_ID}" \
+            "${BACKUP_DEADMAN_URL}" > /dev/null
+
+      - name: Release an interrupted fence and remove all local backup material
+        if: always()
+        shell: bash
+        env:
+          EXPECTED_DATABASE_IDENTITY: ${{ env.KINRESOLVE_DATABASE_IDENTITY }}
+          RELEASE_FENCE_DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
+        run: |
+          set +e
+          cleanup_status=0
+          if test -n "${BACKUP_WORK:-}" && test -f "${BACKUP_WORK}/fence-release-required"; then
+            npm run --silent release:fence:control -- release \
+              > "${BACKUP_WORK}/fence-release-cleanup.json" || cleanup_status=$?
+          fi
+          if test -n "${BACKUP_WORK:-}"; then rm -rf "${BACKUP_WORK}"; fi
+          exit "${cleanup_status}"

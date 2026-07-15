@@ -9,9 +9,12 @@ try {
     throw new Error("Usage: validate-recovery-health.mjs <output.json>.");
   }
   const origin = loopbackOrigin(required("RECOVERY_APP_ORIGIN"));
-  const response = await fetch(new URL("/api/health", origin), {
+  const response = await fetch(new URL("/api/internal/health", origin), {
     redirect: "error",
-    headers: { accept: "application/json" },
+    headers: {
+      accept: "application/json",
+      authorization: `Bearer ${required("KINRESOLVE_OBSERVABILITY_PROBE_SECRET")}`
+    },
     signal: AbortSignal.timeout(15_000)
   });
   const body = await response.text();
@@ -19,9 +22,11 @@ try {
     status: response.status,
     contentType: response.headers.get("content-type"),
     body,
+    expectedReleaseCommit: gitSha(required("RELEASE_COMMIT")),
     expectedVersion: required("RELEASE_VERSION"),
     expectedDatasetMode: "pilot",
-    expectedDatabaseIdentity: required("RECOVERY_TARGET_DATABASE_IDENTITY")
+    expectedDatabaseIdentity: required("RECOVERY_TARGET_DATABASE_IDENTITY"),
+    requireOperationalDiagnostics: true
   });
   await writeFile(outputPath, `${JSON.stringify({ status: "pass", checkedAt: new Date().toISOString() }, null, 2)}\n`, {
     encoding: "utf8",
@@ -58,5 +63,12 @@ function loopbackOrigin(value) {
 function required(name) {
   const value = process.env[name]?.trim();
   if (!value) throw new Error(`${name} is required.`);
+  return value;
+}
+
+function gitSha(value) {
+  if (!/^[a-f0-9]{40}$/.test(value)) {
+    throw new Error("RELEASE_COMMIT must be a full lowercase Git SHA.");
+  }
   return value;
 }

@@ -113,6 +113,13 @@ const expectedMigrations = [
     risk: "high",
     compatibility: "expansion-compatible",
     notes: "Adds fail-closed private-beta invitation, exact legal acceptance, email-verification, immutable audit, operator-replay, and durable auth-limit state; existing tables and writers remain structurally valid."
+  },
+  {
+    file: "015_beta_operations.sql",
+    sha256: "92cf51032274239d63ea0b2aa821a66829e31e03d7242245dfd749d2ddbd3337",
+    risk: "moderate",
+    compatibility: "expansion-compatible",
+    notes: "Adds privacy-safe worker heartbeat and immutable participant data-operation evidence tables with explicit API-role denial; existing application tables and writers remain structurally valid."
   }
 ] as const;
 
@@ -223,7 +230,7 @@ describe("forward-only first-cutover release policy", () => {
   it("proves a filename bijection and exact checksum equality with checksums.json", () => {
     const missing = policyFixture();
     (missing.migrations as unknown[]).pop();
-    expect(() => validateReleasePolicy(validationInput(missing))).toThrow(/missing.*014_beta_invitations\.sql/i);
+    expect(() => validateReleasePolicy(validationInput(missing))).toThrow(/missing.*015_beta_operations\.sql/i);
 
     const duplicate = policyFixture();
     (duplicate.migrations as unknown[]).push(structuredClone((duplicate.migrations as unknown[])[0]));
@@ -231,22 +238,22 @@ describe("forward-only first-cutover release policy", () => {
 
     const extra = policyFixture();
     (extra.migrations as unknown[]).push({
-      file: "014_unreviewed.sql",
+      file: "016_unreviewed.sql",
       sha256: "b".repeat(64),
       risk: "low",
       compatibility: "expansion-compatible",
       notes: "This unreviewed entry must not be accepted without a checksum manifest entry."
     });
-    expect(() => validateReleasePolicy(validationInput(extra))).toThrow(/not recorded.*014_unreviewed\.sql/i);
+    expect(() => validateReleasePolicy(validationInput(extra))).toThrow(/not recorded.*016_unreviewed\.sql/i);
 
     const mismatch = policyFixture();
     ((mismatch.migrations as Array<Record<string, unknown>>)[4]).sha256 = "c".repeat(64);
     expect(() => validateReleasePolicy(validationInput(mismatch))).toThrow(/checksum mismatch.*005_guided_research_loop\.sql/i);
 
     const unclassifiedChecksum = checksumFixture();
-    (unclassifiedChecksum.files as Record<string, string>)["014_unreviewed.sql"] = "d".repeat(64);
+    (unclassifiedChecksum.files as Record<string, string>)["016_unreviewed.sql"] = "d".repeat(64);
     expect(() => validateReleasePolicy(validationInput(policyFixture(), unclassifiedChecksum))).toThrow(
-      /missing policy entry.*014_unreviewed\.sql/i
+      /missing policy entry.*016_unreviewed\.sql/i
     );
   });
 
@@ -327,7 +334,7 @@ describe("forward-only first-cutover release policy", () => {
     });
 
     expect(result.status, result.stderr).toBe(0);
-    expect(result.stdout).toMatch(/verified 14 migration.*v0\.17\.4.*forward-only/i);
+    expect(result.stdout).toMatch(/verified 15 migration.*v0\.17\.4.*forward-only/i);
     expect(result.stdout).toMatch(/owner erichare.*2026-07-15T04:30:00Z/i);
     expect(result.stdout).not.toContain(FIRST_CUTOVER_ACKNOWLEDGEMENT);
     expect(result.stderr).not.toContain(FIRST_CUTOVER_ACKNOWLEDGEMENT);

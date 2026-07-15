@@ -8,6 +8,7 @@ import {
 } from "@/lib/api-case-projection";
 import { isGuidedResearchEnabled } from "@/lib/guided-research-config";
 import { acceptGuideAssignment } from "@/lib/workspace-store";
+import { captureOperationalError } from "@/lib/observability";
 
 export const dynamic = "force-dynamic";
 
@@ -50,7 +51,11 @@ export const POST = withPermission("cases:write", async (request, authorization,
       return knownResponse;
     }
 
-    console.error("Guide assignment failed", error);
+    await captureOperationalError({
+      event: "api_error",
+      requestId: authorization.requestId,
+      route: "/api/cases/[id]/guide/assignments"
+    }, error);
     return NextResponse.json({ error: "Unable to accept the guide assignment" }, { status: 500 });
   }
 });

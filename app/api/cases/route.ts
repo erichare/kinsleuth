@@ -13,6 +13,7 @@ import { projectCaseApiResponse } from "@/lib/api-case-projection";
 import { withPermission } from "@/lib/api-authorization";
 import { resolveHostedCapabilities } from "@/lib/hosted-capabilities";
 import { parsePositiveInteger } from "@/lib/pagination";
+import { captureOperationalError, emitOperationalEvent } from "@/lib/observability";
 import { caseEvidenceQueueFromDb, searchCasesPageFromDb } from "@/lib/store/case-queries";
 import { createNewCase } from "@/lib/workspace-store";
 
@@ -106,6 +107,12 @@ export const POST = withPermission("cases:write", async (request, authorization)
     }
 
     const created = await createNewCase(parsed.data, { archiveId: authorization.archiveId });
+    await emitOperationalEvent({
+      event: "case_created",
+      severity: "info",
+      requestId: authorization.requestId,
+      route: "/api/cases"
+    });
     return NextResponse.json(projectCaseApiResponse(created), { status: 201 });
   } catch (error) {
     if (isUniqueConflict(error)) {
@@ -115,7 +122,11 @@ export const POST = withPermission("cases:write", async (request, authorization)
       );
     }
 
-    console.error("Case creation failed", error);
+    await captureOperationalError({
+      event: "api_error",
+      requestId: authorization.requestId,
+      route: "/api/cases"
+    }, error);
     return NextResponse.json({ error: "Unable to create the case" }, { status: 500 });
   }
 });

@@ -25,7 +25,7 @@ try {
   for (const name of recoveryObjectNamespaceNames) {
     const prefix = recoveryNamespacePrefix(archiveId, name);
     objects.push(...(await listAll(token, prefix)).filter(
-      (blob) => !isRecoveryIdentitySentinel(archiveId, blob.pathname)
+      (blob) => !isRecoveryIdentitySentinel(archiveId, blob.pathname, identity)
     ));
   }
   for (let offset = 0; offset < objects.length; offset += 1_000) {
@@ -33,7 +33,7 @@ try {
   }
   for (const name of recoveryObjectNamespaceNames) {
     const remaining = (await listAll(token, recoveryNamespacePrefix(archiveId, name))).filter(
-      (blob) => !isRecoveryIdentitySentinel(archiveId, blob.pathname)
+      (blob) => !isRecoveryIdentitySentinel(archiveId, blob.pathname, identity)
     );
     if (remaining.length !== 0) {
       throw new Error("Recovery target janitor did not leave an empty object namespace.");

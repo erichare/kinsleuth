@@ -21,6 +21,9 @@ const phase = process.env.SMOKE_PHASE ?? "full";
 if (phase !== "pre-migration" && phase !== "identity" && phase !== "full") {
   fail("SMOKE_PHASE must be pre-migration, identity, or full.");
 }
+const expectedReleaseCommit = phase === "pre-migration"
+  ? undefined
+  : gitSha(process.env.RELEASE_COMMIT, "RELEASE_COMMIT");
 const expectedScheduledWritesEnabled = phase === "full"
   ? strictBoolean(
       process.env.KINRESOLVE_SCHEDULED_WRITES_ENABLED,
@@ -36,16 +39,18 @@ try {
   if (phase === "pre-migration") {
     validateStaticHoldingHealth(await request("/api/health", "GET"));
   } else if (phase === "identity") {
-    const health = await request("/api/health", "GET");
+    const health = await request("/api/internal/health", "GET");
     validateReleaseDatabaseIdentity({
       ...health,
+      expectedReleaseCommit,
       expectedVersion,
       expectedDatabaseIdentity
     });
   } else if (phase === "full") {
-    const health = await request("/api/health", "GET");
+    const health = await request("/api/internal/health", "GET");
     validateReleaseHealth({
       ...health,
+      expectedReleaseCommit,
       expectedVersion,
       expectedDatasetMode,
       expectedDatabaseIdentity,
@@ -99,6 +104,15 @@ async function request(pathname, method) {
   const headers = new Headers();
   const bypassSecret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
   if (bypassSecret) headers.set("x-vercel-protection-bypass", bypassSecret);
+  if (pathname === "/api/internal/health") {
+    headers.set(
+      "authorization",
+      `Bearer ${required(
+        process.env.KINRESOLVE_OBSERVABILITY_PROBE_SECRET,
+        "KINRESOLVE_OBSERVABILITY_PROBE_SECRET"
+      )}`
+    );
+  }
 
   let lastError;
   for (let attempt = 1; attempt <= 10; attempt += 1) {
@@ -160,6 +174,12 @@ function datasetMode(value) {
 function required(value, name) {
   if (!value?.trim()) fail(`${name} is required.`);
   return value.trim();
+}
+
+function gitSha(value, name) {
+  const normalized = required(value, name).toLowerCase();
+  if (!/^[a-f0-9]{40}$/.test(normalized)) fail(`${name} must be a full lowercase Git SHA.`);
+  return normalized;
 }
 
 function strictBoolean(value, name) {

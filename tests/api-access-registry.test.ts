@@ -79,6 +79,7 @@ describe("API access registry", () => {
       "read-only": 0,
       "same-origin-cookie": 0,
       "better-auth-managed": 0,
+      "internal-probe": 0,
       "service-bearer": 0,
       "operator-signature": 0,
       "release-fence-control": 0
@@ -93,10 +94,11 @@ describe("API access registry", () => {
 
     expect(counts).toEqual({
       "read-only": 18,
-      "same-origin-cookie": 38,
+      "same-origin-cookie": 41,
       "better-auth-managed": 2,
+      "internal-probe": 1,
       "service-bearer": 2,
-      "operator-signature": 1,
+      "operator-signature": 2,
       "release-fence-control": 4
     });
   });
@@ -107,7 +109,13 @@ describe("API access registry", () => {
     expect(resolveApiAccess("/api/auth/session", "GET")).toEqual({ kind: "public" });
     expect(resolveApiAccess("/api/setup/claim", "POST")).toEqual({ kind: "bootstrap" });
     expect(resolveApiAccess("/api/cron/import-uploads", "GET")).toEqual({ kind: "service" });
+    expect(resolveApiAccess("/api/internal/health", "GET")).toEqual({ kind: "service" });
     expect(resolveApiAccess("/api/operator/invitations", "POST")).toEqual({ kind: "service" });
+    expect(resolveApiAccess("/api/operator/observability", "POST")).toEqual({ kind: "service" });
+    expect(resolveApiAccess("/api/observability/client-errors", "POST")).toEqual({
+      kind: "permission",
+      permission: "archive:read-private"
+    });
     expect(resolveApiAccess("/api/release/fence/acquire", "POST")).toEqual({ kind: "service" });
     expect(resolveApiAccess("/api/release/fence/assert", "POST")).toEqual({ kind: "service" });
     expect(resolveApiAccess("/api/release/fence/reacquire", "POST")).toEqual({ kind: "service" });
@@ -133,7 +141,10 @@ describe("API access registry", () => {
     expect(resolveApiMethodPolicy("/api/auth/session", "POST")).toBe("better-auth-managed");
     expect(resolveApiMethodPolicy("/api/auth/logout", "POST")).toBe("same-origin-cookie");
     expect(resolveApiMethodPolicy("/api/cron/import-uploads", "GET")).toBe("service-bearer");
+    expect(resolveApiMethodPolicy("/api/internal/health", "GET")).toBe("internal-probe");
     expect(resolveApiMethodPolicy("/api/operator/invitations", "POST")).toBe("operator-signature");
+    expect(resolveApiMethodPolicy("/api/operator/observability", "POST")).toBe("operator-signature");
+    expect(resolveApiMethodPolicy("/api/observability/client-errors", "POST")).toBe("same-origin-cookie");
     expect(resolveApiMethodPolicy("/api/release/fence/acquire", "POST")).toBe("release-fence-control");
     expect(resolveApiMethodPolicy("/api/release/fence/assert", "POST")).toBe("release-fence-control");
     expect(resolveApiMethodPolicy("/api/not-registered", "GET")).toBeNull();
@@ -164,6 +175,7 @@ describe("API access registry", () => {
       for (const [method, registration] of Object.entries(route.methods)) {
         const expected = registration.requestPolicy !== "read-only"
           && registration.requestPolicy !== "release-fence-control"
+          && registration.requestPolicy !== "internal-probe"
           && registration.requestPolicy !== "service-bearer"
           && registration.requestPolicy !== "operator-signature"
           && !(registration.requestPolicy === "better-auth-managed" && method === "GET");
@@ -209,19 +221,51 @@ describe("API access registry", () => {
     }
   });
 
-  it("keeps operator-signature access limited to a handler that authenticates before fencing", async () => {
+  it("keeps operator-signature handlers authenticating before control or alert mutations", async () => {
     const registrations = apiRouteAccessRegistry.flatMap((route) =>
       Object.entries(route.methods)
         .filter(([, registration]) => registration.requestPolicy === "operator-signature")
         .map(([method]) => ({ method, path: route.path }))
     );
-    expect(registrations).toEqual([{ method: "POST", path: "/api/operator/invitations" }]);
+    expect(registrations).toEqual([
+      { method: "POST", path: "/api/operator/invitations" },
+      { method: "POST", path: "/api/operator/observability" }
+    ]);
 
-    const source = await readFile(path.join(apiRoot, "operator", "invitations", "route.ts"), "utf8");
-    const authentication = source.indexOf("authenticateOperatorRequest(request)");
-    const fence = source.indexOf("getActiveReleaseFence()");
+    const invitationSource = await readFile(
+      path.join(apiRoot, "operator", "invitations", "route.ts"),
+      "utf8"
+    );
+    const invitationAuthentication = invitationSource.indexOf("authenticateOperatorRequest(request)");
+    const fence = invitationSource.indexOf("getActiveReleaseFence()");
+    expect(invitationAuthentication).toBeGreaterThan(0);
+    expect(fence).toBeGreaterThan(invitationAuthentication);
+    expect(invitationSource).toContain(
+      "releaseFenceLockedResponse(activeFence, { discloseControlIdentity: true })"
+    );
+
+    const observabilitySource = await readFile(
+      path.join(apiRoot, "operator", "observability", "route.ts"),
+      "utf8"
+    );
+    const observabilityAuthentication = observabilitySource.indexOf("authenticateOperatorRequest(request)");
+    const observabilityFence = observabilitySource.indexOf("getActiveReleaseFence()");
+    const nonceConsumption = observabilitySource.lastIndexOf("consumeBetaOperatorRequest(");
+    const alertDelivery = observabilitySource.lastIndexOf("emitOperationalEvent(");
+    expect(observabilityAuthentication).toBeGreaterThan(0);
+    expect(observabilityFence).toBeGreaterThan(observabilityAuthentication);
+    expect(nonceConsumption).toBeGreaterThan(observabilityFence);
+    expect(alertDelivery).toBeGreaterThan(nonceConsumption);
+  });
+
+  it("keeps internal diagnostics behind probe authentication", async () => {
+    const source = await readFile(path.join(apiRoot, "internal", "health", "route.ts"), "utf8");
+    const authentication = source.lastIndexOf("authenticateObservabilityProbe(request)");
+    const runtimeStatus = source.lastIndexOf("getRuntimeStatus()");
+    const workerFreshness = source.lastIndexOf("readWorkerFreshness(");
+
     expect(authentication).toBeGreaterThan(0);
-    expect(fence).toBeGreaterThan(authentication);
-    expect(source).toContain("releaseFenceLockedResponse(activeFence, { discloseControlIdentity: true })");
+    expect(runtimeStatus).toBeGreaterThan(authentication);
+    expect(workerFreshness).toBeGreaterThan(authentication);
   });
 });

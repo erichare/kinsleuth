@@ -23,7 +23,7 @@ The database project is single-use. After restore and application health pass, t
 
 The workflow deliberately refuses to overwrite an occupied object target. On the success path it re-reads the exact restored set, removes it, proves both namespaces empty, and then destroys the database project before evidence assembly. The `always()` cleanup repeats both operations as a best-effort fallback when the runner is still available. No attestation or artifact is produced unless success-path cleanup is proven.
 
-The encrypted backup bucket must be operationally independent from the production database and Blob store. Age private-key custody must also be separate from the bucket credentials. Apply an encrypted-backup retention/lifecycle policy appropriate for production data. The GitHub-hosted runner necessarily handles the plaintext only while performing the drill, but GitHub artifact storage receives only the strict JSON evidence file, never a dump, object, key, provider response, or application log.
+The encrypted backup bucket must be operationally independent from the production database and Blob store. Age private-key custody must also be separate from the bucket credentials. Enable bucket versioning and S3 Object Lock with a default `COMPLIANCE` period at least as long as the protected `RECOVERY_BACKUP_S3_MIN_RETENTION_DAYS`. The workflow verifies both bucket controls and the exact-version retain-until metadata, then downloads the same key and version ID; it never accepts an unversioned latest-object read. This proves a minimum retained-through time, not an exact expiry or deletion date. The GitHub-hosted runner necessarily handles the plaintext only while performing the drill, but GitHub artifact storage receives only the strict JSON evidence file, never a dump, object, key, provider response, age identity, secret, or application log.
 
 ## Protected `production-recovery` configuration
 
@@ -44,6 +44,8 @@ Create a GitHub environment named `production-recovery`, restrict deployment bra
 - `RECOVERY_BACKUP_S3_BUCKET`
 - `RECOVERY_BACKUP_S3_REGION`
 - `RECOVERY_BACKUP_S3_ENDPOINT` — optional HTTPS S3-compatible endpoint
+- `RECOVERY_BACKUP_S3_MIN_RETENTION_DAYS` — approved whole-day lower bound, `1..3650`;
+  both the bucket default and exact object-version `COMPLIANCE` retention must satisfy it
 
 Configure these protected secrets:
 
@@ -54,6 +56,7 @@ Configure these protected secrets:
 - `RECOVERY_TARGET_BLOB_READ_WRITE_TOKEN` — distinct disposable Blob store token
 - `RELEASE_FENCE_SECRET` — dedicated 256-bit-or-stronger base64url/hex fence-control bearer secret; generate with `openssl rand -hex 32` and never reuse `CRON_SECRET`
 - `CRON_SECRET`
+- `KINRESOLVE_OBSERVABILITY_PROBE_SECRET` — dedicated bearer secret for the restored application's detailed internal health contract; never reuse auth, cron, ingest, or fence credentials
 - `SUPABASE_ACCESS_TOKEN` — source-scoped token with project/backup read access for only `SUPABASE_PROJECT_REF`; it must not have source project-delete authority
 - `RECOVERY_TARGET_SUPABASE_ACCESS_TOKEN` — fine-grained `projects:write` token scoped to only `RECOVERY_TARGET_SUPABASE_PROJECT_REF` when the provider supports project scoping; never reuse the source token
 - `RECOVERY_AGE_IDENTITY`
@@ -67,6 +70,11 @@ Configure these protected secrets:
 - `FIRST_CUTOVER_HOLDING_DEPLOYMENT_ID`
 
 Vercel production must have the matching `RELEASE_FENCE_SECRET`, `CRON_SECRET`, source identities, archive ID, database URL, and Blob token configured as Sensitive values where supported.
+
+The offsite S3 principal may read bucket versioning and Object Lock configuration, create
+new attempt-bound objects, and read/head exact versions and their retention metadata. It
+must not bypass governance, shorten retention, reconfigure Object Lock, delete versions,
+or delete the bucket.
 
 Create a second environment named `production-recovery-cleanup` for the automatic
 `workflow_run` janitor. Restrict it to `main`, do **not** add a manual reviewer that would
@@ -99,7 +107,7 @@ The workflow acquires or resumes the stable `fence-recovery-<release SHA>` produ
 - verified `pg_stat_activity` visibility for every database client role (or a database role with `pg_read_all_stats`);
 - a fresh Supabase backup/PITR recovery point for the exact source project.
 
-It then creates a custom-format logical database backup including privileges and a deterministic object archive, encrypts both with age, uploads both to offsite S3 with SHA-256 provider checksums, deletes local originals, downloads them again, and restores only those round-tripped ciphertexts. Both ciphertext SHA-256 digests are serialized into the attested evidence. The database manifest covers rows, sequences, constraints, indexes, RLS flags/policies, triggers, functions, extensions, ACLs, and default privileges.
+It then creates a custom-format logical database backup including privileges and a deterministic object archive, encrypts both with age, verifies offsite bucket versioning and Object Lock, uploads both to offsite S3 with SHA-256 provider checksums, captures each exact version ID and `COMPLIANCE` retain-until timestamp, deletes local originals, downloads those same key/version locators, and restores only those round-tripped ciphertexts. Both ciphertext SHA-256 digests are serialized into the attested evidence. The database manifest covers rows, sequences, constraints, indexes, RLS flags/policies, triggers, functions, extensions, ACLs, and default privileges.
 
 The restored target must first match the source backup byte-for-manifest and carry the
 same exact migration-policy prefix. Only then does the workflow record a separate
@@ -110,7 +118,7 @@ required to equal the pre-migration manifest: forward migrations are allowed to 
 schema and rows. Instead, evidence schema v2 records both manifests, the exact applied
 migration suffix (including an empty suffix for a no-op first cutover), the final ledger,
 the candidate semantic/catalog checks, both object manifests, application health, and
-restore/migration timings. The restored app uses `RECOVERY_TARGET_RUNTIME_DATABASE_URL`, never the migration/admin credential. A privacy-safe role digest and explicit posture record prove distinct credentials, a live session observed from the migration connection on the same database, no superuser/CREATEDB/CREATEROLE/REPLICATION or owner path, no effective mutation rights on `release_write_fences`, no `CREATE` on `public`, and a representative application update that is immediately rolled back. Because the current single-cell schema enables RLS without runtime policies, this evidence records (and temporarily permits) the role's actual `BYPASSRLS` flag; it does not conceal that posture as least privilege.
+restore/migration timings. The restored app uses `RECOVERY_TARGET_RUNTIME_DATABASE_URL`, never the migration/admin credential. After candidate migration, the workflow applies the same checked-in beta-operations runtime grant contract used by staging and production, re-attests exact effective DML on `beta_data_operations` and `beta_worker_heartbeats`, and keeps `release_write_fences` and `schema_migrations` SELECT-only. A privacy-safe role digest and explicit posture record prove distinct credentials, a live session observed from the migration connection on the same database, no superuser/CREATEDB/CREATEROLE/REPLICATION or owner path, no effective mutation rights on `release_write_fences`, no `CREATE` on `public`, and a representative application update that is immediately rolled back. Protected recovery health must also return a complete, well-formed three-worker diagnostic set and bounded job-lag object; null or malformed operational diagnostics stop evidence. Because the current single-cell schema enables RLS without runtime policies, this evidence records (and temporarily permits) the role's actual `BYPASSRLS` flag; it does not conceal that posture as least privilege.
 
 After health, the app is stopped, object-data removal is proven, and the database project is destroyed and polled to 404. Immediately afterward, `/api/release/fence/assert` must return the exact original `fenceId`, commit, activation generation, and `activatedAt`. A release/reacquire cycle therefore invalidates older evidence. The strict schema-v2 JSON serializes the exact source prefix versions, count, ledger digest, checksum-bound policy digest, migration-013 checksum, release commit, source and target database/object identities, both Supabase project refs, physical provider store IDs, privacy-safe runtime-role posture, `targetObjectDataRemoved=true`, and `targetDatabaseDestroyed=true`. Release readiness accepts it only against the same checked-in candidate policy, then the release migrator refuses production unless its live ledger still equals that exact evidenced prefix. The sole release evidence payload is `recovery-evidence.json`, uploaded under the immutable attempt-scoped artifact name `production-recovery-evidence-<run_attempt>`; GitHub Artifact Attestations signs that exact file. A separate attempt-scoped, non-secret cleanup lease contains only the already-protected source/target identities needed to authorize the janitor and is retained for 90 days. Database dumps, object bytes, age identity material, raw provider responses, credentials, role names, and application logs are never uploaded as Actions artifacts.
 

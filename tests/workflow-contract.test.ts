@@ -316,6 +316,7 @@ describe("stable release workflow contract", () => {
     );
     const migrate = staging.indexOf("npm run db:migrate:production");
     const ledger = staging.indexOf("npm run db:migrations:verify-production");
+    const runtimeGrant = staging.indexOf("npm run db:runtime-role:grant-beta-operations");
     const fullSmoke = staging.indexOf('SMOKE_PHASE: "full"');
 
     for (const script of [
@@ -403,6 +404,7 @@ describe("stable release workflow contract", () => {
       disabledSchedulers,
       migrate,
       ledger,
+      runtimeGrant,
       fullSmoke
     ]) {
       expect(position).toBeGreaterThan(0);
@@ -437,7 +439,20 @@ describe("stable release workflow contract", () => {
     expect(holdingSmoke).toBeLessThan(migrate);
     expect(deploy).toBeLessThan(migrate);
     expect(migrate).toBeLessThan(ledger);
-    expect(ledger).toBeLessThan(fullSmoke);
+    expect(ledger).toBeLessThan(runtimeGrant);
+    expect(runtimeGrant).toBeLessThan(fullSmoke);
+    const runtimeGrantStep = staging.slice(
+      staging.lastIndexOf("- name:", runtimeGrant),
+      staging.indexOf("\n      - name:", runtimeGrant)
+    );
+    expect(runtimeGrantStep).toContain(
+      "MIGRATION_DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}"
+    );
+    expect(runtimeGrantStep).toContain(
+      "EXPECTED_DATABASE_IDENTITY: ${{ steps.staging-release-contract.outputs.database_identity }}"
+    );
+    expect(runtimeGrantStep).not.toMatch(/^\s*DATABASE_URL:/m);
+    expect(runtimeGrantStep).toContain('grantContract == "beta-operations-v1"');
     expect(staging).not.toContain("vercel promote");
     expect(staging).not.toContain("rollback");
     expect(staging).not.toContain("gh release create");
@@ -547,13 +562,15 @@ describe("stable release workflow contract", () => {
     const production = job(await workflow("vercel-release.yml"), "production", "publish-release");
     const migrate = production.indexOf("npm run db:migrate:production");
     const ledger = production.indexOf("npm run db:migrations:verify-production");
+    const runtimeGrant = production.indexOf("npm run db:runtime-role:grant-beta-operations");
     const reassertFence = production.indexOf("Reassert the production write fence after migration");
     const candidateSmoke = production.indexOf("Smoke the production candidate");
     const deploy = production.indexOf("deploy --prebuilt --prod --skip-domain --yes");
 
     expect(migrate).toBeGreaterThan(0);
     expect(ledger).toBeGreaterThan(migrate);
-    expect(reassertFence).toBeGreaterThan(ledger);
+    expect(runtimeGrant).toBeGreaterThan(ledger);
+    expect(reassertFence).toBeGreaterThan(runtimeGrant);
     expect(candidateSmoke).toBeGreaterThan(reassertFence);
     expect(deploy).toBeLessThan(migrate);
     const migrationStep = production.slice(production.lastIndexOf("- name:", migrate), ledger);
@@ -567,6 +584,18 @@ describe("stable release workflow contract", () => {
       "EXPECTED_MIGRATION_PREFIX_LEDGER_SHA256: ${{ steps.recovery-readiness.outputs.source_migration_ledger_sha256 }}"
     );
     expect(migrationStep).not.toMatch(/^\s*DATABASE_URL:/m);
+    const runtimeGrantStep = production.slice(
+      production.lastIndexOf("- name:", runtimeGrant),
+      production.indexOf("\n      - name:", runtimeGrant)
+    );
+    expect(runtimeGrantStep).toContain(
+      "MIGRATION_DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}"
+    );
+    expect(runtimeGrantStep).toContain(
+      "EXPECTED_DATABASE_IDENTITY: ${{ steps.production-release-contract.outputs.database_identity }}"
+    );
+    expect(runtimeGrantStep).not.toMatch(/^\s*DATABASE_URL:/m);
+    expect(runtimeGrantStep).toContain('grantContract == "beta-operations-v1"');
   });
 
   it("proves the generated production candidate is private before bypass-authenticated identity smoke", async () => {

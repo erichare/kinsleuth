@@ -1,6 +1,18 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+const settingsMocks = vi.hoisted(() => ({
+  getSessionContext: vi.fn()
+}));
+
+vi.mock("next/headers", () => ({
+  headers: vi.fn(async () => new Headers())
+}));
+
+vi.mock("@/lib/auth-session", () => ({
+  getSessionContext: settingsMocks.getSessionContext
+}));
+
 vi.mock("@/components/archive-branding-form", () => ({
   ArchiveBrandingForm: ({ publicArchiveEnabled }: { publicArchiveEnabled: boolean }) => (
     publicArchiveEnabled ? "branding-public" : "branding-private"
@@ -10,6 +22,8 @@ vi.mock("@/components/archive-branding-form", () => ({
 import SettingsPage from "@/app/app/settings/page";
 
 beforeEach(() => {
+  vi.clearAllMocks();
+  settingsMocks.getSessionContext.mockResolvedValue(null);
   vi.unstubAllEnvs();
   vi.stubEnv("DATABASE_URL", "");
   vi.stubEnv("AI_API_KEY", "stray-key-must-not-surface");

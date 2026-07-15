@@ -158,6 +158,14 @@ export type RuntimeDatabaseRolePosture = {
   bypassRls: boolean;
 };
 
+export function runtimeDatabaseRoleIdentitySha256(roleName: string): string {
+  const validatedRoleName = safeIdentifier(roleName, "runtime database role");
+  return createHash("sha256")
+    .update("kinresolve-runtime-database-role-v1\0", "utf8")
+    .update(validatedRoleName, "utf8")
+    .digest("hex");
+}
+
 type AttestationInput = {
   runtimeDatabaseUrl: string;
   migrationDatabaseUrl: string;
@@ -361,10 +369,7 @@ export async function attestRuntimeDatabaseRole(
     return {
       schemaVersion: 1,
       databaseIdentity: databaseIdentity.fingerprint,
-      runtimeRoleIdentitySha256: createHash("sha256")
-        .update("kinresolve-runtime-database-role-v1\0", "utf8")
-        .update(posture.roleName, "utf8")
-        .digest("hex"),
+      runtimeRoleIdentitySha256: runtimeDatabaseRoleIdentitySha256(posture.roleName),
       credentialsDistinct: true,
       sameDatabaseSessionVerified: true,
       superuser: false,
