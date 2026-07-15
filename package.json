@@ -16,6 +16,7 @@
     "migrations:verify": "node --experimental-strip-types scripts/verify-migration-history.mjs",
     "demo:verify": "node scripts/verify-fictional-demo.mjs",
     "test:db:large": "node --experimental-strip-types scripts/require-test-database.mjs && RUN_LARGE_GEDCOM_TEST=true vitest run tests/gedcom-apply.test.ts -t \"larger than 10.5 MB\"",
+    "test:db:integration-large": "node --experimental-strip-types scripts/require-test-database.mjs && RUN_LARGE_INTEGRATION_TEST=true vitest run --no-file-parallelism tests/integration-large-refresh.test.ts",
     "test:watch": "vitest",
     "worker": "node scripts/worker.mjs",
     "site:dev": "npm --prefix site run dev",
@@ -24,6 +25,8 @@
     "site:verify": "npm --prefix site run verify"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1087.0",
+    "@aws-sdk/s3-presigned-post": "^3.1087.0",
     "@next/env": "^16.0.0",
     "@vercel/blob": "^2.6.1",
     "better-auth": "^1.6.23",
@@ -43,6 +46,7 @@
     "eslint": "^9.0.0",
     "eslint-config-next": "^16.0.0",
     "playwright": "^1.61.1",
+    "tsx": "^4.23.1",
     "typescript": "^5.8.0",
     "vitest": "^3.0.0"
   },

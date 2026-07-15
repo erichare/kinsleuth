@@ -10,26 +10,40 @@ import {
 } from "@/lib/gedcom/upload-policy";
 
 const uploadId = "17d9a2d4-f3c0-4c0f-a291-2de3a33f418a";
+const archiveId = "archive-alpha";
+const otherArchiveId = "archive-beta";
 
 describe("GEDCOM upload policy", () => {
   it("builds a private, randomized GEDCOM upload path", () => {
-    expect(createGedcomUploadPath(uploadId, "Family Tree (2026).GED")).toBe(
-      "gedcom-imports/17d9a2d4-f3c0-4c0f-a291-2de3a33f418a/Family-Tree-2026.GED"
+    expect(createGedcomUploadPath(archiveId, uploadId, "Family Tree (2026).GED")).toBe(
+      "gedcom-imports/archive-alpha/17d9a2d4-f3c0-4c0f-a291-2de3a33f418a/Family-Tree-2026.GED"
     );
-    expect(validateGedcomUploadPath(createGedcomUploadPath(uploadId, "family.gedcom"))).toContain(uploadId);
+    expect(
+      validateGedcomUploadPath(
+        createGedcomUploadPath(archiveId, uploadId, "family.gedcom"),
+        archiveId
+      )
+    ).toContain(uploadId);
   });
 
   it("rejects paths outside the GEDCOM staging prefix", () => {
-    expect(() => validateGedcomUploadPath("other/private.ged")).toThrow(/Invalid GEDCOM upload path/);
-    expect(() => validateGedcomUploadPath(`gedcom-imports/${uploadId}/family.pdf`)).toThrow(/Invalid GEDCOM upload path/);
+    expect(() => validateGedcomUploadPath("other/private.ged", archiveId)).toThrow(/Invalid GEDCOM upload path/);
+    expect(() => validateGedcomUploadPath(`gedcom-imports/${archiveId}/${uploadId}/family.pdf`, archiveId)).toThrow(/Invalid GEDCOM upload path/);
+  });
+
+  it("rejects a valid staged path from a different archive", () => {
+    const pathname = createGedcomUploadPath(archiveId, uploadId, "family.ged");
+
+    expect(() => validateGedcomUploadPath(pathname, otherArchiveId)).toThrow(/Invalid GEDCOM upload path/);
   });
 
   it("binds upload metadata to the exact generated path", () => {
     const payload = JSON.stringify({ uploadId, originalName: "family.ged", size: 10_500_000 });
-    const pathname = createGedcomUploadPath(uploadId, "family.ged");
+    const pathname = createGedcomUploadPath(archiveId, uploadId, "family.ged");
 
-    expect(validateGedcomUploadRequest(pathname, payload)).toEqual({ uploadId, originalName: "family.ged", size: 10_500_000 });
-    expect(() => validateGedcomUploadRequest(`${pathname}com`, payload)).toThrow(/does not match/);
+    expect(validateGedcomUploadRequest(pathname, payload, archiveId)).toEqual({ uploadId, originalName: "family.ged", size: 10_500_000 });
+    expect(() => validateGedcomUploadRequest(`${pathname}com`, payload, archiveId)).toThrow(/does not match/);
+    expect(() => validateGedcomUploadRequest(pathname, payload, otherArchiveId)).toThrow(/does not match/);
   });
 
   it("enforces the configured file-size limit", () => {

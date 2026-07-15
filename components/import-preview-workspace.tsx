@@ -52,6 +52,7 @@ export function ImportPreviewWorkspace() {
   const [applyArmed, setApplyArmed] = useState(false);
   const currentFileInputRef = useRef<HTMLInputElement>(null);
   const previousFileInputRef = useRef<HTMLInputElement>(null);
+  const uploadArchiveIdRef = useRef<Promise<string> | undefined>(undefined);
   const requestInProgress = status === "uploading" || status === "loading" || status === "applying";
 
   useEffect(() => {
@@ -277,8 +278,9 @@ export function ImportPreviewWorkspace() {
   }
 
   async function stageFile(file: File): Promise<GedcomUploadReference> {
+    const archiveId = await loadUploadArchiveId();
     const uploadId = crypto.randomUUID();
-    const pathname = createGedcomUploadPath(uploadId, file.name);
+    const pathname = createGedcomUploadPath(archiveId, uploadId, file.name);
     const blob = await upload(pathname, file, {
       access: "private",
       contentType: "text/plain",
@@ -288,6 +290,22 @@ export function ImportPreviewWorkspace() {
     });
 
     return { pathname: blob.pathname, etag: blob.etag, size: file.size };
+  }
+
+  async function loadUploadArchiveId(): Promise<string> {
+    uploadArchiveIdRef.current ??= fetch("/api/imports/uploads")
+      .then(async (response) => {
+        const body = await response.json() as { archiveId?: unknown; error?: unknown };
+        if (!response.ok || typeof body.archiveId !== "string" || !body.archiveId) {
+          throw new Error(typeof body.error === "string" ? body.error : "Unable to prepare private upload storage");
+        }
+        return body.archiveId;
+      })
+      .catch((error) => {
+        uploadArchiveIdRef.current = undefined;
+        throw error;
+      });
+    return uploadArchiveIdRef.current;
   }
 
   function releaseStagedUpload(reference: GedcomUploadReference | undefined) {

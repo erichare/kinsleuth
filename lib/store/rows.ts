@@ -519,10 +519,34 @@ export async function upsertBackupRowPreservingSnapshot(
 }
 
 export async function pruneBackupRows(client: PoolClient, archiveId: string, keep: number): Promise<void> {
+  // A sync run is restorable only while its backup remains inside the bounded
+  // workspace window. Clear older references first so the restrictive FK does
+  // not turn every historical refresh into permanent full-snapshot retention.
   await client.query(
-    `DELETE FROM workspace_backups WHERE archive_id = $1 AND id NOT IN (
-       SELECT id FROM workspace_backups WHERE archive_id = $1 ORDER BY sort_order ASC, created_at DESC LIMIT $2
-     )`,
+    `WITH retained AS (
+       SELECT id
+       FROM workspace_backups
+       WHERE archive_id = $1
+       ORDER BY sort_order ASC, created_at DESC
+       LIMIT $2
+     )
+     UPDATE sync_runs
+     SET backup_id = NULL, updated_at = now()
+     WHERE archive_id = $1
+       AND backup_id IS NOT NULL
+       AND NOT EXISTS (SELECT 1 FROM retained WHERE retained.id = sync_runs.backup_id)`,
+    [archiveId, keep]
+  );
+  await client.query(
+    `DELETE FROM workspace_backups
+     WHERE archive_id = $1
+       AND id NOT IN (
+         SELECT id
+         FROM workspace_backups
+         WHERE archive_id = $1
+         ORDER BY sort_order ASC, created_at DESC
+         LIMIT $2
+       )`,
     [archiveId, keep]
   );
 }

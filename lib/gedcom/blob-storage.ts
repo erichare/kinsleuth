@@ -2,6 +2,7 @@ import { del, get, head, list } from "@vercel/blob";
 import { decodeGedcomBuffer, type DecodedGedcom } from "./charset";
 import {
   gedcomUploadPrefix,
+  getGedcomUploadArchivePrefix,
   maximumGedcomFileSizeBytes,
   staleGedcomUploadAgeMs,
   type GedcomUploadReference,
@@ -17,8 +18,11 @@ export class GedcomUploadError extends Error {
   }
 }
 
-export async function readStagedGedcomUpload(reference: GedcomUploadReference): Promise<DecodedGedcom> {
-  validateReference(reference);
+export async function readStagedGedcomUpload(
+  reference: GedcomUploadReference,
+  archiveId: string
+): Promise<DecodedGedcom> {
+  validateReference(reference, archiveId);
 
   let metadata;
   try {
@@ -59,22 +63,47 @@ export async function readStagedGedcomUpload(reference: GedcomUploadReference): 
   }
 }
 
-export async function deleteStagedGedcomUploads(pathnames: Array<string | undefined>): Promise<void> {
-  const validPathnames = Array.from(new Set(pathnames.filter((pathname): pathname is string => Boolean(pathname)).map(validateGedcomUploadPath)));
+export async function deleteStagedGedcomUploads(
+  pathnames: Array<string | undefined>,
+  archiveId: string
+): Promise<void> {
+  const validPathnames = Array.from(new Set(
+    pathnames
+      .filter((pathname): pathname is string => Boolean(pathname))
+      .map((pathname) => validateGedcomUploadPath(pathname, archiveId))
+  ));
   if (validPathnames.length === 0) {
     return;
   }
   await del(validPathnames);
 }
 
-export async function cleanupStaleGedcomUploads(now = new Date()): Promise<number> {
+export async function cleanupStaleGedcomUploadsForArchive(
+  archiveId: string,
+  now = new Date()
+): Promise<number> {
+  const prefix = getGedcomUploadArchivePrefix(archiveId);
+  return cleanupStaleGedcomUploadsWithPrefix(prefix, now, (pathname) => isGedcomUploadForArchive(pathname, archiveId));
+}
+
+export async function cleanupAllStaleGedcomUploads(now = new Date()): Promise<number> {
+  return cleanupStaleGedcomUploadsWithPrefix(gedcomUploadPrefix, now);
+}
+
+async function cleanupStaleGedcomUploadsWithPrefix(
+  prefix: string,
+  now: Date,
+  shouldDelete: (pathname: string) => boolean = () => true
+): Promise<number> {
   const staleBefore = now.getTime() - staleGedcomUploadAgeMs;
   let cursor: string | undefined;
   let deleted = 0;
 
   do {
-    const page = await list({ prefix: gedcomUploadPrefix, limit: 1000, cursor });
-    const stale = page.blobs.filter((blob) => blob.uploadedAt.getTime() < staleBefore).map((blob) => blob.pathname);
+    const page = await list({ prefix, limit: 1000, cursor });
+    const stale = page.blobs
+      .filter((blob) => blob.uploadedAt.getTime() < staleBefore && shouldDelete(blob.pathname))
+      .map((blob) => blob.pathname);
     if (stale.length > 0) {
       await del(stale);
       deleted += stale.length;
@@ -85,7 +114,16 @@ export async function cleanupStaleGedcomUploads(now = new Date()): Promise<numbe
   return deleted;
 }
 
-function validateReference(reference: GedcomUploadReference): void {
+function isGedcomUploadForArchive(pathname: string, archiveId: string): boolean {
+  try {
+    validateGedcomUploadPath(pathname, archiveId);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function validateReference(reference: GedcomUploadReference, archiveId: string): void {
   if (!reference || typeof reference.pathname !== "string" || typeof reference.etag !== "string") {
     throw new GedcomUploadError("GEDCOM upload reference is invalid");
   }
@@ -96,7 +134,7 @@ function validateReference(reference: GedcomUploadReference): void {
     throw new GedcomUploadError("GEDCOM upload reference has an invalid size");
   }
   try {
-    validateGedcomUploadPath(reference.pathname);
+    validateGedcomUploadPath(reference.pathname, archiveId);
   } catch (error) {
     throw new GedcomUploadError(errorMessage(error));
   }

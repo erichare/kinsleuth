@@ -52,7 +52,13 @@ describe("migration checksum history", () => {
         "002_search_unaccent.sql",
         "003_auth_accounts.sql",
         "004_archive_scoped_keys.sql",
-        "005_guided_research_loop.sql"
+        "005_guided_research_loop.sql",
+        "006_integration_sources.sql",
+        "007_integration_change_filters.sql",
+        "008_integration_upload_intents.sql",
+        "009_integration_media_objects.sql",
+        "010_integration_media_write_claims.sql",
+        "011_integration_change_search.sql"
       ],
       releaseAnchors: ["v0.17.4"]
     });

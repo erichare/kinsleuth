@@ -7,6 +7,7 @@ export const staleGedcomUploadAgeMs = 24 * 60 * 60 * 1000;
 export const importDiffPreviewRecordLimit = 12;
 
 const uploadIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const archiveIdPattern = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$/;
 
 export type GedcomUploadReference = {
   pathname: string;
@@ -32,7 +33,14 @@ export function sanitizeGedcomFileName(fileName: string): string {
   return `${safeBaseName || "import"}${extension}`;
 }
 
-export function createGedcomUploadPath(uploadId: string, originalName: string): string {
+export function getGedcomUploadArchivePrefix(archiveId: string): string {
+  if (!archiveIdPattern.test(archiveId)) {
+    throw new Error("Invalid archive namespace");
+  }
+  return `${gedcomUploadPrefix}${archiveId}/`;
+}
+
+export function createGedcomUploadPath(archiveId: string, uploadId: string, originalName: string): string {
   if (!uploadIdPattern.test(uploadId)) {
     throw new Error("Invalid GEDCOM upload id");
   }
@@ -40,7 +48,7 @@ export function createGedcomUploadPath(uploadId: string, originalName: string): 
     throw new Error("GEDCOM uploads must use a .ged or .gedcom filename");
   }
 
-  return `${gedcomUploadPrefix}${uploadId}/${sanitizeGedcomFileName(originalName)}`;
+  return `${getGedcomUploadArchivePrefix(archiveId)}${uploadId}/${sanitizeGedcomFileName(originalName)}`;
 }
 
 export function parseGedcomUploadClientPayload(value: string | null): GedcomUploadClientPayload {
@@ -69,14 +77,21 @@ export function parseGedcomUploadClientPayload(value: string | null): GedcomUplo
   return { uploadId, originalName, size };
 }
 
-export function validateGedcomUploadPath(pathname: string): string {
+export function validateGedcomUploadPath(pathname: string, archiveId: string): string {
   if (!pathname.startsWith(gedcomUploadPrefix)) {
     throw new Error("Invalid GEDCOM upload path");
   }
 
   const relativePath = pathname.slice(gedcomUploadPrefix.length);
-  const [uploadId, fileName, ...extra] = relativePath.split("/");
-  if (extra.length > 0 || !uploadIdPattern.test(uploadId ?? "") || !fileName || !isGedcomFileName(fileName)) {
+  const [pathArchiveId, uploadId, fileName, ...extra] = relativePath.split("/");
+  if (
+    extra.length > 0
+    || !archiveIdPattern.test(archiveId)
+    || pathArchiveId !== archiveId
+    || !uploadIdPattern.test(uploadId ?? "")
+    || !fileName
+    || !isGedcomFileName(fileName)
+  ) {
     throw new Error("Invalid GEDCOM upload path");
   }
   if (fileName !== sanitizeGedcomFileName(fileName)) {
@@ -86,9 +101,13 @@ export function validateGedcomUploadPath(pathname: string): string {
   return pathname;
 }
 
-export function validateGedcomUploadRequest(pathname: string, clientPayload: string | null): GedcomUploadClientPayload {
+export function validateGedcomUploadRequest(
+  pathname: string,
+  clientPayload: string | null,
+  archiveId: string
+): GedcomUploadClientPayload {
   const payload = parseGedcomUploadClientPayload(clientPayload);
-  if (pathname !== createGedcomUploadPath(payload.uploadId, payload.originalName)) {
+  if (pathname !== createGedcomUploadPath(archiveId, payload.uploadId, payload.originalName)) {
     throw new Error("GEDCOM upload path does not match its metadata");
   }
   return payload;

@@ -127,7 +127,21 @@ export function getAIStatus(): RuntimeStatus["ai"] {
 }
 
 export function getStorageStatus(): RuntimeStatus["storage"] {
+  const backend = process.env.KINRESOLVE_OBJECT_STORAGE_BACKEND?.trim().toLowerCase();
+
+  if (backend === "vercel-blob") {
+    return { configured: Boolean(process.env.BLOB_READ_WRITE_TOKEN?.trim()) };
+  }
+
+  if (backend === "s3") {
+    const hasAccessKey = Boolean(process.env.S3_ACCESS_KEY_ID?.trim());
+    const hasSecretKey = Boolean(process.env.S3_SECRET_ACCESS_KEY?.trim());
+    return {
+      configured: Boolean(process.env.S3_BUCKET?.trim()) && hasAccessKey === hasSecretKey
+    };
+  }
+
   return {
-    configured: Boolean(process.env.BLOB_READ_WRITE_TOKEN)
+    configured: false
   };
 }

@@ -13,8 +13,8 @@ The V0.1 implementation is intentionally one-family-archive-per-deployment. That
 - Next.js App Router renders public and private routes.
 - Postgres stores normalized workspace data, import snapshots, backups, case tasks, and AI run history.
 - `pgvector` is provisioned for semantic embeddings for source notes, facts, case evidence, and DNA match notes.
-- Private Vercel Blob storage stages large GEDCOM imports outside the request path. General source-file uploads still use local disk; the S3-compatible configuration is not yet a working source-storage abstraction.
-- The worker entry point is currently a scaffold. Durable GEDCOM, embedding, and long-running AI jobs remain planned.
+- Data-source artifacts use private, archive-namespaced object storage backed by either Vercel Blob or S3-compatible storage such as MinIO. Legacy general source-file attachments still use local disk and have not yet moved to this contract.
+- Data-source parsing uses Postgres-backed leased jobs with retries, cancellation, and bounded worker batches. Self-hosted deployments run the long-lived worker; hosted deployments invoke the same worker protocol on a schedule. Individual parse jobs do not yet checkpoint mid-file, and durable embedding and long-running AI jobs remain planned.
 
 ## Privacy
 

@@ -9,9 +9,16 @@ const blobMocks = vi.hoisted(() => ({
 
 vi.mock("@vercel/blob", () => blobMocks);
 
-import { cleanupStaleGedcomUploads, deleteStagedGedcomUploads, readStagedGedcomUpload } from "@/lib/gedcom/blob-storage";
+import {
+  cleanupAllStaleGedcomUploads,
+  cleanupStaleGedcomUploadsForArchive,
+  deleteStagedGedcomUploads,
+  readStagedGedcomUpload
+} from "@/lib/gedcom/blob-storage";
 
-const pathname = "gedcom-imports/17d9a2d4-f3c0-4c0f-a291-2de3a33f418a/family.ged";
+const archiveId = "archive-alpha";
+const otherArchiveId = "archive-beta";
+const pathname = "gedcom-imports/archive-alpha/17d9a2d4-f3c0-4c0f-a291-2de3a33f418a/family.ged";
 const content = "0 HEAD\n1 GEDC\n2 VERS 5.5.1\n0 TRLR";
 
 afterEach(() => {
@@ -27,7 +34,7 @@ describe("GEDCOM Blob storage", () => {
       blob: { pathname, etag: 'W/"etag-1"', size: 0, contentType: "text/plain; charset=utf-8" }
     });
 
-    await expect(readStagedGedcomUpload({ pathname, etag: '"etag-1"', size: content.length })).resolves.toEqual({
+    await expect(readStagedGedcomUpload({ pathname, etag: '"etag-1"', size: content.length }, archiveId)).resolves.toEqual({
       content,
       charset: "utf-8",
       warnings: []
@@ -38,34 +45,81 @@ describe("GEDCOM Blob storage", () => {
   it("rejects a changed upload before parsing it", async () => {
     blobMocks.head.mockResolvedValue({ pathname, etag: "different", size: content.length, contentType: "text/plain" });
 
-    await expect(readStagedGedcomUpload({ pathname, etag: "etag-1", size: content.length })).rejects.toThrow(/changed after it was selected/);
+    await expect(readStagedGedcomUpload({ pathname, etag: "etag-1", size: content.length }, archiveId)).rejects.toThrow(/changed after it was selected/);
     expect(blobMocks.get).not.toHaveBeenCalled();
   });
 
   it("does not resolve arbitrary Blob paths", async () => {
-    await expect(readStagedGedcomUpload({ pathname: "other/private.ged", etag: "etag-1", size: 100 })).rejects.toThrow(/Invalid GEDCOM upload path/);
+    await expect(readStagedGedcomUpload({ pathname: "other/private.ged", etag: "etag-1", size: 100 }, archiveId)).rejects.toThrow(/Invalid GEDCOM upload path/);
+    expect(blobMocks.get).not.toHaveBeenCalled();
+  });
+
+  it("rejects another archive's staged upload before reading Blob storage", async () => {
+    await expect(
+      readStagedGedcomUpload({ pathname, etag: "etag-1", size: content.length }, otherArchiveId)
+    ).rejects.toThrow(/Invalid GEDCOM upload path/);
+    expect(blobMocks.head).not.toHaveBeenCalled();
     expect(blobMocks.get).not.toHaveBeenCalled();
   });
 
   it("deduplicates paths before cleanup", async () => {
     blobMocks.del.mockResolvedValue(undefined);
 
-    await deleteStagedGedcomUploads([pathname, pathname, undefined]);
+    await deleteStagedGedcomUploads([pathname, pathname, undefined], archiveId);
 
     expect(blobMocks.del).toHaveBeenCalledWith([pathname]);
   });
 
-  it("removes abandoned uploads older than one day", async () => {
+  it("does not delete another archive's staged upload", async () => {
+    await expect(deleteStagedGedcomUploads([pathname], otherArchiveId)).rejects.toThrow(/Invalid GEDCOM upload path/);
+    expect(blobMocks.del).not.toHaveBeenCalled();
+  });
+
+  it("rejects an invalid cleanup archive before listing Blob storage", async () => {
+    await expect(cleanupStaleGedcomUploadsForArchive("../archive-alpha")).rejects.toThrow(/Invalid archive namespace/);
+    expect(blobMocks.list).not.toHaveBeenCalled();
+  });
+
+  it("removes only stale uploads belonging to the requested archive", async () => {
+    const otherPathname = pathname.replace(archiveId, otherArchiveId);
     blobMocks.list.mockResolvedValue({
       blobs: [
         { pathname, uploadedAt: new Date("2026-07-07T00:00:00.000Z") },
+        { pathname: otherPathname, uploadedAt: new Date("2026-07-07T00:00:00.000Z") },
         { pathname: pathname.replace("family.ged", "recent.ged"), uploadedAt: new Date("2026-07-09T11:30:00.000Z") }
       ],
       hasMore: false
     });
     blobMocks.del.mockResolvedValue(undefined);
 
-    await expect(cleanupStaleGedcomUploads(new Date("2026-07-09T12:00:00.000Z"))).resolves.toBe(1);
+    await expect(
+      cleanupStaleGedcomUploadsForArchive(archiveId, new Date("2026-07-09T12:00:00.000Z"))
+    ).resolves.toBe(1);
+    expect(blobMocks.list).toHaveBeenCalledWith({
+      prefix: `gedcom-imports/${archiveId}/`,
+      limit: 1000,
+      cursor: undefined
+    });
     expect(blobMocks.del).toHaveBeenCalledWith([pathname]);
+  });
+
+  it("preserves global stale cleanup for the secret cron", async () => {
+    const otherPathname = pathname.replace(archiveId, otherArchiveId);
+    blobMocks.list.mockResolvedValue({
+      blobs: [
+        { pathname, uploadedAt: new Date("2026-07-07T00:00:00.000Z") },
+        { pathname: otherPathname, uploadedAt: new Date("2026-07-07T00:00:00.000Z") }
+      ],
+      hasMore: false
+    });
+    blobMocks.del.mockResolvedValue(undefined);
+
+    await expect(cleanupAllStaleGedcomUploads(new Date("2026-07-09T12:00:00.000Z"))).resolves.toBe(2);
+    expect(blobMocks.list).toHaveBeenCalledWith({
+      prefix: "gedcom-imports/",
+      limit: 1000,
+      cursor: undefined
+    });
+    expect(blobMocks.del).toHaveBeenCalledWith([pathname, otherPathname]);
   });
 });

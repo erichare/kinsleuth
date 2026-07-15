@@ -42,6 +42,7 @@ export const apiRouteAccessRegistry: readonly ApiRouteAccess[] = [
     path: "/api/cases/[id]/tasks/[taskId]/outcome",
     methods: { POST: permission("cases:write") }
   },
+  { path: "/api/cron/integration-jobs", methods: { GET: serviceAccess } },
   { path: "/api/cron/import-uploads", methods: { GET: serviceAccess } },
   {
     path: "/api/dna/[id]",
@@ -52,11 +53,71 @@ export const apiRouteAccessRegistry: readonly ApiRouteAccess[] = [
   { path: "/api/dna/matches", methods: { GET: permission("dna:read") } },
   { path: "/api/exports/gedcom", methods: { GET: permission("archive:export") } },
   { path: "/api/health", methods: { GET: publicAccess } },
+  {
+    path: "/api/integration-runs/[id]",
+    methods: { GET: permission("imports:manage"), DELETE: permission("imports:manage") }
+  },
+  {
+    path: "/api/integration-runs/[id]/apply",
+    methods: { POST: permission("imports:manage") }
+  },
+  {
+    path: "/api/integration-runs/[id]/changes",
+    methods: { GET: permission("imports:manage") }
+  },
+  {
+    path: "/api/integration-runs/[id]/rollback",
+    methods: { POST: permission("imports:manage") }
+  },
+  {
+    path: "/api/integration-media",
+    methods: { GET: permission("imports:manage") }
+  },
+  {
+    path: "/api/integration-media/[id]",
+    methods: { PATCH: permission("imports:manage") }
+  },
+  {
+    path: "/api/integration-media/[id]/download",
+    methods: { GET: permission("imports:manage") }
+  },
+  {
+    path: "/api/integrations",
+    methods: { GET: permission("imports:manage"), POST: permission("imports:manage") }
+  },
+  {
+    path: "/api/integrations/[id]",
+    methods: { DELETE: permission("imports:manage") }
+  },
+  {
+    path: "/api/integrations/[id]/artifacts",
+    methods: { POST: permission("imports:manage"), DELETE: permission("imports:manage") }
+  },
+  {
+    path: "/api/integrations/[id]/artifacts/[artifactId]/download",
+    methods: { GET: permission("imports:manage") }
+  },
+  {
+    path: "/api/integrations/[id]/artifacts/complete",
+    methods: { POST: permission("imports:manage") }
+  },
+  {
+    path: "/api/integrations/[id]/artifacts/stage",
+    methods: { POST: permission("imports:manage") }
+  },
+  {
+    path: "/api/integrations/[id]/sync-runs",
+    methods: { GET: permission("imports:manage"), POST: permission("imports:manage") }
+  },
   { path: "/api/imports", methods: { POST: permission("imports:manage") } },
   { path: "/api/imports/relationships", methods: { POST: permission("imports:manage") } },
   {
     path: "/api/imports/uploads",
-    methods: { POST: permission("imports:manage"), DELETE: permission("imports:manage") }
+    methods: {
+      GET: permission("imports:manage"),
+      POST: permission("imports:manage"),
+      DELETE: permission("imports:manage")
+    }
   },
   { path: "/api/people", methods: { GET: permission("archive:read-private") } },
   { path: "/api/people/[id]/curation", methods: { PATCH: permission("archive:publish") } },

@@ -16,10 +16,10 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 export const maxDuration = 300;
 
-export const POST = withPermission("imports:manage", async (request) => {
+export const POST = withPermission("imports:manage", async (request, authorization) => {
   let body: ResolvedImportRequest;
   try {
-    body = await readImportRequest(request);
+    body = await readImportRequest(request, authorization.archiveId);
   } catch (error) {
     return importErrorResponse(error);
   }
@@ -41,11 +41,13 @@ export const POST = withPermission("imports:manage", async (request) => {
           omittedRecords: Math.max(0, fullDiff.records.length - importDiffPreviewRecordLimit)
         }
       : undefined;
-    const applied = prepared ? await applyPreparedGedcomImport(prepared) : undefined;
+    const applied = prepared
+      ? await applyPreparedGedcomImport(prepared, { archiveId: authorization.archiveId })
+      : undefined;
 
     if (applied && body.stagedPathnames.length > 0) {
       try {
-        await deleteStagedGedcomUploads(body.stagedPathnames);
+        await deleteStagedGedcomUploads(body.stagedPathnames, authorization.archiveId);
       } catch (error) {
         console.error("GEDCOM import applied, but staged upload cleanup failed", error);
       }
@@ -86,7 +88,7 @@ type ResolvedImportRequest = {
   warnings: string[];
 };
 
-async function readImportRequest(request: Request): Promise<ResolvedImportRequest> {
+async function readImportRequest(request: Request, archiveId: string): Promise<ResolvedImportRequest> {
   const contentType = request.headers.get("content-type") ?? "";
   if (contentType.includes("multipart/form-data")) {
     const formData = await request.formData();
@@ -131,8 +133,8 @@ async function readImportRequest(request: Request): Promise<ResolvedImportReques
     body.previousUpload?.size ?? Buffer.byteLength(body.previousContent ?? "")
   );
   const [stagedContent, stagedPreviousContent] = await Promise.all([
-    body.currentUpload ? readStagedGedcomUpload(body.currentUpload) : Promise.resolve(undefined),
-    body.previousUpload ? readStagedGedcomUpload(body.previousUpload) : Promise.resolve(undefined)
+    body.currentUpload ? readStagedGedcomUpload(body.currentUpload, archiveId) : Promise.resolve(undefined),
+    body.previousUpload ? readStagedGedcomUpload(body.previousUpload, archiveId) : Promise.resolve(undefined)
   ]);
 
   return {

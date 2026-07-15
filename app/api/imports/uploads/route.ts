@@ -2,11 +2,10 @@ import { after } from "next/server";
 import { handleUpload, type HandleUploadBody } from "@vercel/blob/client";
 import { NextResponse } from "next/server";
 import { withPermission } from "@/lib/api-authorization";
-import { cleanupStaleGedcomUploads, deleteStagedGedcomUploads } from "@/lib/gedcom/blob-storage";
+import { cleanupStaleGedcomUploadsForArchive, deleteStagedGedcomUploads } from "@/lib/gedcom/blob-storage";
 import {
   gedcomUploadTokenLifetimeMs,
   maximumGedcomFileSizeBytes,
-  validateGedcomUploadPath,
   validateGedcomUploadRequest
 } from "@/lib/gedcom/upload-policy";
 
@@ -14,7 +13,11 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-export const POST = withPermission("imports:manage", async (request) => {
+export const GET = withPermission("imports:manage", async (_request, authorization) => {
+  return NextResponse.json({ archiveId: authorization.archiveId });
+});
+
+export const POST = withPermission("imports:manage", async (request, authorization) => {
   if (!process.env.BLOB_READ_WRITE_TOKEN) {
     return NextResponse.json({ error: "Private GEDCOM upload storage is not configured." }, { status: 503 });
   }
@@ -31,7 +34,7 @@ export const POST = withPermission("imports:manage", async (request) => {
       request,
       body,
       onBeforeGenerateToken: async (pathname, clientPayload) => {
-        validateGedcomUploadRequest(pathname, clientPayload);
+        validateGedcomUploadRequest(pathname, clientPayload, authorization.archiveId);
 
         return {
           allowedContentTypes: ["text/plain"],
@@ -47,7 +50,7 @@ export const POST = withPermission("imports:manage", async (request) => {
     if (body.type === "blob.generate-client-token") {
       after(async () => {
         try {
-          await cleanupStaleGedcomUploads();
+          await cleanupStaleGedcomUploadsForArchive(authorization.archiveId);
         } catch (error) {
           console.error("Unable to clean stale GEDCOM uploads", error);
         }
@@ -60,7 +63,7 @@ export const POST = withPermission("imports:manage", async (request) => {
   }
 });
 
-export const DELETE = withPermission("imports:manage", async (request) => {
+export const DELETE = withPermission("imports:manage", async (request, authorization) => {
   if (!process.env.BLOB_READ_WRITE_TOKEN) {
     return NextResponse.json({ error: "Private GEDCOM upload storage is not configured." }, { status: 503 });
   }
@@ -70,7 +73,7 @@ export const DELETE = withPermission("imports:manage", async (request) => {
     if (typeof body.pathname !== "string") {
       throw new Error("GEDCOM upload path is required");
     }
-    await deleteStagedGedcomUploads([validateGedcomUploadPath(body.pathname)]);
+    await deleteStagedGedcomUploads([body.pathname], authorization.archiveId);
     return NextResponse.json({ deleted: true });
   } catch (error) {
     return NextResponse.json({ error: errorMessage(error) }, { status: 400 });

@@ -7,6 +7,10 @@
   "regions": ["sfo1"],
   "crons": [
     {
+      "path": "/api/cron/integration-jobs",
+      "schedule": "*/5 * * * *"
+    },
+    {
       "path": "/api/cron/import-uploads",
       "schedule": "17 7 * * *"
     }

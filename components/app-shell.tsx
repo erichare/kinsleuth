@@ -15,7 +15,7 @@ const navGroups = [
     label: "Archive",
     items: [
       { href: "/app/sources", label: "Sources", icon: Icons.Database },
-      { href: "/app/imports", label: "GEDCOM Imports", icon: Icons.Upload }
+      { href: "/app/imports", label: "Data sources", icon: Icons.Upload }
     ]
   },
   {

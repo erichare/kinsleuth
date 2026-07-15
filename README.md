@@ -10,7 +10,7 @@
 [![Postgres + pgvector](https://img.shields.io/badge/Postgres-pgvector-336791?logo=postgresql&logoColor=white)](https://github.com/pgvector/pgvector)
 [![Tests: Vitest](https://img.shields.io/badge/Tests-Vitest-6E9F18?logo=vitest&logoColor=white)](https://vitest.dev)
 
-*Import GEDCOM files, triage DNA matches, build research cases, run AI-assisted analysis — then publish selected deceased profiles through person-level privacy gates.*
+*Import and refresh tree exports from Ancestry, Family Tree Maker, RootsMagic, or any GEDCOM-producing app; triage DNA matches; build research cases; and publish selected deceased profiles through privacy gates.*
 
 <p><em>Every person, record, place, photograph, story, and DNA value shown below belongs to the wholly fictional Hartwell–Mercer demo.</em></p>
 
@@ -56,15 +56,15 @@ Server-paginated search over every imported person with publication, privacy, an
 
 <img src="docs/screenshots/people-workspace.webp" alt="Fictional Hartwell–Mercer people workspace with search and curation" width="90%" />
 
-### GEDCOM imports with reviewable diffs
+### Remembered data sources with reviewable refreshes
 
-Every GEDCOM is previewed before it is applied: new, changed, and removed records are diffed against the current workspace so curated research is never silently overwritten. Raw records, xrefs, custom tags, and checksums are preserved, and each apply stores a restorable pre-import snapshot.
+The **Data sources** workspace presents import paths for Ancestry's downloaded ZIP or GEDCOM, media-capable Family Tree Maker and RootsMagic packages, and generic GEDCOM files. The provider-neutral persistence and API foundation remembers each source and models later exports against the last applied snapshot and current local research. Its review contract groups additions, edits, conflicts, and deletions; a missing remote record keeps the local record by default.
 
-<img src="docs/screenshots/gedcom-import-preview.webp" alt="Fictional Hartwell–Mercer GEDCOM import preview with diff review" width="90%" />
+This is an export workflow, not an Ancestry account connection: Kin Resolve never asks for Ancestry credentials, automates Ancestry pages, or writes changes back. Every non-GEDCOM file in a ZIP must pass the private malware scanner before review, including unreferenced attachments. FTM and RootsMagic media packages fail closed unless the private-media feature, documented legal-review gate, and a versioned user rights acknowledgement are all present. Retained media starts third-party restricted, private, non-publishable, and excluded from AI context; an authenticated owner can attest that a file is user-owned without automatically making it public or AI eligible.
 
-Large files (over 3.5 MB) upload directly from the browser to private Blob storage, bypassing serverless request limits — files up to 25 MB each are supported on Vercel.
+Apply and rollback requests are archive-scoped and idempotent. An apply writes the selected incoming entities and its pre-apply backup in the same transaction; rollback restores that backup. Raw GEDCOM records, xrefs, custom tags, source references, and checksums remain available for provenance. Private package storage uses archive-namespaced keys, and the registered Postgres worker handler provides exclusive leases, retries, cancellation, and redacted status errors. Production enablement requires a configured storage backend plus either the long-running worker or bounded scheduled invocation.
 
-Your data is never locked in: the whole archive exports back to GEDCOM 5.5.1 from the imports page (or `GET /api/exports/gedcom`), with curation flags carried as compatibility-preserved custom `_KS_` tags that another Kin Resolve instance restores on import.
+Your data is never locked in: the whole archive exports back to GEDCOM 5.5.1 from the Data sources page (or `GET /api/exports/gedcom`), with curation flags carried as compatibility-preserved custom `_KS_` tags. The explicit legacy Kin Resolve migration path can restore those tags; the provider-neutral Data sources workflow treats incoming publication controls as untrusted and always creates new people private and unpublished. See [Data source integrations](docs/data-source-integrations.md) for the provider boundary, API, deployment, rights, and rollout contract.
 
 ### DNA match triage
 
@@ -103,10 +103,13 @@ Open [http://localhost:3000](http://localhost:3000). The first read seeds a synt
 
 ```bash
 cp .env.example .env
+# Set MINIO_ROOT_USER and MINIO_ROOT_PASSWORD in .env before continuing.
 docker compose up --build
 ```
 
-Compose provisions Postgres with pgvector and a MinIO service alongside the app. General source-file uploads still use local disk, and the optional worker service is currently a scaffold rather than a durable job processor.
+Before starting Compose, set unique non-empty `MINIO_ROOT_USER` and `MINIO_ROOT_PASSWORD` values in `.env` (for example, generate the password with `openssl rand -hex 32`). Compose fails closed when either value is missing and supplies the same credential pair to the app, worker, MinIO, and bucket initializer.
+
+Compose provisions Postgres with pgvector and private MinIO object storage alongside the production app. The MinIO API and console are published only on the host loopback interface at ports `9000` and `9001`. The data-source storage contract uses archive-namespaced keys; legacy general source-file attachments still use local disk. MinIO allows direct-upload CORS from `http://localhost:3000`; production deployments must configure their exact HTTPS app origin for multipart `POST` uploads. Durable job state lives in Postgres, and the worker runs the registered export parser continuously by default. The web and worker processes share database, storage, and rollout configuration.
 
 ## Route map
 
@@ -121,7 +124,7 @@ Compose provisions Postgres with pgvector and a MinIO service alongside the app.
 | `/app/cases` | Research cases, evidence, hypotheses, and task queues |
 | `/app/dna` | DNA match triage and connection hypotheses |
 | `/app/sources` | Source register and transcript review |
-| `/app/imports` | GEDCOM preview, apply flow, and full-archive GEDCOM export |
+| `/app/imports` | Remembered Ancestry/FTM/RootsMagic/GEDCOM data sources, reviewable refreshes, rollback, and full-archive GEDCOM export |
 | `/app/ai` | AI Analyst with saved run history |
 | `/app/reports` | Quality and evidence reports |
 | `/app/publishing` | Public-profile readiness review |
@@ -138,15 +141,29 @@ Compose provisions Postgres with pgvector and a MinIO service alongside the app.
 | `DATABASE_POOL_MAX` | Max connections per instance; use `2` for serverless |
 | `DATABASE_AUTO_MIGRATE` | Applies pending versioned migrations at boot; set `false` in production and run `npm run db:migrate` at deploy time instead |
 | `KINRESOLVE_GUIDED_RESEARCH_ENABLED` | Server-side kill switch for the private case guide and its mutation APIs; defaults to `true`, set `false` to disable without deleting research history |
+| `KINRESOLVE_EXPORT_REFRESH_ENABLED` | Data-source tree import/refresh gate; defaults to `true` |
+| `KINRESOLVE_DESKTOP_MEDIA_ENABLED` | Requests the private FTM/RootsMagic media path; defaults to `false` and is ineffective without the legal-review gate and per-package rights acknowledgement |
+| `KINRESOLVE_MEDIA_LEGAL_REVIEW_APPROVED` | Independent operator assertion that the private media rights language and release were reviewed; defaults to `false` |
+| `KINRESOLVE_MALWARE_SCANNER` | Worker malware scanner provider: `clamd` or `none`; media-bearing ZIPs fail closed when unset |
+| `KINRESOLVE_CLAMD_HOST` / `KINRESOLVE_CLAMD_PORT` | Private clamd TCP endpoint; no filenames or genealogy metadata are sent |
+| `KINRESOLVE_MALWARE_SCAN_TIMEOUT_MS` | Whole-file clamd connection/scan timeout, default `30000` |
+| `KINRESOLVE_MALWARE_SCAN_MAX_BYTES` | Per-file INSTREAM ceiling, default `25165824`; must not exceed clamd `StreamMaxLength` |
+| `KINRESOLVE_ANCESTRY_API_ENABLED` | Future partner-API rollout request; defaults to `false` and has no effect without separate written approval |
+| `KINRESOLVE_ANCESTRY_PARTNER_APPROVED` | Independent operator assertion that written Ancestry approval exists; both Ancestry API gates must be true |
 | `AUTH_SECRET` | Secret for account sessions (better-auth); required in production |
 | `KINSLEUTH_ARCHIVE_ID` | Archive id; defaults to `archive-default` |
-| `BLOB_READ_WRITE_TOKEN` | Private Vercel Blob store for staging large GEDCOM uploads |
-| `CRON_SECRET` | Bearer token for the daily stale-upload cleanup job |
+| `KINRESOLVE_OBJECT_STORAGE_BACKEND` | Private data-source artifact backend (`s3` or `vercel-blob`); archive namespace enforcement is fixed by the storage contract |
+| `BLOB_READ_WRITE_TOKEN` | Server-only credential for Vercel Blob artifact storage and archive-namespaced legacy large-GEDCOM staging |
+| `S3_ENDPOINT` | Server/worker endpoint for S3-compatible private artifact reads and writes |
+| `S3_PUBLIC_ENDPOINT` | Browser-reachable endpoint used only when signing direct-upload POST policies |
+| `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD` | **Required for Docker Compose.** Operator-supplied credentials shared by the bundled MinIO service, app, worker, and bucket initializer |
+| `S3_BUCKET` / `S3_REGION` / `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY` | Private S3/MinIO bucket and server-only credentials for non-Compose runtimes; Compose derives its access keys from the required MinIO values |
+| `KINRESOLVE_WORKER_*` | Worker identity, polling and maintenance intervals, lease duration, per-run parse bound, and bounded staged-upload cleanup limit |
+| `CRON_SECRET` | Bearer token for scheduled integration parsing and stale-upload cleanup jobs |
 | `AI_BASE_URL` / `AI_API_KEY` | OpenAI-compatible provider; deterministic fallback runs without a key |
 | `AI_API_MODE` | `responses` (default) or `chat` |
 | `AI_CHAT_MODEL` / `AI_EMBEDDING_MODEL` | Chat model for analysis; the embedding model is reserved for planned pgvector retrieval (not implemented yet) |
 | `APP_BASE_URL` | Canonical origin of the running app; production requires an HTTPS origin such as `https://app.kinresolve.com` |
-| `S3_*` | Reserved for object-storage-backed source uploads |
 
 Archive name and tagline are edited in **Settings → Archive branding** and flow through both the private workspace and the public site. Settings also reports live database, storage, and AI-provider health.
 
@@ -184,11 +201,11 @@ large-import regression, and released-schema upgrade rehearsal separate required
 ## Data & privacy model
 
 ```
-GEDCOM / DNA CSV ──▶ Private workspace (Postgres) ──▶ Curation gates ──▶ Public archive
-                        │                                  │
-                        ├─ raw records, xrefs, checksums   ├─ manual publish flag
-                        ├─ pre-import snapshots            ├─ living-person gate
-                        └─ cases, evidence, AI runs        └─ privacy level gate
+Provider export / DNA CSV ──▶ Private workspace (Postgres) ──▶ Curation gates ──▶ Public archive
+                                  │                                  │
+                                  ├─ raw records and snapshots       ├─ manual publish flag
+                                  ├─ reviewable refresh changes      ├─ living-person gate
+                                  └─ cases, evidence, AI runs        └─ privacy level gate
 ```
 
 - Anonymous visitors see only manually published, automatically re-checked public content.
@@ -217,7 +234,8 @@ Required Vercel production environment: `DATABASE_URL` (Supabase transaction poo
 port `6543` with `sslmode=require`—the app upgrades known Supabase pooler connections to
 `verify-full` with the bundled root CA), `DATABASE_POOL_MAX=2`,
 `DATABASE_AUTO_MIGRATE=false`, `APP_BASE_URL` set to the canonical HTTPS product origin,
-`AUTH_SECRET`, `BLOB_READ_WRITE_TOKEN`, and `CRON_SECRET`. The current product provider
+`AUTH_SECRET`, the selected private object-storage credentials, `CRON_SECRET`, and the
+integration feature flags. The current product provider
 configuration is intentionally considered incomplete until `APP_BASE_URL` is present;
 the release workflow fails rather than guessing a legacy hostname.
 
@@ -233,7 +251,7 @@ reviewed maintenance procedure.
 | --- | --- |
 | `app/` | Next.js App Router pages and API routes |
 | `components/` | Shared UI and workspace components |
-| `lib/` | GEDCOM parsing, workspace store, search, DNA, AI, privacy, publishing, reports |
+| `lib/` | GEDCOM/package parsing, integrations, private object storage, durable jobs, workspace store, search, DNA, AI, privacy, publishing, reports |
 | `db/migrations/` | Versioned Postgres + pgvector schema migrations, tracked in `schema_migrations` |
 | `tests/` | Vitest unit and Postgres integration coverage |
 | `docs/` | Architecture notes and README screenshots |
@@ -242,11 +260,13 @@ reviewed maintenance procedure.
 
 Kin Resolve is a working vertical slice suited to local/self-hosted beta use — not yet a production genealogy platform.
 
-- General source-file uploads still target local disk; wire object storage before production use of file attachments.
+- Data-source artifacts have an archive-namespaced private-storage contract; legacy general source-file attachments still target local disk and need the same backend before production use.
 - ANSEL-encoded GEDCOM files are decoded on a best-effort basis (UTF-8, UTF-16, and Windows-1252 are handled properly).
-- Importing two *unrelated* GEDCOM files can collide on xref-derived record ids; curation flags are protected from cross-person leaks, but the second import replaces colliding records. Re-imports of the same tree merge as intended.
+- Remembered data sources scope provider identifiers and GEDCOM xrefs to a connection. The legacy direct `/api/imports` path still uses xref-derived record ids, so two unrelated files sent through that legacy route can collide.
+- Ancestry support is export-only. Partner OAuth, incremental API pulls, AncestryDNA, hints, messages, and writeback remain disabled unless a future written partner agreement explicitly authorizes them.
+- FTM/RootsMagic binary media retention is not implemented. Packages still receive path reconciliation and missing/ambiguous-file reports. All non-GEDCOM ZIP entries must scan clean even while desktop media retention is disabled; retention stays gated on the unfinished rights-attestation release.
 - Semantic (pgvector) retrieval is planned but not implemented; the embeddings table is provisioned and unused.
-- The worker is a scaffold; durable background jobs are not implemented. Invitations, member management, and route-wide role enforcement are also still evolving.
+- Durable Postgres jobs provide leases, retries, cancellation, idempotency, and redacted errors. The registered integration parser runs through `npm run worker` for self-hosting or `/api/cron/integration-jobs` for bounded hosted processing. Invitations and member management are still evolving.
 
 ## License
 

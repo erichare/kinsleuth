@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { cleanupStaleGedcomUploads } from "@/lib/gedcom/blob-storage";
+import { cleanupAllStaleGedcomUploads } from "@/lib/gedcom/blob-storage";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -15,7 +15,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    const deleted = await cleanupStaleGedcomUploads();
+    const deleted = await cleanupAllStaleGedcomUploads();
     return NextResponse.json({ deleted });
   } catch (error) {
     console.error("Scheduled GEDCOM upload cleanup failed", error);

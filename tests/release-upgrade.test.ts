@@ -404,7 +404,13 @@ describe.skipIf(!releaseDatabaseUrl)("v0.17.4 release upgrade", () => {
       "002_search_unaccent",
       "003_auth_accounts",
       "004_archive_scoped_keys",
-      "005_guided_research_loop"
+      "005_guided_research_loop",
+      "006_integration_sources",
+      "007_integration_change_filters",
+      "008_integration_upload_intents",
+      "009_integration_media_objects",
+      "010_integration_media_write_claims",
+      "011_integration_change_search"
     ]);
     for (const table of archiveScopedTables) {
       const count = await pool.query<{ count: string }>(`SELECT count(*)::text AS count FROM ${table}`);
@@ -461,7 +467,13 @@ describe.skipIf(!releaseDatabaseUrl)("v0.17.4 release upgrade", () => {
       "002_search_unaccent",
       "003_auth_accounts",
       "004_archive_scoped_keys",
-      "005_guided_research_loop"
+      "005_guided_research_loop",
+      "006_integration_sources",
+      "007_integration_change_filters",
+      "008_integration_upload_intents",
+      "009_integration_media_objects",
+      "010_integration_media_write_claims",
+      "011_integration_change_search"
     ]);
     await exerciseCompositeKeyWriters(pool);
     await expect(pool.query("SELECT count(*)::integer AS count FROM legacy_users")).resolves.toMatchObject({ rows: [{ count: 1 }] });

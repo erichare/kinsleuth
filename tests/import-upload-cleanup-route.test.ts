@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const storageMocks = vi.hoisted(() => ({
-  cleanupStaleGedcomUploads: vi.fn()
+  cleanupAllStaleGedcomUploads: vi.fn()
 }));
 
 vi.mock("@/lib/gedcom/blob-storage", () => storageMocks);
@@ -26,7 +26,7 @@ describe("scheduled GEDCOM upload cleanup", () => {
     const response = await GET(cleanupRequest());
 
     expect(response.status).toBe(503);
-    expect(storageMocks.cleanupStaleGedcomUploads).not.toHaveBeenCalled();
+    expect(storageMocks.cleanupAllStaleGedcomUploads).not.toHaveBeenCalled();
   });
 
   it("rejects an invalid bearer token", async () => {
@@ -35,18 +35,18 @@ describe("scheduled GEDCOM upload cleanup", () => {
     const response = await GET(cleanupRequest("wrong-secret"));
 
     expect(response.status).toBe(401);
-    expect(storageMocks.cleanupStaleGedcomUploads).not.toHaveBeenCalled();
+    expect(storageMocks.cleanupAllStaleGedcomUploads).not.toHaveBeenCalled();
   });
 
   it("deletes stale uploads for an authenticated Vercel Cron request", async () => {
     process.env.CRON_SECRET = "expected-secret";
-    storageMocks.cleanupStaleGedcomUploads.mockResolvedValue(3);
+    storageMocks.cleanupAllStaleGedcomUploads.mockResolvedValue(3);
 
     const response = await GET(cleanupRequest("expected-secret"));
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({ deleted: 3 });
-    expect(storageMocks.cleanupStaleGedcomUploads).toHaveBeenCalledOnce();
+    expect(storageMocks.cleanupAllStaleGedcomUploads).toHaveBeenCalledOnce();
   });
 });
 

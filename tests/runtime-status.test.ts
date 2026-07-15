@@ -52,10 +52,26 @@ describe("runtime status", () => {
   });
 
   it("reports whether private upload storage is configured", () => {
+    delete process.env.KINRESOLVE_OBJECT_STORAGE_BACKEND;
     delete process.env.BLOB_READ_WRITE_TOKEN;
+    delete process.env.S3_BUCKET;
+    delete process.env.S3_ACCESS_KEY_ID;
+    delete process.env.S3_SECRET_ACCESS_KEY;
     expect(getStorageStatus()).toEqual({ configured: false });
 
+    process.env.KINRESOLVE_OBJECT_STORAGE_BACKEND = "vercel-blob";
     process.env.BLOB_READ_WRITE_TOKEN = "vercel_blob_rw_test";
+    expect(getStorageStatus()).toEqual({ configured: true });
+
+    delete process.env.BLOB_READ_WRITE_TOKEN;
+    process.env.KINRESOLVE_OBJECT_STORAGE_BACKEND = "s3";
+    process.env.S3_BUCKET = "kinresolve-private";
+    expect(getStorageStatus()).toEqual({ configured: true });
+
+    process.env.S3_ACCESS_KEY_ID = "partial-credential";
+    expect(getStorageStatus()).toEqual({ configured: false });
+
+    process.env.S3_SECRET_ACCESS_KEY = "matching-secret";
     expect(getStorageStatus()).toEqual({ configured: true });
   });
 });

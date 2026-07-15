@@ -1126,53 +1126,130 @@ export async function applyPreparedGedcomImport(
   rawRecordCount: number;
 }> {
   return withArchiveMutation(options, async (client, archiveId) => {
-    // The full pre-import workspace is still loaded once here: it becomes the
-    // restorable backup snapshot. The writes below stay scoped to the tables
-    // the import actually touches — cases, DNA matches, and AI runs are not
-    // rewritten anymore.
-    const workspace = await loadWorkspace(client, archiveId);
-    const backup = createWorkspaceBackup(workspace, `Before applying ${prepared.snapshot.sourceName}`);
-    const appliedImport: AppliedGedcomImport = {
-      ...prepared.appliedImport,
-      backupId: backup.id
-    };
-
-    // mergeImportedPeople returns the merged imports first, then untouched
-    // existing people; only the imported slice needs to be written.
-    const mergedPeople = mergeImportedPeople(workspace.people, prepared.people);
-    const mergedImported = mergedPeople.slice(0, prepared.people.length);
-    const peopleStart = await prependSortOrderRange(client, "people", archiveId, mergedImported.length);
-    await upsertPeopleRows(client, archiveId, mergedImported, peopleStart);
-    await replacePersonFacts(client, archiveId, mergedImported);
-
-    const sourcesStart = await prependSortOrderRange(client, "sources", archiveId, prepared.sources.length);
-    await upsertSourceRows(client, archiveId, prepared.sources, sourcesStart);
-
-    // Re-importing a file replaces exactly that import's raw records.
-    const rawStart = await prependSortOrderRange(client, "raw_records", archiveId, prepared.rawRecords.length);
-    await client.query("DELETE FROM raw_records WHERE archive_id = $1 AND import_id = $2", [archiveId, prepared.snapshot.id]);
-    await insertRawRecordRows(client, archiveId, prepared.rawRecords, rawStart);
-
-    const importSort = await prependSortOrder(client, "import_snapshots", archiveId);
-    await upsertImportSnapshotRow(client, archiveId, appliedImport, importSort);
-
-    const backupSort = await prependSortOrder(client, "workspace_backups", archiveId);
-    await insertBackupRow(client, archiveId, backup, JSON.stringify(workspace), backupSort);
-    await pruneBackupRows(client, archiveId, retainedBackupCount);
-
-    // The people list changed, so the derived per-match hypotheses are stale.
-    for (const match of workspace.dnaMatches) {
-      await upsertDnaHypothesisRow(client, archiveId, match.id, createDnaConnectionHypothesis(match, mergedPeople));
-    }
-
-    return {
-      import: appliedImport,
-      backup,
-      peopleImported: prepared.people.length,
-      sourcesImported: prepared.sources.length,
-      rawRecordCount: prepared.rawRecords.length
-    };
+    return applyPreparedGedcomImportInTransaction(client, archiveId, prepared);
   });
+}
+
+/**
+ * Applies a prepared import using an existing, archive-locked transaction.
+ * Integration refreshes use this seam so the workspace mutation, backup,
+ * reviewed resolutions, and remembered baseline commit atomically.
+ */
+export async function applyPreparedGedcomImportInTransaction(
+  client: PoolClient,
+  archiveId: string,
+  prepared: PreparedGedcomImport,
+  options: { preserveCurationByStableId?: boolean } = {}
+): Promise<{
+  import: AppliedGedcomImport;
+  backup: WorkspaceBackup;
+  peopleImported: number;
+  sourcesImported: number;
+  rawRecordCount: number;
+}> {
+  // The full pre-import workspace is still loaded once here: it becomes the
+  // restorable backup snapshot. The writes below stay scoped to the tables
+  // the import actually touches — cases, DNA matches, and AI runs are not
+  // rewritten anymore.
+  const workspace = await loadWorkspace(client, archiveId);
+  const backup = await persistWorkspaceBackupInTransaction(
+    client,
+    archiveId,
+    workspace,
+    `Before applying ${prepared.snapshot.sourceName}`
+  );
+  const appliedImport: AppliedGedcomImport = {
+    ...prepared.appliedImport,
+    backupId: backup.id
+  };
+
+  // mergeImportedPeople returns the merged imports first, then untouched
+  // existing people; only the imported slice needs to be written.
+  const mergedPeople = mergeImportedPeople(
+    workspace.people,
+    prepared.people,
+    options.preserveCurationByStableId === true
+  );
+  const mergedImported = mergedPeople.slice(0, prepared.people.length);
+  const peopleStart = await prependSortOrderRange(client, "people", archiveId, mergedImported.length);
+  await upsertPeopleRows(client, archiveId, mergedImported, peopleStart);
+  await replacePersonFacts(client, archiveId, mergedImported);
+
+  const sources = options.preserveCurationByStableId
+    ? preserveImportedSourceCuration(workspace.sources, prepared.sources)
+    : prepared.sources;
+  const sourcesStart = await prependSortOrderRange(client, "sources", archiveId, sources.length);
+  await upsertSourceRows(client, archiveId, sources, sourcesStart);
+
+  // Re-importing a file replaces exactly that import's raw records.
+  const rawStart = await prependSortOrderRange(client, "raw_records", archiveId, prepared.rawRecords.length);
+  await client.query("DELETE FROM raw_records WHERE archive_id = $1 AND import_id = $2", [archiveId, prepared.snapshot.id]);
+  await insertRawRecordRows(client, archiveId, prepared.rawRecords, rawStart);
+
+  const importSort = await prependSortOrder(client, "import_snapshots", archiveId);
+  await upsertImportSnapshotRow(client, archiveId, appliedImport, importSort);
+
+  // The people list changed, so the derived per-match hypotheses are stale.
+  for (const match of workspace.dnaMatches) {
+    await upsertDnaHypothesisRow(client, archiveId, match.id, createDnaConnectionHypothesis(match, mergedPeople));
+  }
+
+  return {
+    import: appliedImport,
+    backup,
+    peopleImported: prepared.people.length,
+    sourcesImported: prepared.sources.length,
+    rawRecordCount: prepared.rawRecords.length
+  };
+}
+
+/** Creates a full, restorable archive backup inside the caller's transaction. */
+export async function createWorkspaceBackupInTransaction(
+  client: PoolClient,
+  archiveId: string,
+  reason: string
+): Promise<WorkspaceBackup> {
+  const workspace = await loadWorkspace(client, archiveId);
+  return persistWorkspaceBackupInTransaction(client, archiveId, workspace, reason);
+}
+
+async function persistWorkspaceBackupInTransaction(
+  client: PoolClient,
+  archiveId: string,
+  workspace: WorkspaceData,
+  reason: string
+): Promise<WorkspaceBackup> {
+  const backup = createWorkspaceBackup(workspace, reason);
+  const backupSort = await prependSortOrder(client, "workspace_backups", archiveId);
+  await insertBackupRow(client, archiveId, backup, JSON.stringify(workspace), backupSort);
+  await pruneBackupRows(client, archiveId, retainedBackupCount);
+  return backup;
+}
+
+/** Restores a workspace backup without leaving the caller's transaction. */
+export async function restoreWorkspaceBackupInTransaction(
+  client: PoolClient,
+  archiveId: string,
+  backupId: string
+): Promise<WorkspaceData> {
+  const result = await client.query<{ snapshot: unknown }>(
+    "SELECT snapshot FROM workspace_backups WHERE archive_id = $1 AND id = $2",
+    [archiveId, backupId]
+  );
+  if (result.rowCount !== 1 || !result.rows[0].snapshot || typeof result.rows[0].snapshot !== "object") {
+    throw new Error("Workspace backup not found or invalid");
+  }
+
+  const current = await loadWorkspace(client, archiveId);
+  const restored = normalizeWorkspaceData({
+    ...(result.rows[0].snapshot as Partial<WorkspaceData>),
+    // Keep the current backup ledger. In particular, the sync run being
+    // rolled back has a restrictive FK to its pre-apply backup.
+    backups: current.backups,
+    updatedAt: new Date().toISOString()
+  });
+  await persistWorkspace(client, archiveId, restored);
+  return restored;
 }
 
 export type GedcomRelationshipRepairResult = {
@@ -1917,7 +1994,11 @@ function removeDnaScore(match: ScoredDnaMatch): DnaMatch {
   return dnaMatch;
 }
 
-function mergeImportedPeople(existing: PersonSummary[], imported: PersonSummary[]): PersonSummary[] {
+function mergeImportedPeople(
+  existing: PersonSummary[],
+  imported: PersonSummary[],
+  preserveCurationByStableId = false
+): PersonSummary[] {
   const existingById = new Map(existing.map((person) => [person.id, person]));
   const importedIds = new Set(imported.map((person) => person.id));
   const mergedImported = imported.map((person) => {
@@ -1926,16 +2007,35 @@ function mergeImportedPeople(existing: PersonSummary[], imported: PersonSummary[
     // a different person from an unrelated import. Only carry curation flags
     // forward when the incoming record plausibly is the same person —
     // otherwise inheriting published/privacy could expose a living stranger.
-    return current && isSameImportedPerson(current, person)
-      ? {
-          ...person,
-          privacy: current.privacy,
-          published: current.published,
-          livingStatus: current.livingStatus
-        }
-      : person;
+    if (!current || (!preserveCurationByStableId && !isSameImportedPerson(current, person))) {
+      return person;
+    }
+    const currentFacts = new Map(current.facts.map((fact) => [fact.id, fact]));
+    return {
+      ...person,
+      privacy: current.privacy,
+      published: current.published,
+      livingStatus: current.livingStatus,
+      facts: person.facts.map((fact) => ({
+        ...fact,
+        privacy: currentFacts.get(fact.id)?.privacy ?? fact.privacy,
+        confidence: currentFacts.get(fact.id)?.confidence ?? fact.confidence
+      }))
+    };
   });
   return [...mergedImported, ...existing.filter((person) => !importedIds.has(person.id))];
+}
+
+function preserveImportedSourceCuration(
+  existing: SourceDocument[],
+  imported: SourceDocument[]
+): SourceDocument[] {
+  const existingById = new Map(existing.map((source) => [source.id, source]));
+  return imported.map((source) => ({
+    ...source,
+    privacy: existingById.get(source.id)?.privacy ?? source.privacy,
+    confidence: existingById.get(source.id)?.confidence ?? source.confidence
+  }));
 }
 
 function isSameImportedPerson(existing: PersonSummary, imported: PersonSummary): boolean {

@@ -24,7 +24,7 @@ vi.mock("@/lib/auth-session", () => ({
 
 import { POST } from "@/app/api/imports/route";
 
-const pathname = "gedcom-imports/17d9a2d4-f3c0-4c0f-a291-2de3a33f418a/family.ged";
+const pathname = "gedcom-imports/archive-default/17d9a2d4-f3c0-4c0f-a291-2de3a33f418a/family.ged";
 
 afterEach(() => {
   vi.clearAllMocks();
@@ -90,6 +90,23 @@ describe("GEDCOM import route", () => {
     expect(blobMocks.get).not.toHaveBeenCalled();
   });
 
+  it("rejects a staged upload owned by another archive", async () => {
+    const response = await POST(importRequest({
+      sourceName: "family.ged",
+      currentUpload: {
+        pathname: pathname.replace("archive-default", "archive-other"),
+        etag: "etag-1",
+        size: 100
+      },
+      apply: false
+    }));
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({ error: "Invalid GEDCOM upload path" });
+    expect(blobMocks.head).not.toHaveBeenCalled();
+    expect(blobMocks.get).not.toHaveBeenCalled();
+  });
+
   it("decodes a UTF-16LE multipart upload using its byte-order mark", async () => {
     const gedcom = "0 HEAD\n1 CHAR UNICODE\n0 @I1@ INDI\n1 NAME José /Müller/\n0 TRLR";
     const bytes = Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(gedcom, "utf16le")]);
@@ -127,7 +144,7 @@ describe("GEDCOM import route", () => {
       sourceName: "family.ged",
       currentUpload: { pathname, etag: "etag-1", size: 20 * 1024 * 1024 },
       previousUpload: {
-        pathname: "gedcom-imports/266d0b8c-37e3-4560-9f44-47ce12dcd12b/previous.ged",
+        pathname: "gedcom-imports/archive-default/266d0b8c-37e3-4560-9f44-47ce12dcd12b/previous.ged",
         etag: "etag-2",
         size: 20 * 1024 * 1024
       },

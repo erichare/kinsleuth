@@ -5,7 +5,13 @@
     "002_search_unaccent.sql": "fddf9f9a8fc3a439debf91a1262c82bb128a4dcbcd7047cbabf4a6ecf4c1c550",
     "003_auth_accounts.sql": "9d57f0a55d5043da0154ec947bf411408d825f87034e38e4033b84c5c5bd5e1f",
     "004_archive_scoped_keys.sql": "cf1d852419e752c462236f417177bef0651ec74c035f7353dcbbc9b5a9227195",
-    "005_guided_research_loop.sql": "1007d571926d590e060181e022510721cf47a8f64b24118f22cd9a6f363096e3"
+    "005_guided_research_loop.sql": "1007d571926d590e060181e022510721cf47a8f64b24118f22cd9a6f363096e3",
+    "006_integration_sources.sql": "174b48b220087d9728857c011050d9492c43224e411d859aa8b5b20c0d696cab",
+    "007_integration_change_filters.sql": "33bf169884f07955e960f56f27a7991036a7417f6fe481c68b7f487fa66aec1d",
+    "008_integration_upload_intents.sql": "ef2a140e31cf26205a10f74d7378324d36b3a8035f9cefd905d3bc3da5baa4f4",
+    "009_integration_media_objects.sql": "da0cf4d2e645ad6afd1eca2cc0d4704438ba33703127c89b42a396ce63110a2d",
+    "010_integration_media_write_claims.sql": "a6ad46c12e6679c30d9f581e76c358d181cca48e9bd2716ec1b1cf15c01652a7",
+    "011_integration_change_search.sql": "da2f8e0b06f6df05fc6c0731305ac9981ad03318b63924ae18877d3774dda852"
   },
   "releaseAnchors": {
     "v0.17.4": {

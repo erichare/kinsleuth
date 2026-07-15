@@ -6,10 +6,11 @@ export const runtime = "nodejs";
 
 export async function GET() {
   const status = await getRuntimeStatus();
+  const ready = status.database.connected && status.storage.configured;
 
   return NextResponse.json(
     {
-      status: status.database.connected ? "ok" : "degraded",
+      status: ready ? "ok" : "degraded",
       product: status.product,
       version: status.version,
       database: {
@@ -23,6 +24,6 @@ export async function GET() {
         configured: status.storage.configured
       }
     },
-    { status: status.database.connected ? 200 : 503 }
+    { status: ready ? 200 : 503 }
   );
 }
