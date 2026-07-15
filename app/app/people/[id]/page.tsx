@@ -48,7 +48,11 @@ export default async function AppPersonPage({ params }: { params: Promise<{ id: 
             <p className="muted">{lifeSummary}</p>
             <p>{person.notes ?? "Imported profile with curated facts and source confidence."}</p>
             <div className="hero-actions">
-              <Status tone={person.published ? "ok" : "private"}>{person.published ? "Published" : "Private"}</Status>
+              {capabilities.publicArchive && capabilities.publicPublishing ? (
+                <Status tone={person.published ? "ok" : "private"}>{person.published ? "Published" : "Private"}</Status>
+              ) : (
+                <Status tone="private">Private beta</Status>
+              )}
               <Status tone="private">{person.livingStatus}</Status>
             </div>
           </div>
