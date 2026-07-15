@@ -18,10 +18,12 @@ import { ensureWorkspaceProvisioned, getArchiveId, type WorkspaceStoreOptions } 
 // Everything buildSourceSearchText concatenates, in SQL form. The linked
 // person name and case title join in so searches match them, exactly like the
 // in-memory lookups.
-const searchHaystackSql = `extensions.unaccent(lower(concat_ws(' ',
-  s.id, s.title, s.source_type, s.repository, s.file_name, s.citation_date,
+function searchHaystackSql(includeBinaryMetadata: boolean): string {
+  return `extensions.unaccent(lower(concat_ws(' ',
+  s.id, s.title, s.source_type, s.repository, ${includeBinaryMetadata ? "s.file_name," : ""} s.citation_date,
   s.url, s.ancestry_apid, s.linked_person_id, pp.display_name,
   s.linked_case_id, rc.title, s.transcript, s.notes, s.privacy)))`;
+}
 
 const linkJoinsSql = `LEFT JOIN people pp ON pp.archive_id = s.archive_id AND pp.id = s.linked_person_id
   LEFT JOIN research_cases rc ON rc.archive_id = s.archive_id AND rc.id = s.linked_case_id`;
@@ -51,13 +53,18 @@ type SourceRow = {
   created_at: Date;
 };
 
+export type SourceQueryOptions = WorkspaceStoreOptions & {
+  includeBinaryMetadata?: boolean;
+};
+
 export async function searchSourcesPageFromDb(
   filters: SourceSearchFilters = {},
   pagination: PaginationInput = { page: 1, pageSize: 50 },
-  options: WorkspaceStoreOptions = {}
+  options: SourceQueryOptions = {}
 ): Promise<SourceSearchResult> {
   await ensureWorkspaceProvisioned(options);
   const archiveId = getArchiveId(options);
+  const includeBinaryMetadata = options.includeBinaryMetadata ?? true;
 
   const params: unknown[] = [archiveId];
   const conditions: string[] = ["s.archive_id = $1"];
@@ -85,7 +92,7 @@ export async function searchSourcesPageFromDb(
   const terms = normalizeSearchTerms(filters.query);
   for (const term of terms) {
     params.push(`%${escapeLikePattern(term)}%`);
-    conditions.push(`${searchHaystackSql} ILIKE $${params.length} ESCAPE '\\'`);
+    conditions.push(`${searchHaystackSql(includeBinaryMetadata)} ILIKE $${params.length} ESCAPE '\\'`);
   }
 
   const whereSql = conditions.join(" AND ");
@@ -118,7 +125,7 @@ export async function searchSourcesPageFromDb(
     options
   );
 
-  const items = pageResult.rows.map(toListItem);
+  const items = pageResult.rows.map((row) => toListItem(row, includeBinaryMetadata));
 
   return {
     items,
@@ -270,13 +277,13 @@ function excerpt(value: string | null, maxLength = 180): string | undefined {
   return normalized.length > maxLength ? `${normalized.slice(0, maxLength - 1).trimEnd()}...` : normalized;
 }
 
-function toListItem(row: SourceRow): SourceListItem {
+function toListItem(row: SourceRow, includeBinaryMetadata: boolean): SourceListItem {
   return {
     id: row.id,
     title: row.title,
     sourceType: row.source_type,
     repository: row.repository ?? undefined,
-    fileName: row.file_name ?? undefined,
+    fileName: includeBinaryMetadata ? row.file_name ?? undefined : undefined,
     citationDate: row.citation_date ?? undefined,
     linkedPersonId: row.linked_person_id ?? undefined,
     linkedPersonName: row.linked_person_name ?? undefined,

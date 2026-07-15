@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { withPermission } from "@/lib/api-authorization";
+import { resolveHostedCapabilities } from "@/lib/hosted-capabilities";
 import { parsePositiveInteger } from "@/lib/pagination";
 import { type SourceLinkFilter, type SourcePrivacyFilter, type SourceSortKey } from "@/lib/source-search";
 import { searchSourcesPageFromDb } from "@/lib/store/source-queries";
@@ -10,8 +11,9 @@ const privacyValues = new Set<SourcePrivacyFilter>(["all", "public", "private", 
 const linkValues = new Set<SourceLinkFilter>(["all", "linked", "unlinked", "person", "case"]);
 const sortValues = new Set<SourceSortKey>(["created", "title", "confidence"]);
 
-export const GET = withPermission("archive:read-private", async (request) => {
+export const GET = withPermission("archive:read-private", async (request, authorization) => {
   const url = new URL(request.url);
+  const capabilities = resolveHostedCapabilities();
 
   return NextResponse.json(
     await searchSourcesPageFromDb(
@@ -25,6 +27,10 @@ export const GET = withPermission("archive:read-private", async (request) => {
       {
         page: parsePositiveInteger(url.searchParams.get("page"), 1),
         pageSize: parsePositiveInteger(url.searchParams.get("pageSize"), 50)
+      },
+      {
+        archiveId: authorization.archiveId,
+        includeBinaryMetadata: capabilities.evidenceBinaryUploads
       }
     )
   );

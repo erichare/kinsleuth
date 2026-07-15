@@ -12,7 +12,11 @@ export default async function SourcesPage() {
     readArchiveBranding(),
     listCaseLinkOptions(),
     listPersonLinkOptions(),
-    searchSourcesPageFromDb({}, { page: 1, pageSize: 50 })
+    searchSourcesPageFromDb(
+      {},
+      { page: 1, pageSize: 50 },
+      { includeBinaryMetadata: capabilities.evidenceBinaryUploads }
+    )
   ]);
 
   return (
