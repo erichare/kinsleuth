@@ -40,6 +40,13 @@ function validInput(overrides: Partial<ReleaseContractInput> = {}): ReleaseContr
       CRON_SECRET: "cron-secret-that-is-at-least-32-characters",
       KINRESOLVE_DEPLOYMENT_MODE: "hosted",
       KINRESOLVE_DATASET_MODE: "pilot",
+      KINRESOLVE_DNA_ENABLED: "false",
+      KINRESOLVE_EXTERNAL_AI_ENABLED: "false",
+      KINRESOLVE_PUBLIC_ARCHIVE_ENABLED: "false",
+      KINRESOLVE_PUBLIC_PUBLISHING_ENABLED: "false",
+      KINRESOLVE_EVIDENCE_BINARY_UPLOADS_ENABLED: "false",
+      KINRESOLVE_PACKAGE_MEDIA_ENABLED: "false",
+      KINRESOLVE_PLAIN_GEDCOM_ENABLED: "true",
       KINSLEUTH_ARCHIVE_ID: "pilot-household-01"
     },
     ...overrides
@@ -158,6 +165,28 @@ describe("stable release contract", () => {
     const missing = validInput();
     delete missing.productionEnvironment.KINRESOLVE_DATASET_MODE;
     expect(() => validateReleaseContract(missing)).toThrow(/missing required production settings.*KINRESOLVE_DATASET_MODE/i);
+  });
+
+  it("requires the exact cohort-one hosted capability manifest", () => {
+    const missing = validInput();
+    delete missing.productionEnvironment.KINRESOLVE_DNA_ENABLED;
+    expect(() => validateReleaseContract(missing)).toThrow(
+      /missing required production settings.*KINRESOLVE_DNA_ENABLED/i
+    );
+
+    for (const [name, unsafeValue] of [
+      ["KINRESOLVE_DNA_ENABLED", "true"],
+      ["KINRESOLVE_EXTERNAL_AI_ENABLED", "true"],
+      ["KINRESOLVE_PUBLIC_ARCHIVE_ENABLED", "true"],
+      ["KINRESOLVE_PUBLIC_PUBLISHING_ENABLED", "true"],
+      ["KINRESOLVE_EVIDENCE_BINARY_UPLOADS_ENABLED", "true"],
+      ["KINRESOLVE_PACKAGE_MEDIA_ENABLED", "true"],
+      ["KINRESOLVE_PLAIN_GEDCOM_ENABLED", "false"]
+    ] as const) {
+      expect(() => validateReleaseContract(validInput({
+        productionEnvironment: { ...validInput().productionEnvironment, [name]: unsafeValue }
+      })), name).toThrow(new RegExp(`${name}.*cohort-one`, "i"));
+    }
   });
 
   it("requires an HTTPS origin and rejects placeholder secrets without leaking them", () => {
