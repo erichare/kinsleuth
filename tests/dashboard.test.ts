@@ -15,4 +15,21 @@ describe("dashboard summary", () => {
     expect(summary.dnaLeads[0].helpfulnessScore).toBeGreaterThan(0);
     expect(summary.actions.length).toBeLessThanOrEqual(2);
   });
+
+  it("omits disabled DNA and publication work from the hosted summary", () => {
+    const workspace = createSeedWorkspace(new Date("2026-07-08T12:00:00.000Z"));
+    const summary = buildDashboardSummary(workspace, {
+      dnaEnabled: false,
+      publicPublishingEnabled: false
+    });
+
+    expect(summary.metrics.dnaMatches).toBe(0);
+    expect(summary.metrics.triagedDnaMatches).toBe(0);
+    expect(summary.metrics.highPriorityDnaMatches).toBe(0);
+    expect(summary.dnaLeads).toEqual([]);
+    expect(summary.actions).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ href: "/app/dna" })
+    ]));
+    expect(summary.actions.some((action) => action.id.startsWith("publishing-"))).toBe(false);
+  });
 });
