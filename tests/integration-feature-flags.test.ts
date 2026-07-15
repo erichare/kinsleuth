@@ -14,7 +14,9 @@ describe("integration rollout gates", () => {
       exportRefresh: true,
       desktopMedia: false,
       desktopMediaLegalReviewApproved: false,
-      ancestryPartnerApi: false
+      ancestryPartnerApi: false,
+      packageMedia: true,
+      plainGedcomOnly: false
     });
     expect(isIntegrationProviderEnabled("ancestry_export", flags)).toBe(true);
     expect(isIntegrationProviderEnabled("family_tree_maker", flags)).toBe(true);
@@ -32,7 +34,9 @@ describe("integration rollout gates", () => {
       exportRefresh: false,
       desktopMedia: true,
       desktopMediaLegalReviewApproved: true,
-      ancestryPartnerApi: false
+      ancestryPartnerApi: false,
+      packageMedia: true,
+      plainGedcomOnly: false
     });
     expect(isIntegrationProviderEnabled("ancestry_export", flags)).toBe(false);
     expect(isIntegrationProviderEnabled("family_tree_maker", flags)).toBe(false);
@@ -82,5 +86,35 @@ describe("integration rollout gates", () => {
       "gedcom",
       "ancestry_api"
     ]).every((provider) => getProviderCapabilities(provider as never, open).writeback === false)).toBe(true);
+  });
+
+  it("allows only plain GEDCOM for the hosted private beta", () => {
+    const flags = getIntegrationFeatureFlags({
+      KINRESOLVE_DEPLOYMENT_MODE: "hosted",
+      KINRESOLVE_DATASET_MODE: "pilot",
+      KINRESOLVE_DNA_ENABLED: "false",
+      KINRESOLVE_EXTERNAL_AI_ENABLED: "false",
+      KINRESOLVE_PUBLIC_ARCHIVE_ENABLED: "false",
+      KINRESOLVE_PUBLIC_PUBLISHING_ENABLED: "false",
+      KINRESOLVE_EVIDENCE_BINARY_UPLOADS_ENABLED: "false",
+      KINRESOLVE_PACKAGE_MEDIA_ENABLED: "false",
+      KINRESOLVE_PLAIN_GEDCOM_ENABLED: "true",
+      KINRESOLVE_EXPORT_REFRESH_ENABLED: "true",
+      KINRESOLVE_DESKTOP_MEDIA_ENABLED: "true",
+      KINRESOLVE_MEDIA_LEGAL_REVIEW_APPROVED: "true"
+    });
+
+    expect(flags).toMatchObject({
+      exportRefresh: true,
+      desktopMedia: false,
+      packageMedia: false,
+      plainGedcomOnly: true
+    });
+    expect(isIntegrationProviderEnabled("gedcom", flags)).toBe(true);
+    expect(isIntegrationProviderEnabled("ancestry_export", flags)).toBe(false);
+    expect(isIntegrationProviderEnabled("family_tree_maker", flags)).toBe(false);
+    expect(isIntegrationProviderEnabled("rootsmagic", flags)).toBe(false);
+    expect(getProviderCapabilities("ancestry_export", flags).snapshotImport).toBe(false);
+    expect(getProviderCapabilities("gedcom", flags).snapshotImport).toBe(true);
   });
 });
