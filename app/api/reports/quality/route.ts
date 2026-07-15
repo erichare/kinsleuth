@@ -16,6 +16,6 @@ export const GET = withPermission("archive:read-private", async (request, author
     buildQualityReportPage(workspace.people, capabilities.dna ? workspace.dnaMatches : [], workspace.cases, {
       page: parsePositiveInteger(url.searchParams.get("page"), 1),
       pageSize: parsePositiveInteger(url.searchParams.get("pageSize"), 50)
-    })
+    }, { dnaEnabled: capabilities.dna })
   );
 });

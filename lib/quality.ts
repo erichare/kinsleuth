@@ -30,8 +30,18 @@ export type QualityReportPage = Omit<QualityReport, "issues"> & {
   issues: PaginationResult<QualityIssue>;
 };
 
-export function buildQualityReport(people: PersonSummary[], dnaMatches: DnaMatch[], cases: ResearchCase[]): QualityReport {
+export type QualityCapabilities = {
+  dnaEnabled?: boolean;
+};
+
+export function buildQualityReport(
+  people: PersonSummary[],
+  dnaMatches: DnaMatch[],
+  cases: ResearchCase[],
+  capabilities: QualityCapabilities = {}
+): QualityReport {
   const issues: QualityIssue[] = [];
+  const dnaEnabled = capabilities.dnaEnabled ?? true;
 
   for (const [index, anomaly] of findStructuredAnomalies(people).entries()) {
     issues.push({
@@ -44,7 +54,7 @@ export function buildQualityReport(people: PersonSummary[], dnaMatches: DnaMatch
     });
   }
 
-  for (const match of dnaMatches) {
+  for (const match of dnaEnabled ? dnaMatches : []) {
     if (match.totalCm >= 90 && (match.treeStatus === "none" || match.treeStatus === "unknown")) {
       issues.push({
         id: `dna-tree-${match.id}`,
@@ -78,7 +88,9 @@ export function buildQualityReport(people: PersonSummary[], dnaMatches: DnaMatch
         severity: "low",
         title: `${researchCase.title} has no linked evidence`,
         detail: researchCase.question,
-        action: "Add at least one source, DNA match, or research note before relying on the case.",
+        action: dnaEnabled
+          ? "Add at least one source, DNA match, or research note before relying on the case."
+          : "Add at least one source or research note before relying on the case.",
         entityId: researchCase.id
       });
     }
@@ -123,8 +135,14 @@ export function paginateQualityReport(report: QualityReport, pagination: Paginat
   };
 }
 
-export function buildQualityReportPage(people: PersonSummary[], dnaMatches: DnaMatch[], cases: ResearchCase[], pagination: PaginationInput): QualityReportPage {
-  return paginateQualityReport(buildQualityReport(people, dnaMatches, cases), pagination);
+export function buildQualityReportPage(
+  people: PersonSummary[],
+  dnaMatches: DnaMatch[],
+  cases: ResearchCase[],
+  pagination: PaginationInput,
+  capabilities: QualityCapabilities = {}
+): QualityReportPage {
+  return paginateQualityReport(buildQualityReport(people, dnaMatches, cases, capabilities), pagination);
 }
 
 function severityRank(severity: QualityIssue["severity"]): number {

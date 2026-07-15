@@ -18,6 +18,7 @@ export default async function PublishingPage({ searchParams }: { searchParams: P
   const capabilities = resolveHostedCapabilities();
   const params = await searchParams;
   const workspace = await readWorkspace();
+  const publicationEnabled = capabilities.publicArchive && capabilities.publicPublishing;
   const review = buildPublicationReview(workspace.people, {
     profilePage: parsePositiveInteger(params.profilesPage, 1),
     blockerPage: parsePositiveInteger(params.blockersPage, 1),
@@ -78,8 +79,8 @@ export default async function PublishingPage({ searchParams }: { searchParams: P
                   <td>
                     <Link href={`/app/people/${encodeURIComponent(profile.personId)}`}>{profile.displayName}</Link>
                     <div className="muted">
-                      {profile.published ? "Published" : "Draft"} ·{" "}
-                      {!capabilities.publicArchive ? (
+                      {publicationEnabled ? (profile.published ? "Published" : "Draft") : "Private beta"} ·{" "}
+                      {!publicationEnabled ? (
                         "Public preview disabled"
                       ) : profile.status === "blocked" ? (
                         "No public preview"
@@ -91,7 +92,7 @@ export default async function PublishingPage({ searchParams }: { searchParams: P
                   <td>{profile.publicFactCount}</td>
                   <td>{profile.sourceCoverage}%</td>
                   <td>{profile.readinessScore}%</td>
-                  <td>{profile.recommendedAction}</td>
+                  <td>{publicationEnabled ? profile.recommendedAction : readinessAction(profile.status)}</td>
                 </tr>
               ))}
             </tbody>
@@ -187,4 +188,10 @@ function statusTone(status: PublicationStatus): "ok" | "warning" | "danger" {
     return "warning";
   }
   return "danger";
+}
+
+function readinessAction(status: PublicationStatus): string {
+  if (status === "blocked") return "Resolve blockers before sharing.";
+  if (status === "needs_review") return "Review warnings before sharing.";
+  return "Ready for final privacy and editorial review.";
 }

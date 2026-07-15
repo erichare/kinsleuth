@@ -71,7 +71,13 @@ function buildDashboardActions(
   capabilities: { dnaEnabled: boolean; publicPublishingEnabled: boolean }
 ): DashboardActionItem[] {
   const enabledDnaMatches = capabilities.dnaEnabled ? workspace.dnaMatches : [];
-  const qualityReport = buildQualityReportPage(workspace.people, enabledDnaMatches, workspace.cases, { page: 1, pageSize: 4 });
+  const qualityReport = buildQualityReportPage(
+    workspace.people,
+    enabledDnaMatches,
+    workspace.cases,
+    { page: 1, pageSize: 4 },
+    { dnaEnabled: capabilities.dnaEnabled }
+  );
   const publishingReview = buildPublicationReview(workspace.people, { profilePage: 1, blockerPage: 1, pageSize: 4 });
   const dnaActions = enabledDnaMatches
     .filter((match) => match.triageStatus === "high_priority" || (match.totalCm >= 150 && match.side === "unknown"))

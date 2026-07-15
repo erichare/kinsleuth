@@ -4,7 +4,15 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Status } from "./ui";
 
-export function ArchiveBrandingForm({ initialName, initialTagline }: { initialName: string; initialTagline: string }) {
+export function ArchiveBrandingForm({
+  initialName,
+  initialTagline,
+  publicArchiveEnabled = true
+}: {
+  initialName: string;
+  initialTagline: string;
+  publicArchiveEnabled?: boolean;
+}) {
   const router = useRouter();
   const [name, setName] = useState(initialName);
   const [tagline, setTagline] = useState(initialTagline);
@@ -58,7 +66,7 @@ export function ArchiveBrandingForm({ initialName, initialTagline }: { initialNa
         <input
           maxLength={200}
           name="archive-tagline"
-          placeholder="Family history. Openly shared."
+          placeholder={publicArchiveEnabled ? "Family history. Openly shared." : "Private family research."}
           value={tagline}
           onChange={(event) => setTagline(event.target.value)}
         />
@@ -68,7 +76,11 @@ export function ArchiveBrandingForm({ initialName, initialTagline }: { initialNa
       </button>
       {status === "saved" ? (
         <span aria-atomic="true" role="status">
-          <Status>Saved. The new name appears across the workspace and public archive.</Status>
+          <Status>
+            {publicArchiveEnabled
+              ? "Saved. The new name appears across the workspace and public archive."
+              : "Saved. The new name appears across the private workspace."}
+          </Status>
         </span>
       ) : null}
       {status === "error" && errorMessage ? (

@@ -19,7 +19,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   const report = buildQualityReportPage(workspace.people, capabilities.dna ? workspace.dnaMatches : [], workspace.cases, {
     page: parsePositiveInteger(params.issuesPage, 1),
     pageSize: reportPageSize
-  });
+  }, { dnaEnabled: capabilities.dna });
 
   return (
     <AppShell title="Quality Reports" active="/app/reports" archiveName={workspace.archiveName}>

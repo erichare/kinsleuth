@@ -441,7 +441,7 @@ export function SourceWorkspace({
             ) : null}
             {status === "error" || error ? (
               <div aria-atomic="true" role="alert">
-                {status === "error" ? <Status tone="warning">Upload failed</Status> : null}
+                {status === "error" ? <Status tone="warning">{sourceSaveFailureLabel(evidenceBinaryUploadsEnabled)}</Status> : null}
                 {error ? <p className={status === "error" ? "muted" : "form-error"}>{error}</p> : null}
               </div>
             ) : null}
@@ -471,6 +471,10 @@ export function SourceWorkspace({
       </section>
     </div>
   );
+}
+
+export function sourceSaveFailureLabel(evidenceBinaryUploadsEnabled: boolean): string {
+  return evidenceBinaryUploadsEnabled ? "Upload failed" : "Save failed";
 }
 
 function PaginationControls({ page, pageCount, onPageChange }: { page: number; pageCount: number; onPageChange: (page: number) => void }) {

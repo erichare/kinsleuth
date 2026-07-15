@@ -29,7 +29,11 @@ export default async function SettingsPage() {
               ? "The name and tagline appear across the private workspace and the public archive."
               : "The name and tagline identify this private workspace."}
           </p>
-          <ArchiveBrandingForm initialName={runtime.database.archiveName} initialTagline={runtime.database.archiveTagline} />
+          <ArchiveBrandingForm
+            initialName={runtime.database.archiveName}
+            initialTagline={runtime.database.archiveTagline}
+            publicArchiveEnabled={runtime.capabilities.publicArchive}
+          />
         </div>
         <aside className="app-card">
           {runtime.ai.enabled ? (

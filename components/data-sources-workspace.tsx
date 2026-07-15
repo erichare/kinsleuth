@@ -1625,7 +1625,9 @@ function SourceCard({
             ? `Add another ${card.title} ${sourceKind}`
             : card.provider === "ancestry_export"
               ? "Choose Ancestry export"
-              : "Choose import package"}
+              : card.provider === "gedcom"
+                ? "Choose GEDCOM file"
+                : "Choose import package"}
         </button>
       </div>
 
