@@ -18,7 +18,7 @@ calling `createCase`, `addCaseTask`, `saveDnaMatch`, etc. Internally each mutato
    `UPDATE archives SET updated_at = now() WHERE id = $1 RETURNING id` — this both
    takes the row lock that serializes concurrent mutations (the same guarantee the
    old `SELECT ... FOR UPDATE` provided) and bumps the workspace timestamp. A missing
-   archive is seeded first, preserving first-touch demo seeding.
+   archive fails closed; only explicit archive provisioning creates archive data.
 2. Reads only the rows it needs (a case and its children, one DNA match, the people
    list for hypothesis generation) via scoped loaders in `lib/store/rows.ts`.
 3. Writes only the rows it changes with targeted `INSERT ... ON CONFLICT (archive_id, id)
@@ -28,8 +28,8 @@ calling `createCase`, `addCaseTask`, `saveDnaMatch`, etc. Internally each mutato
 workspace and for GEDCOM export. The hottest read paths use scoped SQL instead:
 people search/filter/sort/pagination and the public people pages run targeted
 queries in `lib/store/people-queries.ts` (accent-insensitive matching via the
-`unaccent` extension, migration 002), with `ensureWorkspaceSeeded` preserving
-first-touch demo seeding. Remaining surfaces (dashboard, reports, sources, DNA)
+`unaccent` extension, migration 002), with `ensureWorkspaceProvisioned` validating
+the persisted dataset contract without writing. Remaining surfaces (dashboard, reports, sources, DNA)
 move over in later slices.
 
 ## Ordering without renumbering
@@ -44,9 +44,10 @@ GEDCOM people) take a contiguous descending range below the current minimum.
 
 ## What stays bulk
 
-- **Seeding**: first touch of a missing archive persists the synthetic demo
-  workspace via the old `persistWorkspace` bulk path (it writes a whole archive by
-  definition).
+- **Explicit archive provisioning**: `npm run archive:provision` creates an empty,
+  versioned fictional demo, or pilot archive in one transaction. Ordinary reads and
+  writes never create an archive. A demo upgrade rotates to a fresh archive rather
+  than partially resetting an existing cell.
 - **`writeWorkspace`**: kept for tests and whole-workspace restores; not used by any
   route mutator anymore.
 - **GEDCOM apply**: still loads the full workspace once (the pre-import backup
@@ -72,7 +73,7 @@ GEDCOM people) take a contiguous descending range below the current minimum.
 
 Postgres caches each foreign key's referenced-row lookup plan per session
 (backend). If the first insert into `person_facts` happens while `people` is
-tiny — exactly what the in-transaction demo seed does — that cached RI-check
+tiny — exactly what in-transaction demo provisioning can do — that cached RI-check
 plan can be a sequential scan. Every later fact insert in the same session then
 seq-scans the (by now large) people table once per row: a 20k-person import
 went from ~1s to ~20s this way, with the time invisible to `EXPLAIN` (it hides
@@ -85,7 +86,7 @@ imports on the same connection.
 ## Verification
 
 `tests/workspace-store.test.ts` (behavior parity) and `tests/gedcom-apply.test.ts`
-(including the 65k-person regression) run unchanged. New
+(including the 65k-person regression) provision their fixtures explicitly. New
 `tests/workspace-row-store.test.ts` asserts the row-level property directly: it
 captures `xmin` (the row-version system column) of unrelated rows before a mutation
 and verifies they are untouched afterward — under the old delete-all/insert-all

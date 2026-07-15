@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 const steps = [
   {
     title: "Start Postgres and the app",
-    detail: "Copy .env.example to .env, run `docker compose up -d postgres`, then `npm run dev`. The first read seeds a synthetic demo archive.",
+    detail: "Copy .env.example to .env, run `docker compose up -d postgres`, then `npm run archive:provision -- --mode demo` before `npm run dev`.",
     action: null
   },
   {

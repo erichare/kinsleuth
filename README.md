@@ -92,10 +92,11 @@ cd kinresolve
 npm install
 cp .env.example .env
 docker compose up -d postgres
+npm run archive:provision -- --mode demo
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). The first read seeds a synthetic demo archive so every screen has data.
+Open [http://localhost:3000](http://localhost:3000). The provisioning command creates the versioned, wholly fictional demo exactly once; rerunning it verifies the same persisted mode without resetting later work.
 
 > `DATABASE_URL` is required (the `.env.example` default matches the bundled Postgres service). Private `/app` routes are open in local development; set a long `AUTH_SECRET` and create the owner account at `/setup` to protect them.
 
@@ -109,7 +110,7 @@ docker compose up --build
 
 Before starting Compose, set unique non-empty `MINIO_ROOT_USER` and `MINIO_ROOT_PASSWORD` values in `.env` (for example, generate the password with `openssl rand -hex 32`). Compose fails closed when either value is missing and supplies the same credential pair to the app, worker, MinIO, and bucket initializer.
 
-Compose provisions Postgres with pgvector and private MinIO object storage alongside the production app. The MinIO API and console are published only on the host loopback interface at ports `9000` and `9001`. The data-source storage contract uses archive-namespaced keys; legacy general source-file attachments still use local disk. MinIO allows direct-upload CORS from `http://localhost:3000`; production deployments must configure their exact HTTPS app origin for multipart `POST` uploads. Durable job state lives in Postgres, and the worker runs the registered export parser continuously by default. The web and worker processes share database, storage, and rollout configuration.
+Compose provisions Postgres with pgvector, explicitly provisions the versioned fictional demo, and starts private MinIO object storage alongside the production app. Both the app and worker wait for that one-shot provisioning service. The MinIO API and console are published only on the host loopback interface at ports `9000` and `9001`. The data-source storage contract uses archive-namespaced keys; legacy general source-file attachments still use local disk. MinIO allows direct-upload CORS from `http://localhost:3000`; production deployments must configure their exact HTTPS app origin for multipart `POST` uploads. Durable job state lives in Postgres, and the worker runs the registered export parser continuously by default. The web and worker processes share database, storage, and rollout configuration.
 
 ## Route map
 
@@ -140,6 +141,8 @@ Compose provisions Postgres with pgvector and private MinIO object storage along
 | `DATABASE_URL` | **Required.** Postgres connection string for workspace storage |
 | `DATABASE_POOL_MAX` | Max connections per instance; use `2` for serverless |
 | `DATABASE_AUTO_MIGRATE` | Applies pending versioned migrations at boot; set `false` in production and run `npm run db:migrate` at deploy time instead |
+| `KINRESOLVE_DEPLOYMENT_MODE` | `self-hosted` or `hosted`; required in hosted production and set explicitly by the bundled Compose stack |
+| `KINRESOLVE_DATASET_MODE` | Persisted archive contract: `empty`, versioned fictional `demo`, or real-data `pilot`; required for hosted deployments and provisioning |
 | `KINRESOLVE_GUIDED_RESEARCH_ENABLED` | Server-side kill switch for the private case guide and its mutation APIs; defaults to `true`, set `false` to disable without deleting research history |
 | `KINRESOLVE_EXPORT_REFRESH_ENABLED` | Data-source tree import/refresh gate; defaults to `true` |
 | `KINRESOLVE_DESKTOP_MEDIA_ENABLED` | Requests the private FTM/RootsMagic media path; defaults to `false` and is ineffective without the legal-review gate and per-package rights acknowledgement |
@@ -151,7 +154,7 @@ Compose provisions Postgres with pgvector and private MinIO object storage along
 | `KINRESOLVE_ANCESTRY_API_ENABLED` | Future partner-API rollout request; defaults to `false` and has no effect without separate written approval |
 | `KINRESOLVE_ANCESTRY_PARTNER_APPROVED` | Independent operator assertion that written Ancestry approval exists; both Ancestry API gates must be true |
 | `AUTH_SECRET` | Secret for account sessions (better-auth); required in production |
-| `KINSLEUTH_ARCHIVE_ID` | Archive id; defaults to `archive-default` |
+| `KINSLEUTH_ARCHIVE_ID` | Archive id; set explicitly before `npm run archive:provision` (the runtime fallback remains `archive-default` for legacy self-hosted installs) |
 | `KINRESOLVE_OBJECT_STORAGE_BACKEND` | Private data-source artifact backend (`s3` or `vercel-blob`); archive namespace enforcement is fixed by the storage contract |
 | `BLOB_READ_WRITE_TOKEN` | Server-only credential for Vercel Blob artifact storage and archive-namespaced legacy large-GEDCOM staging |
 | `S3_ENDPOINT` | Server/worker endpoint for S3-compatible private artifact reads and writes |
@@ -234,7 +237,8 @@ Required Vercel production environment: `DATABASE_URL` (Supabase transaction poo
 port `6543` with `sslmode=require`—the app upgrades known Supabase pooler connections to
 `verify-full` with the bundled root CA), `DATABASE_POOL_MAX=2`,
 `DATABASE_AUTO_MIGRATE=false`, `APP_BASE_URL` set to the canonical HTTPS product origin,
-`AUTH_SECRET`, the selected private object-storage credentials, `CRON_SECRET`, and the
+`KINRESOLVE_DEPLOYMENT_MODE=hosted`, an explicit `KINRESOLVE_DATASET_MODE`, an explicit
+`KINSLEUTH_ARCHIVE_ID`, `AUTH_SECRET`, the selected private object-storage credentials, `CRON_SECRET`, and the
 integration feature flags. The current product provider
 configuration is intentionally considered incomplete until `APP_BASE_URL` is present;
 the release workflow fails rather than guessing a legacy hostname.
