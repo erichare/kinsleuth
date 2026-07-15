@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import packageJson from "../package.json";
 import { APP_VERSION } from "@/lib/app-version";
+import { hostedGedcomFileLimitBytes, hostedGedcomPersonLimit } from "@/lib/hosted-capabilities";
 import { getAIStatus, getRuntimeStatus, getStorageStatus } from "@/lib/runtime-status";
 
 const originalEnv = { ...process.env };
@@ -15,6 +16,7 @@ describe("runtime status", () => {
   });
 
   it("reports AI provider defaults and API key presence", () => {
+    process.env.KINRESOLVE_DEPLOYMENT_MODE = "self-hosted";
     delete process.env.AI_API_KEY;
     delete process.env.OPENAI_API_KEY;
     delete process.env.AI_API_MODE;
@@ -34,6 +36,69 @@ describe("runtime status", () => {
       configured: true,
       mode: "chat"
     });
+  });
+
+  it("reports external AI as disabled when the capability is off even if API keys exist", () => {
+    setPrivateBetaEnvironment();
+    process.env.AI_API_KEY = "must-not-enable-ai";
+    process.env.OPENAI_API_KEY = "must-not-enable-ai-either";
+
+    expect(getAIStatus()).toMatchObject({
+      enabled: false,
+      configured: false
+    });
+  });
+
+  it("exposes the effective non-secret capability manifest and hosted limits", async () => {
+    setPrivateBetaEnvironment();
+    delete process.env.DATABASE_URL;
+
+    const status = await getRuntimeStatus();
+
+    expect(status.capabilities).toEqual({
+      valid: true,
+      deploymentMode: "hosted",
+      datasetMode: "pilot",
+      dna: false,
+      externalAi: false,
+      publicArchive: false,
+      publicPublishing: false,
+      evidenceBinaryUploads: false,
+      packageMedia: false,
+      plainGedcom: true,
+      gedcomFileLimitBytes: hostedGedcomFileLimitBytes,
+      gedcomPersonLimit: hostedGedcomPersonLimit
+    });
+    expect(status.ai).toMatchObject({ enabled: false, configured: false });
+  });
+
+  it("fails closed when a hosted capability configuration is invalid", async () => {
+    setPrivateBetaEnvironment();
+    delete process.env.KINRESOLVE_PACKAGE_MEDIA_ENABLED;
+    process.env.DATABASE_URL = "postgresql://unused.invalid/kinresolve";
+
+    const status = await getRuntimeStatus();
+
+    expect(status.capabilities).toEqual({
+      valid: false,
+      deploymentMode: null,
+      datasetMode: null,
+      dna: false,
+      externalAi: false,
+      publicArchive: false,
+      publicPublishing: false,
+      evidenceBinaryUploads: false,
+      packageMedia: false,
+      plainGedcom: false,
+      gedcomFileLimitBytes: null,
+      gedcomPersonLimit: null
+    });
+    expect(status.database).toMatchObject({
+      configured: true,
+      connected: false,
+      error: expect.stringMatching(/KINRESOLVE_PACKAGE_MEDIA_ENABLED.*required.*hosted/i)
+    });
+    expect(status.ai).toMatchObject({ enabled: false, configured: false });
   });
 
   it("reports a degraded database state when DATABASE_URL is missing", async () => {
@@ -75,3 +140,17 @@ describe("runtime status", () => {
     expect(getStorageStatus()).toEqual({ configured: true });
   });
 });
+
+function setPrivateBetaEnvironment() {
+  Object.assign(process.env, {
+    KINRESOLVE_DEPLOYMENT_MODE: "hosted",
+    KINRESOLVE_DATASET_MODE: "pilot",
+    KINRESOLVE_DNA_ENABLED: "false",
+    KINRESOLVE_EXTERNAL_AI_ENABLED: "false",
+    KINRESOLVE_PUBLIC_ARCHIVE_ENABLED: "false",
+    KINRESOLVE_PUBLIC_PUBLISHING_ENABLED: "false",
+    KINRESOLVE_EVIDENCE_BINARY_UPLOADS_ENABLED: "false",
+    KINRESOLVE_PACKAGE_MEDIA_ENABLED: "false",
+    KINRESOLVE_PLAIN_GEDCOM_ENABLED: "true"
+  });
+}
