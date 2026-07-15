@@ -51,6 +51,12 @@ describe("integration API error reporting", () => {
     ["EXTERNAL_ID_CONFLICT", 409],
     ["ARTIFACT_INTEGRITY", 409],
     ["UNSUPPORTED_MEDIA", 415],
+    ["CAPABILITY_DISABLED", 404],
+    ["PLAIN_GEDCOM_REQUIRED", 415],
+    ["GEDCOM_FILE_INVALID", 400],
+    ["GEDCOM_FILE_TOO_LARGE", 413],
+    ["GEDCOM_PERSON_COUNT_INVALID", 400],
+    ["GEDCOM_PERSON_LIMIT_EXCEEDED", 413],
     ["MALWARE_DETECTED", 422],
     ["MALWARE_SCANNER_UNAVAILABLE", 503]
   ])("maps the public integration code %s to HTTP %i", (code, status) => {
