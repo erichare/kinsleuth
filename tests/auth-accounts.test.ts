@@ -35,6 +35,9 @@ beforeAll(async () => {
 
 beforeEach(async () => {
   if (!databaseUrl) return;
+  vi.stubEnv("KINRESOLVE_DEPLOYMENT_MODE", "self-hosted");
+  vi.stubEnv("KINRESOLVE_DATASET_MODE", "demo");
+  vi.stubEnv("KINSLEUTH_ALLOW_SIGNUPS", "");
   await provisionTestArchive(options!);
 });
 
@@ -136,6 +139,31 @@ describeIfDatabase("account-based auth", () => {
     const context = await getSessionContext(new Headers({ cookie }), options);
     expect(context).toBeNull();
     vi.stubEnv("KINSLEUTH_ALLOW_SIGNUPS", "");
+  });
+
+  it("does not self-heal a membership-less account in a hosted deployment", async () => {
+    await authCatchAllPost(signUpRequest("pilot@example.com"));
+
+    const signIn = await getAuth().api.signInEmail({
+      body: { email: "pilot@example.com", password: "a-long-password-123" },
+      asResponse: true
+    });
+    const cookie = signIn.headers
+      .getSetCookie()
+      .map((value) => value.split(";")[0])
+      .join("; ");
+
+    vi.stubEnv("KINRESOLVE_DEPLOYMENT_MODE", "hosted");
+    vi.stubEnv("KINRESOLVE_DATASET_MODE", "demo");
+
+    await expect(getSessionContext(new Headers({ cookie }), options)).resolves.toBeNull();
+
+    const memberships = await query<{ count: number }>(
+      "SELECT count(*)::int AS count FROM memberships WHERE archive_id = $1",
+      [archiveId],
+      { databaseUrl: databaseUrl! }
+    );
+    expect(memberships.rows[0].count).toBe(0);
   });
 
   it("signs in and resolves the owner role from membership, self-healing the first account", async () => {

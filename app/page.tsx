@@ -1,14 +1,19 @@
 import Link from "next/link";
 import Image from "next/image";
+import { redirect } from "next/navigation";
 import { Icons } from "@/components/icons";
 import { PublicShell } from "@/components/public-shell";
 import { Status, TableScroll } from "@/components/ui";
 import { canPublishPerson, publicFactFilter } from "@/lib/privacy";
+import { privateWorkspaceLoginPath, publicArchiveEnabled } from "@/lib/public-surface";
 import { readWorkspace } from "@/lib/workspace-store";
 
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
+  if (!publicArchiveEnabled()) {
+    redirect(privateWorkspaceLoginPath);
+  }
   const workspace = await readWorkspace();
   const publishedPeople = workspace.people
     .filter((person) => person.published && canPublishPerson(person))

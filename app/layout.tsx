@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Inter, Newsreader } from "next/font/google";
+import { publicArchiveEnabled } from "@/lib/public-surface";
 import "./globals.css";
 
 const inter = Inter({
@@ -14,10 +15,22 @@ const newsreader = Newsreader({
   variable: "--font-newsreader"
 });
 
-export const metadata: Metadata = {
-  title: "Kin Resolve",
-  description: "Self-hosted genealogy research workspace"
-};
+export function generateMetadata(): Metadata {
+  const privateDeployment = !publicArchiveEnabled();
+  return {
+    title: "Kin Resolve",
+    description: privateDeployment
+      ? "Private genealogy research workspace"
+      : "Self-hosted genealogy research workspace",
+    ...(privateDeployment ? {
+      robots: {
+        index: false,
+        follow: false,
+        noarchive: true
+      }
+    } : {})
+  };
+}
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (

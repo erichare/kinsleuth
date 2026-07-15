@@ -1,7 +1,9 @@
 import Image from "next/image";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { Icons } from "@/components/icons";
 import { PublicShell } from "@/components/public-shell";
+import { privateWorkspaceLoginPath, publicArchiveEnabled } from "@/lib/public-surface";
 
 const stories = [
   {
@@ -28,6 +30,9 @@ const stories = [
 ] as const;
 
 export default function StoriesPage() {
+  if (!publicArchiveEnabled()) {
+    redirect(privateWorkspaceLoginPath);
+  }
   return (
     <PublicShell active="/stories">
       <div className="page-wrap">

@@ -1,12 +1,17 @@
 import { Icons } from "@/components/icons";
+import { redirect } from "next/navigation";
 import { PublicShell } from "@/components/public-shell";
 import { EmptyState } from "@/components/ui";
 import { canPublishPerson, publicFactFilter } from "@/lib/privacy";
+import { privateWorkspaceLoginPath, publicArchiveEnabled } from "@/lib/public-surface";
 import { readWorkspace } from "@/lib/workspace-store";
 
 export const dynamic = "force-dynamic";
 
 export default async function PlacesPage() {
+  if (!publicArchiveEnabled()) {
+    redirect(privateWorkspaceLoginPath);
+  }
   const workspace = await readWorkspace();
   const publishedPeople = workspace.people.filter((person) => person.published && canPublishPerson(person));
   const placeIndex = new Map<string, { referenceCount: number; personNames: Set<string> }>();

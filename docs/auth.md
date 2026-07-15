@@ -42,10 +42,12 @@ schema reference), not its CLI — migrations stay reviewable and self-hosters r
 - **Memberships** map user → archive → role (`owner | admin | editor | contributor |
   viewer`, the roles `lib/rbac.ts` already defines). Single-archive deployments have
   one archive; the schema is multi-archive-ready like everything else.
-- **First-run setup** (Ghost/Gitea pattern): while no user exists, private routes
+- **Self-hosted first-run setup** (Ghost/Gitea pattern): while no user exists, private routes
   redirect to `/setup`, which creates the first account and an `owner` membership on
   the default archive. Once a user exists, open sign-up is disabled (invitations
-  arrive in a later slice).
+  arrive in a later slice). Hosted deployments disable `/setup`, open sign-up, and
+  automatic owner promotion; accounts must arrive through a controlled provisioning
+  or invitation path.
 - **Sessions** are database-backed better-auth sessions (revocable), replacing the
   stateless HMAC timestamp. `AUTH_SECRET` is reused as the better-auth secret.
   `KINSLEUTH_APP_PASSWORD` is retired.
@@ -89,10 +91,13 @@ schema reference), not its CLI — migrations stay reviewable and self-hosters r
   drift; migration `003_auth_accounts.sql` documents this.
 - The sign-up gate lives in our catch-all route wrapper
   (`app/api/auth/[...all]/route.ts`) as plain route code — first account only,
-  `KINSLEUTH_ALLOW_SIGNUPS=true` overrides for testing — rather than in
-  better-auth hook APIs.
-- Membership resolution self-heals: the sole account becomes `owner` of the
-  default archive even if the explicit `/api/setup/claim` step never lands.
+  `KINSLEUTH_ALLOW_SIGNUPS=true` overrides for self-hosted testing — rather than in
+  better-auth hook APIs. Hosted sign-up is rejected before database or better-auth
+  access regardless of the override, and the release contract requires the setting
+  to be exactly `false`.
+- Self-hosted membership resolution self-heals: the sole account becomes `owner` of
+  the default archive even if the explicit `/api/setup/claim` step never lands.
+  Hosted membership resolution never infers ownership from account creation order.
 - `jose` is pinned as a direct dependency: `@vercel/oidc` hoists `jose@5` and
   npm mis-deduped `@better-auth/core`'s `jose@^6` onto it; the root pin gives
   v6 the top-level slot while oidc keeps its nested v5.

@@ -2,13 +2,14 @@
 
 import { useState } from "react";
 import { authClient } from "@/lib/auth-client";
+import { toPublicLoginError } from "@/lib/login-error";
 import { Status } from "./ui";
 
 export function LoginForm({ nextPath }: { nextPath: string }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
-  const [message, setMessage] = useState("Invalid email or password");
+  const [message, setMessage] = useState(toPublicLoginError(undefined));
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -17,14 +18,14 @@ export function LoginForm({ nextPath }: { nextPath: string }) {
     try {
       const result = await authClient.signIn.email({ email, password });
       if (result.error) {
-        setMessage(result.error.message || "Invalid email or password");
+        setMessage(toPublicLoginError(result.error));
         setStatus("error");
         return;
       }
 
       window.location.assign(nextPath || "/app");
-    } catch {
-      setMessage("Could not sign in. Try again.");
+    } catch (error) {
+      setMessage(toPublicLoginError(error));
       setStatus("error");
     }
   }

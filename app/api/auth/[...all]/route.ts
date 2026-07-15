@@ -3,6 +3,7 @@ import { toNextJsHandler } from "better-auth/next-js";
 import { getAuth } from "@/lib/auth";
 import { countUsers } from "@/lib/auth-session";
 import { ensureDatabaseSchema } from "@/lib/db";
+import { isHostedDeployment } from "@/lib/hosted-config";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -13,6 +14,11 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const signUpRequest = request.nextUrl.pathname.startsWith("/api/auth/sign-up");
+  if (signUpRequest && isHostedDeployment()) {
+    return NextResponse.json({ error: "Sign-up is unavailable." }, { status: 403 });
+  }
+
   await ensureDatabaseSchema();
 
   // Open sign-up is only for first-run setup: once an account exists, new
@@ -22,7 +28,7 @@ export async function POST(request: NextRequest) {
   // earliest account self-heals to owner (see resolveMembershipRole). A
   // membership-less account is denied at the proxy, so the worst a race can do
   // is create an extra, powerless account.
-  if (request.nextUrl.pathname.startsWith("/api/auth/sign-up") && process.env.KINSLEUTH_ALLOW_SIGNUPS !== "true") {
+  if (signUpRequest && process.env.KINSLEUTH_ALLOW_SIGNUPS !== "true") {
     if ((await countUsers()) > 0) {
       return NextResponse.json(
         { error: "Sign-up is disabled. Ask the archive owner for an invitation." },

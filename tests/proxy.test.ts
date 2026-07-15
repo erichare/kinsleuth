@@ -22,6 +22,36 @@ afterEach(() => {
 const memberContext = { userId: "u1", email: "a@b.c", name: "A", role: "owner" as const, archiveId: "archive-default" };
 
 describe("private workspace proxy", () => {
+  it.each(["/", "/people", "/people/ada", "/places", "/stories", "/kinsleuth"])(
+    "redirects the disabled hosted public archive route %s before database access",
+    async (pathname) => {
+      stubPrivateHostedEnvironment();
+      vi.stubEnv("NODE_ENV", "production");
+      vi.stubEnv("AUTH_SECRET", "a-long-production-secret");
+      vi.stubEnv("APP_BASE_URL", "https://app.kinresolve.com");
+
+      const response = await proxy(new NextRequest(`https://preview.example${pathname}`));
+
+      expect(response.status).toBe(307);
+      expect(response.headers.get("location")).toBe("https://app.kinresolve.com/login?next=%2Fapp");
+      expect(authMocks.getSessionContext).not.toHaveBeenCalled();
+    }
+  );
+
+  it("keeps the static challenge and self-hosted public archive reachable", async () => {
+    stubPrivateHostedEnvironment();
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("AUTH_SECRET", "a-long-production-secret");
+
+    expect((await proxy(new NextRequest("https://kinsleuth.example/challenge"))).status).toBe(200);
+
+    vi.stubEnv("KINRESOLVE_DEPLOYMENT_MODE", "self-hosted");
+    vi.stubEnv("KINRESOLVE_PUBLIC_ARCHIVE_ENABLED", "true");
+    expect((await proxy(new NextRequest("https://kinsleuth.example/people"))).status).toBe(200);
+    expect((await proxy(new NextRequest("https://kinsleuth.example/peopleish"))).status).toBe(200);
+    expect(authMocks.getSessionContext).not.toHaveBeenCalled();
+  });
+
   it("fails closed when production authentication is missing", async () => {
     vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("AUTH_SECRET", "");
@@ -202,3 +232,15 @@ describe("private workspace proxy", () => {
     expect(authMocks.getSessionContext).not.toHaveBeenCalled();
   });
 });
+
+function stubPrivateHostedEnvironment(): void {
+  vi.stubEnv("KINRESOLVE_DEPLOYMENT_MODE", "hosted");
+  vi.stubEnv("KINRESOLVE_DATASET_MODE", "pilot");
+  vi.stubEnv("KINRESOLVE_DNA_ENABLED", "false");
+  vi.stubEnv("KINRESOLVE_EXTERNAL_AI_ENABLED", "false");
+  vi.stubEnv("KINRESOLVE_PUBLIC_ARCHIVE_ENABLED", "false");
+  vi.stubEnv("KINRESOLVE_PUBLIC_PUBLISHING_ENABLED", "false");
+  vi.stubEnv("KINRESOLVE_EVIDENCE_BINARY_UPLOADS_ENABLED", "false");
+  vi.stubEnv("KINRESOLVE_PACKAGE_MEDIA_ENABLED", "false");
+  vi.stubEnv("KINRESOLVE_PLAIN_GEDCOM_ENABLED", "true");
+}

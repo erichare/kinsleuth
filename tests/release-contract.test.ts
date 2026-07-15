@@ -47,6 +47,7 @@ function validInput(overrides: Partial<ReleaseContractInput> = {}): ReleaseContr
       KINRESOLVE_EVIDENCE_BINARY_UPLOADS_ENABLED: "false",
       KINRESOLVE_PACKAGE_MEDIA_ENABLED: "false",
       KINRESOLVE_PLAIN_GEDCOM_ENABLED: "true",
+      KINSLEUTH_ALLOW_SIGNUPS: "false",
       KINSLEUTH_ARCHIVE_ID: "pilot-household-01"
     },
     ...overrides
@@ -187,6 +188,18 @@ describe("stable release contract", () => {
         productionEnvironment: { ...validInput().productionEnvironment, [name]: unsafeValue }
       })), name).toThrow(new RegExp(`${name}.*cohort-one`, "i"));
     }
+  });
+
+  it("requires hosted self-registration to be explicitly disabled", () => {
+    expect(() => validateReleaseContract(validInput({
+      productionEnvironment: { ...validInput().productionEnvironment, KINSLEUTH_ALLOW_SIGNUPS: "true" }
+    }))).toThrow(/KINSLEUTH_ALLOW_SIGNUPS.*false/i);
+
+    const missing = validInput();
+    delete missing.productionEnvironment.KINSLEUTH_ALLOW_SIGNUPS;
+    expect(() => validateReleaseContract(missing)).toThrow(
+      /missing required production settings.*KINSLEUTH_ALLOW_SIGNUPS/i
+    );
   });
 
   it("requires an HTTPS origin and rejects placeholder secrets without leaking them", () => {

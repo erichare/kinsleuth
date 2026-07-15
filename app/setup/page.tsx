@@ -1,8 +1,10 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { Icons } from "@/components/icons";
 import { PublicShell } from "@/components/public-shell";
 import { SetupForm } from "@/components/setup-form";
 import { countUsers } from "@/lib/auth-session";
+import { isHostedDeployment } from "@/lib/hosted-config";
 
 export const dynamic = "force-dynamic";
 
@@ -40,6 +42,10 @@ const steps = [
 ];
 
 export default async function SetupPage() {
+  if (isHostedDeployment()) {
+    redirect("/login");
+  }
+
   const existingUsers = await countUsers().catch(() => null);
 
   return (

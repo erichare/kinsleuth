@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { ResearchInstinctsChallenge } from "@/components/research-instincts-challenge";
 import { PublicShell } from "@/components/public-shell";
+import { publicArchiveEnabled } from "@/lib/public-surface";
 
 export const metadata: Metadata = {
   title: "Immersive Research Challenge | Kin Resolve",
@@ -15,6 +16,8 @@ export const metadata: Metadata = {
 };
 
 export default function ChallengePage() {
+  const archiveAvailable = publicArchiveEnabled();
+
   return (
     <PublicShell>
       <div className="page-wrap challenge-page">
@@ -31,8 +34,8 @@ export default function ChallengePage() {
             image, transcript, photograph, DNA match, and mystery in the Hartwell–Mercer archive was invented for
             this Kin Resolve demo. No real people or records appear here.
           </p>
-          <Link className="challenge-back-link" href="/">
-            ← Return to the public archive
+          <Link className="challenge-back-link" href={archiveAvailable ? "/" : "/login"}>
+            {archiveAvailable ? "← Return to the public archive" : "← Sign in to Kin Resolve"}
           </Link>
         </section>
 

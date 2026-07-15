@@ -45,6 +45,18 @@ describe("hosted private-beta documentation contract", () => {
     expect(documentation).toMatch(/package media[^\n]*disabled/i);
   });
 
+  it("documents disabled self-registration outside the seven capability flags", async () => {
+    const [environment, contract, readme] = await Promise.all([
+      readFile(".env.example", "utf8"),
+      readFile("docs/hosted-beta-contract.md", "utf8"),
+      readFile("README.md", "utf8")
+    ]);
+
+    expect(environment).toMatch(/^# KINSLEUTH_ALLOW_SIGNUPS=false$/m);
+    expect(contract).toMatch(/`KINSLEUTH_ALLOW_SIGNUPS`[^\n]*`false`[^\n]*hosted/i);
+    expect(readme).toMatch(/`KINSLEUTH_ALLOW_SIGNUPS`[^\n]*hosted[^\n]*`false`/i);
+  });
+
   it("labels the hosted product as proposed, pending approval, and not live", async () => {
     const [contract, readme] = await Promise.all([
       readFile("docs/hosted-beta-contract.md", "utf8"),

@@ -1,13 +1,18 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { Icons } from "@/components/icons";
 import { PublicShell } from "@/components/public-shell";
 import { Confidence, EmptyState, PersonMonogram, Status, TableScroll } from "@/components/ui";
 import { publicFactFilter } from "@/lib/privacy";
+import { privateWorkspaceLoginPath, publicArchiveEnabled } from "@/lib/public-surface";
 import { listPublicPeople, readArchiveBranding } from "@/lib/store/people-queries";
 
 export const dynamic = "force-dynamic";
 
 export default async function PeoplePage() {
+  if (!publicArchiveEnabled()) {
+    redirect(privateWorkspaceLoginPath);
+  }
   const [branding, publishedPeople] = await Promise.all([readArchiveBranding(), listPublicPeople()]);
 
   return (

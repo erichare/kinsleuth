@@ -14,9 +14,25 @@ const request = () => new Request("https://app.kinresolve.com/api/setup/claim", 
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.unstubAllEnvs();
+  vi.stubEnv("KINRESOLVE_DEPLOYMENT_MODE", "self-hosted");
+  vi.stubEnv("KINRESOLVE_DATASET_MODE", "demo");
 });
 
 describe("setup claim route", () => {
+  it("returns a generic 404 in hosted mode before resolving a session", async () => {
+    vi.stubEnv("KINRESOLVE_DEPLOYMENT_MODE", "hosted");
+    vi.stubEnv("KINRESOLVE_DATASET_MODE", "pilot");
+    authMocks.getSessionContext.mockRejectedValue(new Error("private session lookup marker"));
+
+    const response = await POST(request());
+
+    expect(response.status).toBe(404);
+    expect(response.headers.get("x-request-id")).toMatch(/^[0-9a-f-]{36}$/);
+    await expect(response.json()).resolves.toEqual({ error: "Not found" });
+    expect(authMocks.getSessionContext).not.toHaveBeenCalled();
+  });
+
   it("returns the shared private 401 contract when no archive membership resolves", async () => {
     authMocks.getSessionContext.mockResolvedValue(null);
 

@@ -1,5 +1,6 @@
 import { getAuth } from "./auth";
 import { query } from "./db";
+import { isHostedDeployment } from "./hosted-config";
 import type { Role } from "./models";
 import { ensureWorkspaceProvisioned, getArchiveId, type WorkspaceStoreOptions } from "./workspace-store";
 
@@ -64,7 +65,13 @@ async function resolveMembershipRole(
     return membership.rows[0].role;
   }
 
-  // First-run self-heal: while the archive has no members yet, the
+  // Hosted accounts receive membership only through an operator-controlled
+  // invitation or provisioning path. Never infer ownership from user order.
+  if (isHostedDeployment()) {
+    return null;
+  }
+
+  // Self-hosted first-run self-heal: while the archive has no members yet, the
   // earliest-created account becomes owner (covers the browser closing between
   // sign-up and the explicit /api/setup/claim step). This is deterministic
   // even if concurrent first sign-ups slipped several accounts past the gate —

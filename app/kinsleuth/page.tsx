@@ -1,7 +1,9 @@
 import Link from "next/link";
 import Image from "next/image";
+import { redirect } from "next/navigation";
 import { Icons } from "@/components/icons";
 import { PublicShell } from "@/components/public-shell";
+import { privateWorkspaceLoginPath, publicArchiveEnabled } from "@/lib/public-surface";
 
 const features = [
   {
@@ -25,6 +27,9 @@ const features = [
 ] as const;
 
 export default function KinResolveProductPage() {
+  if (!publicArchiveEnabled()) {
+    redirect(privateWorkspaceLoginPath);
+  }
   return (
     <PublicShell active="/kinsleuth">
       <div className="page-wrap">

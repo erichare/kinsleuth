@@ -14,6 +14,7 @@ const requiredProductionSettings = [
   "KINRESOLVE_DEPLOYMENT_MODE",
   "KINRESOLVE_DATASET_MODE",
   ...hostedCapabilityEnvironmentNames,
+  "KINSLEUTH_ALLOW_SIGNUPS",
   "KINSLEUTH_ARCHIVE_ID"
 ] as const;
 
@@ -130,6 +131,9 @@ export function validateReleaseContract(input: ReleaseContractInput): ReleaseCon
   }
   if (environment.KINRESOLVE_DEPLOYMENT_MODE !== "hosted") {
     throw new Error("KINRESOLVE_DEPLOYMENT_MODE must be exactly hosted for production releases.");
+  }
+  if (environment.KINSLEUTH_ALLOW_SIGNUPS !== "false") {
+    throw new Error("KINSLEUTH_ALLOW_SIGNUPS must be exactly false for production releases.");
   }
   if (!["empty", "demo", "pilot"].includes(environment.KINRESOLVE_DATASET_MODE)) {
     throw new Error("KINRESOLVE_DATASET_MODE must be empty, demo, or pilot.");

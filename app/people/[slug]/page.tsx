@@ -1,14 +1,18 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { Icons } from "@/components/icons";
 import { PublicShell } from "@/components/public-shell";
 import { Confidence, EmptyState, PersonMonogram, Status, TableScroll } from "@/components/ui";
 import { publicFactFilter } from "@/lib/privacy";
+import { privateWorkspaceLoginPath, publicArchiveEnabled } from "@/lib/public-surface";
 import { getPublicPersonBySlug, readArchiveBranding } from "@/lib/store/people-queries";
 
 export const dynamic = "force-dynamic";
 
 export default async function PublicPersonPage({ params }: { params: Promise<{ slug: string }> }) {
+  if (!publicArchiveEnabled()) {
+    redirect(privateWorkspaceLoginPath);
+  }
   const { slug } = await params;
   const [branding, loaded] = await Promise.all([readArchiveBranding(), getPublicPersonBySlug(slug)]);
 

@@ -3,6 +3,10 @@ import { allowedApiMethods, resolveApiAccess, resolveApiRoute } from "@/lib/api-
 import { apiErrorResponse } from "@/lib/api-response";
 import { getSessionContext } from "@/lib/auth-session";
 import { ensureDatabaseSchema } from "@/lib/db";
+import {
+  isPublicArchivePath,
+  publicArchiveEnabled
+} from "@/lib/public-surface";
 
 const protectedPagePrefixes = ["/app"];
 
@@ -16,7 +20,9 @@ export async function proxy(request: NextRequest) {
   const apiRoute = isApi ? resolveApiRoute(pathname) : null;
   const apiAccess = isApi ? resolveApiAccess(pathname, request.method) : null;
   const protectsApi = apiAccess?.kind === "permission";
-  const protectsPage = protectedPagePrefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
+  const disabledPublicArchive = isPublicArchivePath(pathname) && !publicArchiveEnabled();
+  const protectsPage = disabledPublicArchive
+    || protectedPagePrefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
 
   if (isApi && !apiRoute) {
     return apiErrorResponse(404, "Not found");
@@ -44,6 +50,14 @@ export async function proxy(request: NextRequest) {
     // Local development stays open until auth is configured, matching the
     // previous password-gate behavior; lib/auth-session.ts mirrors this.
     return NextResponse.next();
+  }
+
+  if (disabledPublicArchive) {
+    const loginUrl = process.env.APP_BASE_URL
+      ? new URL("/login", process.env.APP_BASE_URL)
+      : new URL("/login", request.nextUrl);
+    loginUrl.searchParams.set("next", "/app");
+    return NextResponse.redirect(loginUrl);
   }
 
   if (!protectsApi && !protectsPage) {
@@ -75,5 +89,13 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/app/:path*", "/api/:path*"]
+  matcher: [
+    "/",
+    "/people/:path*",
+    "/places/:path*",
+    "/stories/:path*",
+    "/kinsleuth/:path*",
+    "/app/:path*",
+    "/api/:path*"
+  ]
 };

@@ -166,6 +166,7 @@ Compose provisions Postgres with pgvector, explicitly provisions the versioned f
 | `KINRESOLVE_EVIDENCE_BINARY_UPLOADS_ENABLED` | Hosted cohort one: `false`; permits transcript-only sources while rejecting binary source/evidence uploads |
 | `KINRESOLVE_PACKAGE_MEDIA_ENABLED` | Hosted cohort one: `false`; disables ZIP/package media retention |
 | `KINRESOLVE_PLAIN_GEDCOM_ENABLED` | Hosted cohort one: `true`; admits only `.ged`/`.gedcom` files subject to the fixed 10 MiB and 40,000-person limits |
+| `KINSLEUTH_ALLOW_SIGNUPS` | Hosted releases require exactly `false`; self-hosted first-run signup remains available when no account exists |
 | `KINRESOLVE_GUIDED_RESEARCH_ENABLED` | Server-side kill switch for the private case guide and its mutation APIs; defaults to `true`, set `false` to disable without deleting research history |
 | `KINRESOLVE_EXPORT_REFRESH_ENABLED` | Data-source tree import/refresh gate; defaults to `true` |
 | `KINRESOLVE_DESKTOP_MEDIA_ENABLED` | Requests the private FTM/RootsMagic media path; defaults to `false` and is ineffective without the legal-review gate and per-package rights acknowledgement |
@@ -263,7 +264,7 @@ port `6543` with `sslmode=require`—the app upgrades known Supabase pooler conn
 `verify-full` with the bundled root CA), `DATABASE_POOL_MAX=2`,
 `DATABASE_AUTO_MIGRATE=false`, `APP_BASE_URL` set to the canonical HTTPS product origin,
 `KINRESOLVE_DEPLOYMENT_MODE=hosted`, an explicit `KINRESOLVE_DATASET_MODE`, an explicit
-`KINSLEUTH_ARCHIVE_ID`, `AUTH_SECRET`, the selected private object-storage credentials, `CRON_SECRET`, and the
+`KINSLEUTH_ARCHIVE_ID`, `KINSLEUTH_ALLOW_SIGNUPS=false`, `AUTH_SECRET`, the selected private object-storage credentials, `CRON_SECRET`, and the
 integration feature flags. The current product provider
 configuration is intentionally considered incomplete until `APP_BASE_URL` is present;
 the release workflow fails rather than guessing a legacy hostname.

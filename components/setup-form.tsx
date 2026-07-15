@@ -27,8 +27,8 @@ export function SetupForm() {
         return;
       }
 
-      // Claims the owner membership on the default archive; the server also
-      // self-heals this if the request never lands.
+      // Claims the owner membership on the default self-hosted archive; the
+      // self-hosted server also heals this if the request never lands.
       await fetch("/api/setup/claim", { method: "POST" }).catch(() => undefined);
       window.location.assign("/app");
     } catch {
