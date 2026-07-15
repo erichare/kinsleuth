@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { SourceDocument } from "@/lib/models";
 
 const workspaceMocks = vi.hoisted(() => ({
-  readWorkspace: vi.fn(async () => ({ sources: [] })),
+  readWorkspace: vi.fn(async (): Promise<{ sources: SourceDocument[] }> => ({ sources: [] })),
   saveSourceDocument: vi.fn(async (input) => ({ id: "source-1", ...input }))
 }));
 
@@ -16,7 +17,7 @@ vi.mock("@/lib/auth-session", () => ({
   }))
 }));
 
-import { POST } from "@/app/api/uploads/route";
+import { GET, POST } from "@/app/api/uploads/route";
 
 const hostedEnvironment = {
   KINRESOLVE_DEPLOYMENT_MODE: "hosted",
@@ -40,6 +41,37 @@ afterEach(() => {
 });
 
 describe("hosted source upload capability", () => {
+  it("omits retained binary metadata from hosted source reads when uploads are disabled", async () => {
+    workspaceMocks.readWorkspace.mockResolvedValueOnce({
+      sources: [{
+        id: "source-legacy-binary",
+        title: "Harbor register",
+        sourceType: "Register",
+        fileName: "private-family-record.pdf",
+        storageKey: "uploads/sources/private-family-record.pdf",
+        mimeType: "application/pdf",
+        size: 12_345,
+        transcript: "Amalia Bellandi arrived in 1892.",
+        privacy: "private",
+        confidence: 0.8,
+        createdAt: "2026-07-14T00:00:00.000Z"
+      }]
+    });
+
+    const response = await GET(new Request("https://app.kinresolve.com/api/uploads"));
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual([{
+      id: "source-legacy-binary",
+      title: "Harbor register",
+      sourceType: "Register",
+      transcript: "Amalia Bellandi arrived in 1892.",
+      privacy: "private",
+      confidence: 0.8,
+      createdAt: "2026-07-14T00:00:00.000Z"
+    }]);
+  });
+
   it("rejects multipart before parsing when binary evidence is disabled", async () => {
     const request = new Request("https://app.kinresolve.com/api/uploads", {
       method: "POST",
