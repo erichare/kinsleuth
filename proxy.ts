@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { allowedApiMethods, resolveApiAccess, resolveApiRoute } from "@/lib/api-access";
+import {
+  allowedApiMethods,
+  resolveApiAccess,
+  resolveApiMethodPolicy,
+  resolveApiRoute
+} from "@/lib/api-access";
 import { apiErrorResponse } from "@/lib/api-response";
 import { getSessionContext } from "@/lib/auth-session";
 import { ensureDatabaseSchema } from "@/lib/db";
@@ -7,6 +12,7 @@ import {
   isPublicArchivePath,
   publicArchiveEnabled
 } from "@/lib/public-surface";
+import { evaluateSameOriginRequest } from "@/lib/same-origin-request";
 
 const protectedPagePrefixes = ["/app"];
 
@@ -19,6 +25,7 @@ export async function proxy(request: NextRequest) {
   const isApi = pathname === "/api" || pathname.startsWith("/api/");
   const apiRoute = isApi ? resolveApiRoute(pathname) : null;
   const apiAccess = isApi ? resolveApiAccess(pathname, request.method) : null;
+  const apiRequestPolicy = isApi ? resolveApiMethodPolicy(pathname, request.method) : null;
   const protectsApi = apiAccess?.kind === "permission";
   const disabledPublicArchive = isPublicArchivePath(pathname) && !publicArchiveEnabled();
   const protectsPage = disabledPublicArchive
@@ -32,6 +39,16 @@ export async function proxy(request: NextRequest) {
     return apiErrorResponse(405, "Method not allowed", {
       headers: { allow: allowedApiMethods(apiRoute).join(", ") }
     });
+  }
+
+  if (apiRequestPolicy === "same-origin-cookie") {
+    const sameOriginEvaluation = evaluateSameOriginRequest(request);
+    if (sameOriginEvaluation === "misconfigured") {
+      return apiErrorResponse(503, "Application request origin is not configured");
+    }
+    if (sameOriginEvaluation === "forbidden") {
+      return apiErrorResponse(403, "Forbidden");
+    }
   }
 
   if (!process.env.AUTH_SECRET) {

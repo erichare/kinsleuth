@@ -28,6 +28,12 @@ function buildAuth() {
       expiresIn: sessionExpirySeconds,
       updateAge: sessionUpdateAgeSeconds
     },
+    // Better Auth skips origin validation by default in NODE_ENV=test.
+    // Opt in explicitly so the same CSRF boundary is enforced and exercised
+    // in every environment.
+    advanced: {
+      disableOriginCheck: false
+    },
     // nextCookies must be last so Set-Cookie survives server-action calls.
     plugins: [nextCookies()]
   });
