@@ -67,6 +67,24 @@ beforeEach(() => {
 });
 
 describe("Data Sources page", () => {
+  it("shows only the plain GEDCOM path in the hosted private beta", async () => {
+    stubHostedPrivateBeta();
+
+    const html = await renderPage();
+    const fileInputs = [...html.matchAll(/<input\b[^>]*type="file"[^>]*>/g)].map((match) => match[0]);
+
+    expect(fileInputs).toHaveLength(1);
+    expect(fileInputs[0]).toContain('data-provider="gedcom"');
+    expect(fileInputs[0]).toMatch(/accept="[^"]*\.ged(?:,|\b)/i);
+    expect(fileInputs[0]).not.toMatch(/\.zip|application\/zip/i);
+    for (const unavailableProvider of ["Ancestry", "Family Tree Maker", "RootsMagic"]) {
+      expect(html, unavailableProvider).not.toMatch(
+        new RegExp(`<h[2-4][^>]*>[^<]*${unavailableProvider}[^<]*<\\/h[2-4]>`, "i")
+      );
+    }
+    expect(html).not.toMatch(/Imported package media/i);
+  });
+
   it("presents four honest import paths instead of one generic upload", async () => {
     const html = await renderPage();
 
@@ -223,4 +241,16 @@ describe("Data Sources page", () => {
 
 async function renderPage(): Promise<string> {
   return renderToStaticMarkup(await DataSourcesPage());
+}
+
+function stubHostedPrivateBeta() {
+  vi.stubEnv("KINRESOLVE_DEPLOYMENT_MODE", "hosted");
+  vi.stubEnv("KINRESOLVE_DATASET_MODE", "pilot");
+  vi.stubEnv("KINRESOLVE_DNA_ENABLED", "false");
+  vi.stubEnv("KINRESOLVE_EXTERNAL_AI_ENABLED", "false");
+  vi.stubEnv("KINRESOLVE_PUBLIC_ARCHIVE_ENABLED", "false");
+  vi.stubEnv("KINRESOLVE_PUBLIC_PUBLISHING_ENABLED", "false");
+  vi.stubEnv("KINRESOLVE_EVIDENCE_BINARY_UPLOADS_ENABLED", "false");
+  vi.stubEnv("KINRESOLVE_PACKAGE_MEDIA_ENABLED", "false");
+  vi.stubEnv("KINRESOLVE_PLAIN_GEDCOM_ENABLED", "true");
 }
