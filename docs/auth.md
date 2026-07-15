@@ -104,3 +104,20 @@ schema reference), not its CLI — migrations stay reviewable and self-hosters r
 - Rate limiting uses better-auth's built-in per-instance limiter on auth
   endpoints (enabled in production by default); durable cross-instance
   storage is listed in the phasing above.
+
+## Request-origin boundary
+
+Every registered cookie-capable `POST`, `PUT`, `PATCH`, or `DELETE` route is protected
+before database and session work. The request must provide an `Origin` that exactly
+matches the canonical `APP_BASE_URL` origin and the Fetch Metadata header
+`Sec-Fetch-Site: same-origin`. Production fails closed when `APP_BASE_URL` is absent or
+is not one HTTPS origin. The check applies even when a request happens to omit its
+cookie, so an endpoint cannot change policy based on attacker-controlled credential
+presence.
+
+Better Auth's catch-all endpoints are registered as a narrow exception because Better
+Auth validates their origin itself; that validation is explicitly enabled in the test
+environment so cross-site sign-up and sign-in regressions remain executable. Scheduled
+cron routes are a separate narrow exception and authenticate with `CRON_SECRET` bearer
+tokens. Read-only routes do not inherit the cookie-mutation policy, and only read-only
+`GET` routes inherit `HEAD`.

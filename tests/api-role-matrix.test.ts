@@ -89,8 +89,8 @@ describe("API role matrix", () => {
 
   it("covers every permission referenced by the route registry", () => {
     const registeredPermissions = apiRouteAccessRegistry.flatMap((route) =>
-      Object.values(route.methods).flatMap((access) =>
-        access?.kind === "permission" ? [access.permission] : []
+      Object.values(route.methods).flatMap((registration) =>
+        registration?.access.kind === "permission" ? [registration.access.permission] : []
       )
     );
 

@@ -58,7 +58,60 @@ function signUpRequest(email: string): NextRequest {
   });
 }
 
+function crossSiteHeaders(): Record<string, string> {
+  return {
+    "content-type": "application/json",
+    origin: "https://attacker.example",
+    "sec-fetch-site": "cross-site"
+  };
+}
+
+function crossSiteSignUpRequest(email: string): NextRequest {
+  return new NextRequest("http://localhost:3000/api/auth/sign-up/email", {
+    method: "POST",
+    headers: crossSiteHeaders(),
+    body: JSON.stringify({ email, password: "a-long-password-123", name: "Test Owner" })
+  });
+}
+
+function crossSiteSignInRequest(email: string): NextRequest {
+  return new NextRequest("http://localhost:3000/api/auth/sign-in/email", {
+    method: "POST",
+    headers: crossSiteHeaders(),
+    body: JSON.stringify({ email, password: "a-long-password-123" })
+  });
+}
+
 describeIfDatabase("account-based auth", () => {
+  it("rejects cross-site sign-up without creating an account or session", async () => {
+    const response = await authCatchAllPost(crossSiteSignUpRequest("attacker@example.com"));
+
+    expect(response.status).toBe(403);
+    expect(response.headers.getSetCookie().join("; ")).not.toContain("session_token");
+    expect(await countUsers(options)).toBe(0);
+
+    const sessions = await query<{ count: number }>('SELECT count(*)::int AS count FROM "session"', [], {
+      databaseUrl: databaseUrl!
+    });
+    expect(sessions.rows[0].count).toBe(0);
+  });
+
+  it("rejects cross-site sign-in without creating a session", async () => {
+    await authCatchAllPost(signUpRequest("owner@example.com"));
+    await query('DELETE FROM "session"', [], { databaseUrl: databaseUrl! });
+
+    const response = await authCatchAllPost(crossSiteSignInRequest("owner@example.com"));
+
+    expect(response.status).toBe(403);
+    expect(response.headers.getSetCookie().join("; ")).not.toContain("session_token");
+    expect(await countUsers(options)).toBe(1);
+
+    const sessions = await query<{ count: number }>('SELECT count(*)::int AS count FROM "session"', [], {
+      databaseUrl: databaseUrl!
+    });
+    expect(sessions.rows[0].count).toBe(0);
+  });
+
   it("creates the first account with a session and hashed credentials", async () => {
     const response = await authCatchAllPost(signUpRequest("owner@example.com"));
 

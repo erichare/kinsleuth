@@ -190,9 +190,18 @@ Compose provisions Postgres with pgvector, explicitly provisions the versioned f
 | `AI_BASE_URL` / `AI_API_KEY` | OpenAI-compatible provider; deterministic fallback runs without a key |
 | `AI_API_MODE` | `responses` (default) or `chat` |
 | `AI_CHAT_MODEL` / `AI_EMBEDDING_MODEL` | Chat model for analysis; the embedding model is reserved for planned pgvector retrieval (not implemented yet) |
-| `APP_BASE_URL` | Canonical origin of the running app; production requires an HTTPS origin such as `https://app.kinresolve.com` |
+| `APP_BASE_URL` | Exact canonical origin of the running app; production requires one HTTPS origin such as `https://app.kinresolve.com` and uses it for redirects and cookie-mutation origin checks |
 
 The seven hosted capability flags are required together and fail closed when absent or invalid. They remain commented in `.env.example` so copying that file does not change self-hosted defaults; a hosted operator must uncomment the complete cohort-one manifest. The 10 MiB (10,485,760-byte) and 40,000-person GEDCOM limits are fixed application boundaries, not environment overrides.
+
+Browser-facing cookie mutations are registered explicitly and fail before database or
+session access unless `Origin` equals `APP_BASE_URL` exactly and
+`Sec-Fetch-Site: same-origin` is present. Better Auth endpoints keep Better Auth's own
+origin validation, and cron endpoints require their independent bearer secret. Scripts
+should not reuse browser session cookies as an API credential; the versioned bearer API
+is a separate release surface. If a trusted diagnostic must reproduce a browser
+mutation, it must send both request-origin headers in addition to the protected session
+cookie.
 
 Archive name and tagline are edited in **Settings → Archive branding** and flow through both the private workspace and the public site. Settings also reports live database, storage, and AI-provider health.
 

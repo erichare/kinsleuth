@@ -6,8 +6,10 @@ import {
   allowedApiMethods,
   apiRouteAccessRegistry,
   resolveApiAccess,
+  resolveApiMethodPolicy,
   resolveApiRoute,
-  type ApiMethod
+  type ApiMethod,
+  type ApiRequestPolicy
 } from "@/lib/api-access";
 
 const apiRoot = path.join(process.cwd(), "app/api");
@@ -60,7 +62,8 @@ describe("API access registry", () => {
       const entry = apiRouteAccessRegistry.find((candidate) => candidate.path === routeTemplate(file));
       if (!entry) continue;
 
-      for (const [method, access] of Object.entries(entry.methods)) {
+      for (const [method, registration] of Object.entries(entry.methods)) {
+        const { access } = registration;
         if (access.kind !== "permission") continue;
 
         expect(source, `${method} ${entry.path}`).toContain(
@@ -68,6 +71,29 @@ describe("API access registry", () => {
         );
       }
     }
+  });
+
+  it("assigns an explicit request policy to every exported method", () => {
+    const counts: Record<ApiRequestPolicy, number> = {
+      "read-only": 0,
+      "same-origin-cookie": 0,
+      "better-auth-managed": 0,
+      "service-bearer": 0
+    };
+
+    for (const route of apiRouteAccessRegistry) {
+      for (const registration of Object.values(route.methods)) {
+        expect(registration?.requestPolicy, route.path).toBeDefined();
+        if (registration) counts[registration.requestPolicy] += 1;
+      }
+    }
+
+    expect(counts).toEqual({
+      "read-only": 17,
+      "same-origin-cookie": 33,
+      "better-auth-managed": 2,
+      "service-bearer": 2
+    });
   });
 
   it("resolves parameterized routes and explicit non-membership exceptions", () => {
@@ -92,9 +118,30 @@ describe("API access registry", () => {
     expect(resolveApiAccess("/api/not-registered", "GET")).toBeNull();
     expect(resolveApiAccess("/api/health", "POST")).toBeNull();
 
+    expect(resolveApiMethodPolicy("/api/health", "GET")).toBe("read-only");
+    expect(resolveApiMethodPolicy("/api/auth/session", "POST")).toBe("better-auth-managed");
+    expect(resolveApiMethodPolicy("/api/auth/logout", "POST")).toBe("same-origin-cookie");
+    expect(resolveApiMethodPolicy("/api/cron/import-uploads", "GET")).toBe("service-bearer");
+    expect(resolveApiMethodPolicy("/api/not-registered", "GET")).toBeNull();
+
     const healthRoute = resolveApiRoute("/api/health");
     expect(healthRoute?.path).toBe("/api/health");
     expect(allowedApiMethods(healthRoute!)).toEqual(["GET", "HEAD"]);
     expect(resolveApiRoute("/api/not-registered")).toBeNull();
+  });
+
+  it("inherits HEAD only from read-only GET methods", () => {
+    expect(resolveApiAccess("/api/health", "HEAD")).toEqual({ kind: "public" });
+    expect(resolveApiMethodPolicy("/api/health", "HEAD")).toBe("read-only");
+
+    const cronRoute = resolveApiRoute("/api/cron/import-uploads");
+    expect(resolveApiAccess("/api/cron/import-uploads", "HEAD")).toBeNull();
+    expect(resolveApiMethodPolicy("/api/cron/import-uploads", "HEAD")).toBeNull();
+    expect(allowedApiMethods(cronRoute!)).toEqual(["GET"]);
+
+    const authRoute = resolveApiRoute("/api/auth/session");
+    expect(resolveApiAccess("/api/auth/session", "HEAD")).toBeNull();
+    expect(resolveApiMethodPolicy("/api/auth/session", "HEAD")).toBeNull();
+    expect(allowedApiMethods(authRoute!)).toEqual(["GET", "POST"]);
   });
 });

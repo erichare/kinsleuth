@@ -8,10 +8,20 @@ export type ApiAccess =
   | { kind: "bootstrap" }
   | { kind: "service" }
   | { kind: "permission"; permission: Permission };
+export type ApiRequestPolicy =
+  | "read-only"
+  | "same-origin-cookie"
+  | "better-auth-managed"
+  | "service-bearer";
+
+export type ApiMethodRegistration = {
+  access: ApiAccess;
+  requestPolicy: ApiRequestPolicy;
+};
 
 export type ApiRouteAccess = {
   path: string;
-  methods: Partial<Record<ApiMethod, ApiAccess>>;
+  methods: Partial<Record<ApiMethod, ApiMethodRegistration>>;
   requiresAuthSecret?: boolean;
 };
 
@@ -19,126 +29,235 @@ const publicAccess = { kind: "public" } as const;
 const bootstrapAccess = { kind: "bootstrap" } as const;
 const serviceAccess = { kind: "service" } as const;
 const permission = (value: Permission): ApiAccess => ({ kind: "permission", permission: value });
+const register = (access: ApiAccess, requestPolicy: ApiRequestPolicy): ApiMethodRegistration => ({
+  access,
+  requestPolicy
+});
 
 export const apiRouteAccessRegistry: readonly ApiRouteAccess[] = [
-  { path: "/api/ai/analyze", methods: { POST: permission("ai:whole-tree") } },
+  {
+    path: "/api/ai/analyze",
+    methods: { POST: register(permission("ai:whole-tree"), "same-origin-cookie") }
+  },
   {
     path: "/api/auth/[...all]",
-    methods: { GET: publicAccess, POST: publicAccess },
+    methods: {
+      GET: register(publicAccess, "better-auth-managed"),
+      POST: register(publicAccess, "better-auth-managed")
+    },
     requiresAuthSecret: true
   },
-  { path: "/api/auth/logout", methods: { POST: publicAccess } },
-  { path: "/api/cases", methods: { GET: permission("cases:read"), POST: permission("cases:write") } },
-  { path: "/api/cases/[id]/evidence", methods: { POST: permission("evidence:write") } },
-  { path: "/api/cases/[id]/guide/assignments", methods: { POST: permission("cases:write") } },
-  { path: "/api/cases/[id]/hypotheses", methods: { POST: permission("cases:write") } },
+  { path: "/api/auth/logout", methods: { POST: register(publicAccess, "same-origin-cookie") } },
+  {
+    path: "/api/cases",
+    methods: {
+      GET: register(permission("cases:read"), "read-only"),
+      POST: register(permission("cases:write"), "same-origin-cookie")
+    }
+  },
+  {
+    path: "/api/cases/[id]/evidence",
+    methods: { POST: register(permission("evidence:write"), "same-origin-cookie") }
+  },
+  {
+    path: "/api/cases/[id]/guide/assignments",
+    methods: { POST: register(permission("cases:write"), "same-origin-cookie") }
+  },
+  {
+    path: "/api/cases/[id]/hypotheses",
+    methods: { POST: register(permission("cases:write"), "same-origin-cookie") }
+  },
   {
     path: "/api/cases/[id]/hypotheses/[hypothesisId]",
-    methods: { PATCH: permission("cases:write") }
+    methods: { PATCH: register(permission("cases:write"), "same-origin-cookie") }
   },
-  { path: "/api/cases/[id]/tasks", methods: { POST: permission("cases:write") } },
-  { path: "/api/cases/[id]/tasks/[taskId]", methods: { PATCH: permission("cases:write") } },
+  {
+    path: "/api/cases/[id]/tasks",
+    methods: { POST: register(permission("cases:write"), "same-origin-cookie") }
+  },
+  {
+    path: "/api/cases/[id]/tasks/[taskId]",
+    methods: { PATCH: register(permission("cases:write"), "same-origin-cookie") }
+  },
   {
     path: "/api/cases/[id]/tasks/[taskId]/outcome",
-    methods: { POST: permission("cases:write") }
+    methods: { POST: register(permission("cases:write"), "same-origin-cookie") }
   },
-  { path: "/api/cron/integration-jobs", methods: { GET: serviceAccess } },
-  { path: "/api/cron/import-uploads", methods: { GET: serviceAccess } },
+  {
+    path: "/api/cron/integration-jobs",
+    methods: { GET: register(serviceAccess, "service-bearer") }
+  },
+  {
+    path: "/api/cron/import-uploads",
+    methods: { GET: register(serviceAccess, "service-bearer") }
+  },
   {
     path: "/api/dna/[id]",
-    methods: { PATCH: permission("dna:write"), DELETE: permission("dna:write") }
+    methods: {
+      PATCH: register(permission("dna:write"), "same-origin-cookie"),
+      DELETE: register(permission("dna:write"), "same-origin-cookie")
+    }
   },
-  { path: "/api/dna/analyze", methods: { POST: permission("dna:write") } },
-  { path: "/api/dna/import", methods: { POST: permission("dna:write") } },
-  { path: "/api/dna/matches", methods: { GET: permission("dna:read") } },
-  { path: "/api/exports/gedcom", methods: { GET: permission("archive:export") } },
-  { path: "/api/health", methods: { GET: publicAccess } },
+  {
+    path: "/api/dna/analyze",
+    methods: { POST: register(permission("dna:write"), "same-origin-cookie") }
+  },
+  {
+    path: "/api/dna/import",
+    methods: { POST: register(permission("dna:write"), "same-origin-cookie") }
+  },
+  {
+    path: "/api/dna/matches",
+    methods: { GET: register(permission("dna:read"), "read-only") }
+  },
+  {
+    path: "/api/exports/gedcom",
+    methods: { GET: register(permission("archive:export"), "read-only") }
+  },
+  { path: "/api/health", methods: { GET: register(publicAccess, "read-only") } },
   {
     path: "/api/integration-runs/[id]",
-    methods: { GET: permission("imports:manage"), DELETE: permission("imports:manage") }
+    methods: {
+      GET: register(permission("imports:manage"), "read-only"),
+      DELETE: register(permission("imports:manage"), "same-origin-cookie")
+    }
   },
   {
     path: "/api/integration-runs/[id]/apply",
-    methods: { POST: permission("imports:manage") }
+    methods: { POST: register(permission("imports:manage"), "same-origin-cookie") }
   },
   {
     path: "/api/integration-runs/[id]/changes",
-    methods: { GET: permission("imports:manage") }
+    methods: { GET: register(permission("imports:manage"), "read-only") }
   },
   {
     path: "/api/integration-runs/[id]/rollback",
-    methods: { POST: permission("imports:manage") }
+    methods: { POST: register(permission("imports:manage"), "same-origin-cookie") }
   },
   {
     path: "/api/integration-media",
-    methods: { GET: permission("imports:manage") }
+    methods: { GET: register(permission("imports:manage"), "read-only") }
   },
   {
     path: "/api/integration-media/[id]",
-    methods: { PATCH: permission("imports:manage") }
+    methods: { PATCH: register(permission("imports:manage"), "same-origin-cookie") }
   },
   {
     path: "/api/integration-media/[id]/download",
-    methods: { GET: permission("imports:manage") }
+    methods: { GET: register(permission("imports:manage"), "read-only") }
   },
   {
     path: "/api/integrations",
-    methods: { GET: permission("imports:manage"), POST: permission("imports:manage") }
+    methods: {
+      GET: register(permission("imports:manage"), "read-only"),
+      POST: register(permission("imports:manage"), "same-origin-cookie")
+    }
   },
   {
     path: "/api/integrations/[id]",
-    methods: { DELETE: permission("imports:manage") }
+    methods: { DELETE: register(permission("imports:manage"), "same-origin-cookie") }
   },
   {
     path: "/api/integrations/[id]/artifacts",
-    methods: { POST: permission("imports:manage"), DELETE: permission("imports:manage") }
+    methods: {
+      POST: register(permission("imports:manage"), "same-origin-cookie"),
+      DELETE: register(permission("imports:manage"), "same-origin-cookie")
+    }
   },
   {
     path: "/api/integrations/[id]/artifacts/[artifactId]/download",
-    methods: { GET: permission("imports:manage") }
+    methods: { GET: register(permission("imports:manage"), "read-only") }
   },
   {
     path: "/api/integrations/[id]/artifacts/complete",
-    methods: { POST: permission("imports:manage") }
+    methods: { POST: register(permission("imports:manage"), "same-origin-cookie") }
   },
   {
     path: "/api/integrations/[id]/artifacts/stage",
-    methods: { POST: permission("imports:manage") }
+    methods: { POST: register(permission("imports:manage"), "same-origin-cookie") }
   },
   {
     path: "/api/integrations/[id]/sync-runs",
-    methods: { GET: permission("imports:manage"), POST: permission("imports:manage") }
+    methods: {
+      GET: register(permission("imports:manage"), "read-only"),
+      POST: register(permission("imports:manage"), "same-origin-cookie")
+    }
   },
-  { path: "/api/imports", methods: { POST: permission("imports:manage") } },
-  { path: "/api/imports/relationships", methods: { POST: permission("imports:manage") } },
+  {
+    path: "/api/imports",
+    methods: { POST: register(permission("imports:manage"), "same-origin-cookie") }
+  },
+  {
+    path: "/api/imports/relationships",
+    methods: { POST: register(permission("imports:manage"), "same-origin-cookie") }
+  },
   {
     path: "/api/imports/uploads",
     methods: {
-      GET: permission("imports:manage"),
-      POST: permission("imports:manage"),
-      DELETE: permission("imports:manage")
+      GET: register(permission("imports:manage"), "read-only"),
+      POST: register(permission("imports:manage"), "same-origin-cookie"),
+      DELETE: register(permission("imports:manage"), "same-origin-cookie")
     }
   },
-  { path: "/api/people", methods: { GET: permission("archive:read-private") } },
-  { path: "/api/people/[id]/curation", methods: { PATCH: permission("archive:publish") } },
-  { path: "/api/publishing/readiness", methods: { GET: permission("archive:read-private") } },
-  { path: "/api/reports/quality", methods: { GET: permission("archive:read-private") } },
-  { path: "/api/settings/archive", methods: { PATCH: permission("settings:manage") } },
-  { path: "/api/setup/claim", methods: { POST: bootstrapAccess }, requiresAuthSecret: true },
-  { path: "/api/sources", methods: { GET: permission("archive:read-private") } },
+  {
+    path: "/api/people",
+    methods: { GET: register(permission("archive:read-private"), "read-only") }
+  },
+  {
+    path: "/api/people/[id]/curation",
+    methods: { PATCH: register(permission("archive:publish"), "same-origin-cookie") }
+  },
+  {
+    path: "/api/publishing/readiness",
+    methods: { GET: register(permission("archive:read-private"), "read-only") }
+  },
+  {
+    path: "/api/reports/quality",
+    methods: { GET: register(permission("archive:read-private"), "read-only") }
+  },
+  {
+    path: "/api/settings/archive",
+    methods: { PATCH: register(permission("settings:manage"), "same-origin-cookie") }
+  },
+  {
+    path: "/api/setup/claim",
+    methods: { POST: register(bootstrapAccess, "same-origin-cookie") },
+    requiresAuthSecret: true
+  },
+  {
+    path: "/api/sources",
+    methods: { GET: register(permission("archive:read-private"), "read-only") }
+  },
   {
     path: "/api/uploads",
-    methods: { GET: permission("archive:read-private"), POST: permission("sources:write") }
+    methods: {
+      GET: register(permission("archive:read-private"), "read-only"),
+      POST: register(permission("sources:write"), "same-origin-cookie")
+    }
   }
 ];
 
 export function resolveApiAccess(pathname: string, method: string): ApiAccess | null {
+  return resolveApiMethodRegistration(pathname, method)?.access ?? null;
+}
+
+export function resolveApiMethodPolicy(pathname: string, method: string): ApiRequestPolicy | null {
+  return resolveApiMethodRegistration(pathname, method)?.requestPolicy ?? null;
+}
+
+function resolveApiMethodRegistration(pathname: string, method: string): ApiMethodRegistration | null {
   const normalizedMethod = method.toUpperCase();
   if (!apiMethods.includes(normalizedMethod as ApiMethod)) return null;
-  const registryMethod = normalizedMethod === "HEAD" ? "GET" : normalizedMethod;
 
   const entry = resolveApiRoute(pathname);
-  return entry?.methods[registryMethod as ApiMethod] ?? null;
+  if (!entry) return null;
+
+  const directRegistration = entry.methods[normalizedMethod as ApiMethod];
+  if (directRegistration) return directRegistration;
+
+  if (normalizedMethod !== "HEAD") return null;
+  const getRegistration = entry.methods.GET;
+  return getRegistration?.requestPolicy === "read-only" ? getRegistration : null;
 }
 
 export function resolveApiRoute(pathname: string): ApiRouteAccess | null {
@@ -149,7 +268,7 @@ export function resolveApiRoute(pathname: string): ApiRouteAccess | null {
 
 export function allowedApiMethods(route: ApiRouteAccess): ApiMethod[] {
   const allowed = new Set(Object.keys(route.methods) as ApiMethod[]);
-  if (allowed.has("GET")) allowed.add("HEAD");
+  if (route.methods.GET?.requestPolicy === "read-only") allowed.add("HEAD");
   return apiMethods.filter((method) => allowed.has(method));
 }
 
