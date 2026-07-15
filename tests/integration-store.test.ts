@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { closeDatabasePools, query, withTransaction } from "@/lib/db";
 import { prepareGedcomImport } from "@/lib/gedcom/apply";
@@ -128,6 +128,33 @@ async function createReviewRun(options = firstArchive) {
 }
 
 describeIfDatabase("provider-neutral integration store", () => {
+  it("rejects a non-GEDCOM provider before persisting it in hosted pilot mode", async () => {
+    const hostedEnvironment = {
+      KINRESOLVE_DEPLOYMENT_MODE: "hosted",
+      KINRESOLVE_DATASET_MODE: "pilot",
+      KINRESOLVE_DNA_ENABLED: "false",
+      KINRESOLVE_EXTERNAL_AI_ENABLED: "false",
+      KINRESOLVE_PUBLIC_ARCHIVE_ENABLED: "false",
+      KINRESOLVE_PUBLIC_PUBLISHING_ENABLED: "false",
+      KINRESOLVE_EVIDENCE_BINARY_UPLOADS_ENABLED: "false",
+      KINRESOLVE_PACKAGE_MEDIA_ENABLED: "false",
+      KINRESOLVE_PLAIN_GEDCOM_ENABLED: "true"
+    } as const;
+    for (const [name, value] of Object.entries(hostedEnvironment)) vi.stubEnv(name, value);
+
+    try {
+      await expect(createAncestryConnection()).rejects.toMatchObject({ code: "FEATURE_DISABLED" });
+      const persisted = await query<{ total: number }>(
+        "SELECT count(*)::int AS total FROM integration_connections WHERE archive_id = $1",
+        [firstArchive.archiveId],
+        firstArchive
+      );
+      expect(persisted.rows[0].total).toBe(0);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   it("creates, lists, reads, and disconnects a remembered source without exposing it to another archive", async () => {
     const connection = await createAncestryConnection();
 
