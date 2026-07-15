@@ -36,7 +36,7 @@ beforeEach(() => {
   workspaceMocks.createWorkspaceDnaHypotheses.mockReturnValue([{ matchId: "dna-private" }]);
   aiMocks.runAIAnalysis.mockResolvedValue({
     answer: "Recommendation: review the cited source.",
-    status: "configuration_required",
+    status: "ready",
     evidenceUsed: [],
     uncertainty: [],
     anomalies: [],
@@ -71,9 +71,20 @@ describe("hosted AI analysis route capabilities", () => {
     expect(workspaceMocks.createWorkspaceDnaHypotheses).not.toHaveBeenCalled();
     expect(workspaceMocks.readWorkspace).toHaveBeenCalledWith({ archiveId: "archive-pilot" });
     expect(workspaceMocks.saveAIAnalysisRun).toHaveBeenCalledWith(
-      expect.objectContaining({ provider: "local" }),
+      expect.objectContaining({
+        status: "ready",
+        providerStatus: "not_configured",
+        provider: "local",
+        model: "deterministic"
+      }),
       { archiveId: "archive-pilot" }
     );
+    await expect(response.json()).resolves.toMatchObject({
+      status: "ready",
+      providerStatus: "not_configured",
+      provider: "local",
+      model: "deterministic"
+    });
   });
 });
 
