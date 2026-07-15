@@ -10,6 +10,7 @@ import { query } from "../db";
 import type { ResearchCase } from "../models";
 import { maximumPageSize, type PaginationInput } from "../pagination";
 import { ensureWorkspaceProvisioned, getArchiveId, type WorkspaceStoreOptions } from "../workspace-store";
+import { dnaResearchCaseSql } from "./case-capability-sql";
 
 // SQL-side case reads for the cases workspace and its API, following the
 // people-queries/source-queries template: scoped queries instead of
@@ -24,11 +25,14 @@ const searchHaystackSql = `extensions.unaccent(lower(concat_ws(' ',
   c.id, c.title, c.question, c.status, c.privacy, c.focus,
   coalesce(h.hypotheses_text, ''), coalesce(e.evidence_text, ''), coalesce(t.tasks_text, ''))))`;
 
-// Boolean(linkedDnaMatchId) in the in-memory countDnaEvidence treats empty
-// strings as unlinked, so NULLIF keeps parity if an empty id ever reaches the
-// column.
+// A persisted link is authoritative, while imported/legacy evidence may only
+// identify itself through a normalized "DNA..." evidence type.
 function dnaLinkedSql(prefix: string): string {
   return `NULLIF(${prefix}linked_dna_match_id, '') IS NOT NULL`;
+}
+
+function dnaEvidenceSql(prefix: string): string {
+  return `(${dnaLinkedSql(prefix)} OR lower(btrim(${prefix}evidence_type)) ~ '^dna([[:space:]]|$)')`;
 }
 
 // Two variants per child table: the haystack text is only paid for when
@@ -49,21 +53,39 @@ const hypothesesCountLateralSql = `LEFT JOIN LATERAL (
   FROM hypotheses ch
   WHERE ch.archive_id = c.archive_id AND ch.case_id = c.id
 ) h ON true`;
+const disabledHypothesesSearchLateralSql = `LEFT JOIN LATERAL (
+  SELECT 0::int AS hypothesis_count, NULL::text AS hypotheses_text
+) h ON true`;
+const disabledHypothesesCountLateralSql = `LEFT JOIN LATERAL (
+  SELECT 0::int AS hypothesis_count
+) h ON true`;
 
-const evidenceCountsSql = `count(*)::int AS evidence_count,
-    count(*) FILTER (WHERE ${dnaLinkedSql("ce.")})::int AS dna_evidence_count,
+function evidenceCountsSql(): string {
+  return `count(*)::int AS evidence_count,
+    count(*) FILTER (WHERE ${dnaEvidenceSql("ce.")})::int AS dna_evidence_count,
     min(ce.confidence) AS weakest_confidence`;
-const evidenceSearchLateralSql = `LEFT JOIN LATERAL (
-  SELECT ${evidenceCountsSql},
+}
+
+function evidenceSearchLateralSql(includeDnaEvidence: boolean): string {
+  return `LEFT JOIN LATERAL (
+  SELECT ${evidenceCountsSql()},
     string_agg(concat_ws(' ', ce.title, ce.evidence_type, ce.summary, ce.linked_person_id, ce.linked_dna_match_id), ' ') AS evidence_text
   FROM evidence_items ce
-  WHERE ce.archive_id = c.archive_id AND ce.case_id = c.id
+  WHERE ce.archive_id = c.archive_id AND ce.case_id = c.id${evidenceCapabilityPredicate(includeDnaEvidence, "ce.")}
 ) e ON true`;
-const evidenceCountLateralSql = `LEFT JOIN LATERAL (
-  SELECT ${evidenceCountsSql}
+}
+
+function evidenceCountLateralSql(includeDnaEvidence: boolean): string {
+  return `LEFT JOIN LATERAL (
+  SELECT ${evidenceCountsSql()}
   FROM evidence_items ce
-  WHERE ce.archive_id = c.archive_id AND ce.case_id = c.id
+  WHERE ce.archive_id = c.archive_id AND ce.case_id = c.id${evidenceCapabilityPredicate(includeDnaEvidence, "ce.")}
 ) e ON true`;
+}
+
+function evidenceCapabilityPredicate(includeDnaEvidence: boolean, prefix: string): string {
+  return includeDnaEvidence ? "" : ` AND NOT (${dnaEvidenceSql(prefix)})`;
+}
 
 const tasksCountsSql = `count(*)::int AS task_count,
     count(*) FILTER (WHERE ct.status <> 'done')::int AS open_task_count`;
@@ -83,6 +105,12 @@ const tasksCountLateralSql = `LEFT JOIN LATERAL (
   SELECT ${tasksCountsSql}
   FROM tasks ct
   WHERE ct.archive_id = c.archive_id AND ct.case_id = c.id
+) t ON true`;
+const disabledTasksSearchLateralSql = `LEFT JOIN LATERAL (
+  SELECT 0::int AS task_count, 0::int AS open_task_count, NULL::text AS tasks_text
+) t ON true`;
+const disabledTasksCountLateralSql = `LEFT JOIN LATERAL (
+  SELECT 0::int AS task_count, 0::int AS open_task_count
 ) t ON true`;
 
 type CaseRow = {
@@ -111,16 +139,24 @@ type EvidenceQueueRow = {
   linked_dna_match_id: string | null;
 };
 
+export type CaseQueryOptions = WorkspaceStoreOptions & {
+  includeDnaEvidence?: boolean;
+};
+
 export async function searchCasesPageFromDb(
   filters: CaseSearchFilters = {},
   pagination: PaginationInput = { page: 1, pageSize: 25 },
-  options: WorkspaceStoreOptions = {}
+  options: CaseQueryOptions = {}
 ): Promise<CaseSearchResult> {
   await ensureWorkspaceProvisioned(options);
   const archiveId = getArchiveId(options);
+  const includeDnaEvidence = options.includeDnaEvidence ?? true;
 
   const params: unknown[] = [archiveId];
   const conditions: string[] = ["c.archive_id = $1"];
+  if (!includeDnaEvidence) {
+    conditions.push(`NOT (${dnaResearchCaseSql("c.")})`);
+  }
 
   if ((filters.status ?? "all") !== "all") {
     params.push(filters.status);
@@ -130,7 +166,8 @@ export async function searchCasesPageFromDb(
     params.push(filters.privacy);
     conditions.push(`c.privacy = $${params.length}`);
   }
-  const evidence = filters.evidence ?? "all";
+  const requestedEvidence = filters.evidence ?? "all";
+  const evidence = !includeDnaEvidence && requestedEvidence === "dna" ? "all" : requestedEvidence;
   if (evidence === "dna") {
     conditions.push("e.dna_evidence_count > 0");
   } else if (evidence === "no_evidence") {
@@ -146,20 +183,37 @@ export async function searchCasesPageFromDb(
   }
 
   const whereSql = conditions.join(" AND ");
+  // The canonical case projection can follow DNA dependencies across child
+  // records, but reproducing that recursive graph in list SQL would create a
+  // second policy engine. Hosted list reads therefore fail closed: child text
+  // is not searchable and child counts are withheld. Full case reads retain
+  // exact documentary-only children through projectResearchCaseForDnaCapability.
+  const hypothesesSearchSql = includeDnaEvidence
+    ? hypothesesSearchLateralSql
+    : disabledHypothesesSearchLateralSql;
+  const hypothesesCountSql = includeDnaEvidence
+    ? hypothesesCountLateralSql
+    : disabledHypothesesCountLateralSql;
+  const tasksSearchSql = includeDnaEvidence
+    ? tasksSearchLateralSql
+    : disabledTasksSearchLateralSql;
+  const tasksCountSql = includeDnaEvidence
+    ? tasksCountLateralSql
+    : disabledTasksCountLateralSql;
   // The count query only needs the laterals its WHERE clause references: all
   // three when a term can match child text, the evidence one for evidence
   // filters, none for plain browsing. The page query always needs all three
   // for the output counts.
   const countLateralsSql =
     terms.length > 0
-      ? `${hypothesesSearchLateralSql}\n${evidenceSearchLateralSql}\n${tasksSearchLateralSql}`
+      ? `${hypothesesSearchSql}\n${evidenceSearchLateralSql(includeDnaEvidence)}\n${tasksSearchSql}`
       : evidence !== "all"
-        ? evidenceCountLateralSql
+        ? evidenceCountLateralSql(includeDnaEvidence)
         : "";
   const pageLateralsSql =
     terms.length > 0
-      ? `${hypothesesSearchLateralSql}\n${evidenceSearchLateralSql}\n${tasksSearchLateralSql}`
-      : `${hypothesesCountLateralSql}\n${evidenceCountLateralSql}\n${tasksCountLateralSql}`;
+      ? `${hypothesesSearchSql}\n${evidenceSearchLateralSql(includeDnaEvidence)}\n${tasksSearchSql}`
+      : `${hypothesesCountSql}\n${evidenceCountLateralSql(includeDnaEvidence)}\n${tasksCountSql}`;
 
   const [stats, filteredTotal] = await Promise.all([
     loadCaseStats(archiveId, options),
@@ -201,9 +255,10 @@ export async function searchCasesPageFromDb(
 
 // Cross-case evidence flatten for the review queue: DNA-linked first, then
 // weakest confidence, then case title, capped like the in-memory default.
-export async function caseEvidenceQueueFromDb(options: WorkspaceStoreOptions = {}, limit = 50): Promise<EvidenceQueueItem[]> {
+export async function caseEvidenceQueueFromDb(options: CaseQueryOptions = {}, limit = 50): Promise<EvidenceQueueItem[]> {
   await ensureWorkspaceProvisioned(options);
   const archiveId = getArchiveId(options);
+  const includeDnaEvidence = options.includeDnaEvidence ?? true;
 
   // Tie-breaks past the case title mirror the in-memory flatten order: cases
   // in workspace load order (sort_order, title), then each case's evidence in
@@ -213,8 +268,8 @@ export async function caseEvidenceQueueFromDb(options: WorkspaceStoreOptions = {
        ce.summary, ce.confidence, ce.linked_dna_match_id
      FROM evidence_items ce
      JOIN research_cases rc ON rc.archive_id = ce.archive_id AND rc.id = ce.case_id
-     WHERE ce.archive_id = $1
-     ORDER BY (${dnaLinkedSql("ce.")}) DESC,
+     WHERE ce.archive_id = $1${evidenceCapabilityPredicate(includeDnaEvidence, "ce.")}${includeDnaEvidence ? "" : ` AND NOT (${dnaResearchCaseSql("rc.")})`}
+     ORDER BY (${dnaEvidenceSql("ce.")}) DESC,
        ce.confidence ASC,
        extensions.unaccent(lower(rc.title)) ASC,
        rc.sort_order ASC, rc.title ASC, ce.sort_order ASC, ce.id ASC
@@ -235,24 +290,30 @@ export async function caseEvidenceQueueFromDb(options: WorkspaceStoreOptions = {
   }));
 }
 
-async function loadCaseStats(archiveId: string, options: WorkspaceStoreOptions): Promise<CaseSearchStats> {
+async function loadCaseStats(archiveId: string, options: CaseQueryOptions): Promise<CaseSearchStats> {
+  const includeDnaEvidence = options.includeDnaEvidence ?? true;
+  const caseCapabilityPredicate = includeDnaEvidence
+    ? ""
+    : ` AND NOT (${dnaResearchCaseSql("c.")})`;
   // Every evidence_items row belongs to a research_cases row (composite FK),
   // so the archive-wide evidence counts equal summarizeCases' per-case sums.
   const [caseResult, evidenceResult] = await Promise.all([
     query<{ total: number; active: number; planning: number; resolved: number }>(
       `SELECT count(*)::int AS total,
-         count(*) FILTER (WHERE status = 'active')::int AS active,
-         count(*) FILTER (WHERE status = 'planning')::int AS planning,
-         count(*) FILTER (WHERE status = 'resolved')::int AS resolved
-       FROM research_cases WHERE archive_id = $1`,
+         count(*) FILTER (WHERE c.status = 'active')::int AS active,
+         count(*) FILTER (WHERE c.status = 'planning')::int AS planning,
+         count(*) FILTER (WHERE c.status = 'resolved')::int AS resolved
+       FROM research_cases c WHERE c.archive_id = $1${caseCapabilityPredicate}`,
       [archiveId],
       options
     ),
     query<{ evidence_items: number; dna_evidence: number; low_confidence_evidence: number }>(
       `SELECT count(*)::int AS evidence_items,
-         count(*) FILTER (WHERE ${dnaLinkedSql("")})::int AS dna_evidence,
-         count(*) FILTER (WHERE confidence < 0.5)::int AS low_confidence_evidence
-       FROM evidence_items WHERE archive_id = $1`,
+         count(*) FILTER (WHERE ${dnaEvidenceSql("ce.")})::int AS dna_evidence,
+         count(*) FILTER (WHERE ce.confidence < 0.5)::int AS low_confidence_evidence
+       FROM evidence_items ce
+       JOIN research_cases c ON c.archive_id = ce.archive_id AND c.id = ce.case_id
+       WHERE ce.archive_id = $1${evidenceCapabilityPredicate(includeDnaEvidence, "ce.")}${caseCapabilityPredicate}`,
       [archiveId],
       options
     )

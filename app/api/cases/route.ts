@@ -1,12 +1,17 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import {
+  projectCaseSearchResultForDnaCapability,
+  projectEvidenceQueueForDnaCapability,
+  isDnaResearchCase,
   type CaseEvidenceFilter,
   type CasePrivacyFilter,
   type CaseSortKey,
   type CaseStatusFilter
 } from "@/lib/case-search";
+import { projectCaseApiResponse } from "@/lib/api-case-projection";
 import { withPermission } from "@/lib/api-authorization";
+import { resolveHostedCapabilities } from "@/lib/hosted-capabilities";
 import { parsePositiveInteger } from "@/lib/pagination";
 import { caseEvidenceQueueFromDb, searchCasesPageFromDb } from "@/lib/store/case-queries";
 import { createNewCase } from "@/lib/workspace-store";
@@ -43,28 +48,35 @@ const newCaseSchema = z
   })
   .strict();
 
-export const GET = withPermission("cases:read", async (request) => {
+export const GET = withPermission("cases:read", async (request, authorization) => {
   const url = new URL(request.url);
+  const capabilities = resolveHostedCapabilities();
+  const queryOptions = {
+    archiveId: authorization.archiveId,
+    includeDnaEvidence: capabilities.dna
+  };
 
   if (url.searchParams.get("view") === "evidence-queue") {
-    return NextResponse.json(await caseEvidenceQueueFromDb());
+    const queue = await caseEvidenceQueueFromDb(queryOptions);
+    return NextResponse.json(projectEvidenceQueueForDnaCapability(queue, capabilities.dna));
   }
 
-  return NextResponse.json(
-    await searchCasesPageFromDb(
+  const requestedEvidence = parseEnum(url.searchParams.get("evidence"), evidenceValues, "all");
+  const result = await searchCasesPageFromDb(
       {
         query: url.searchParams.get("query") ?? "",
         status: parseEnum(url.searchParams.get("status"), statusValues, "all"),
         privacy: parseEnum(url.searchParams.get("privacy"), privacyValues, "all"),
-        evidence: parseEnum(url.searchParams.get("evidence"), evidenceValues, "all"),
+        evidence: capabilities.dna || requestedEvidence !== "dna" ? requestedEvidence : "all",
         sort: parseEnum(url.searchParams.get("sort"), sortValues, "status")
       },
       {
         page: parsePositiveInteger(url.searchParams.get("page"), 1),
         pageSize: parsePositiveInteger(url.searchParams.get("pageSize"), 25)
-      }
-    )
-  );
+      },
+      queryOptions
+    );
+  return NextResponse.json(projectCaseSearchResultForDnaCapability(result, capabilities.dna));
 });
 
 export const POST = withPermission("cases:write", async (request, authorization) => {
@@ -81,8 +93,20 @@ export const POST = withPermission("cases:write", async (request, authorization)
       );
     }
 
+    if (
+      !resolveHostedCapabilities().dna
+      && isDnaResearchCase({
+        id: "",
+        title: parsed.data.title,
+        question: parsed.data.question,
+        focus: parsed.data.focus
+      })
+    ) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
     const created = await createNewCase(parsed.data, { archiveId: authorization.archiveId });
-    return NextResponse.json(created, { status: 201 });
+    return NextResponse.json(projectCaseApiResponse(created), { status: 201 });
   } catch (error) {
     if (isUniqueConflict(error)) {
       return NextResponse.json(

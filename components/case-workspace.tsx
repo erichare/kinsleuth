@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Icons } from "@/components/icons";
 import {
+  isDnaEvidence,
   type CaseEvidenceFilter,
   type CasePrivacyFilter,
   type CaseSearchResult,
@@ -16,6 +17,7 @@ import { Confidence, Metric, Status, TableScroll } from "./ui";
 type Props = {
   initialResult: CaseSearchResult;
   initialEvidenceQueue: EvidenceQueueItem[];
+  dnaEnabled?: boolean;
 };
 
 type CaseDraft = {
@@ -36,7 +38,7 @@ const initialDraft: CaseDraft = {
 
 const pageSizeOptions = [10, 25, 50, 100];
 
-export function CaseWorkspace({ initialResult, initialEvidenceQueue }: Props) {
+export function CaseWorkspace({ initialResult, initialEvidenceQueue, dnaEnabled = true }: Props) {
   const [draft, setDraft] = useState(initialDraft);
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
@@ -53,6 +55,9 @@ export function CaseWorkspace({ initialResult, initialEvidenceQueue }: Props) {
   const [refreshNonce, setRefreshNonce] = useState(0);
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [error, setError] = useState("");
+  const visibleEvidenceQueue = dnaEnabled
+    ? evidenceQueue
+    : evidenceQueue.filter((item) => !isDnaEvidence(item));
   const resultSummary = `Showing ${result.start.toLocaleString()}-${result.end.toLocaleString()} of ${result.total.toLocaleString()}`;
   const [announcedResultSummary, setAnnouncedResultSummary] = useState(resultSummary);
 
@@ -179,7 +184,11 @@ export function CaseWorkspace({ initialResult, initialEvidenceQueue }: Props) {
       <div className="metric-row">
         <Metric label="Cases" value={result.stats.total.toLocaleString()} detail="in workspace" />
         <Metric label="Current set" value={result.total.toLocaleString()} detail={`${result.start}-${result.end} shown`} />
-        <Metric label="Evidence" value={result.stats.evidenceItems.toLocaleString()} detail={`${result.stats.dnaEvidence.toLocaleString()} DNA linked`} />
+        <Metric
+          label="Evidence"
+          value={result.stats.evidenceItems.toLocaleString()}
+          detail={dnaEnabled ? `${result.stats.dnaEvidence.toLocaleString()} DNA linked` : "case evidence items"}
+        />
         <Metric label="Active" value={result.stats.active.toLocaleString()} detail={`${result.stats.planning.toLocaleString()} planning`} />
       </div>
 
@@ -188,7 +197,11 @@ export function CaseWorkspace({ initialResult, initialEvidenceQueue }: Props) {
           <div className="people-search-header">
             <div>
               <h2>Investigation cases</h2>
-              <p className="muted">Filter by research question, status, privacy, evidence state, and DNA linkage.</p>
+              <p className="muted">
+                {dnaEnabled
+                  ? "Filter by research question, status, privacy, evidence state, and DNA linkage."
+                  : "Filter by research question, status, privacy, and documentary evidence state."}
+              </p>
             </div>
             <button
               className="button-secondary"
@@ -257,7 +270,7 @@ export function CaseWorkspace({ initialResult, initialEvidenceQueue }: Props) {
               value={evidence}
               options={[
                 ["all", "All"],
-                ["dna", "DNA linked"],
+                ...(dnaEnabled ? [["dna", "DNA linked"] as [string, string]] : []),
                 ["no_evidence", "No evidence"],
                 ["low_confidence", "Low confidence"]
               ]}
@@ -309,7 +322,7 @@ export function CaseWorkspace({ initialResult, initialEvidenceQueue }: Props) {
                 <th>Question</th>
                 <th>Status</th>
                 <th>Evidence</th>
-                <th>Tasks</th>
+                {dnaEnabled ? <th>Tasks</th> : null}
               </tr>
             </thead>
             <tbody>
@@ -325,13 +338,15 @@ export function CaseWorkspace({ initialResult, initialEvidenceQueue }: Props) {
                   </td>
                   <td>
                     {researchCase.evidenceCount}
-                    {researchCase.dnaEvidenceCount ? <div className="muted">{researchCase.dnaEvidenceCount} DNA</div> : null}
+                    {dnaEnabled && researchCase.dnaEvidenceCount ? <div className="muted">{researchCase.dnaEvidenceCount} DNA</div> : null}
                     {researchCase.weakestEvidenceConfidence !== undefined && researchCase.weakestEvidenceConfidence < 0.5 ? <div className="muted">low confidence</div> : null}
                   </td>
-                  <td>
-                    {researchCase.taskCount}
-                    {researchCase.openTaskCount ? <div className="muted">{researchCase.openTaskCount} open</div> : null}
-                  </td>
+                  {dnaEnabled ? (
+                    <td>
+                      {researchCase.taskCount}
+                      {researchCase.openTaskCount ? <div className="muted">{researchCase.openTaskCount} open</div> : null}
+                    </td>
+                  ) : null}
                 </tr>
               ))}
             </tbody>
@@ -350,7 +365,10 @@ export function CaseWorkspace({ initialResult, initialEvidenceQueue }: Props) {
 
         <aside aria-busy={status === "loading"} className="app-card">
           <h2>New case</h2>
-          <p className="fiction-disclosure" role="note"><strong>Built-in example only:</strong> every Hartwell–Mercer name, date, place, record, photograph, and DNA clue is fictional. Replace these values when working in your own private archive.</p>
+          <p className="fiction-disclosure" role="note">
+            <strong>Built-in example only:</strong> every Hartwell–Mercer name, date, place, record, and photograph
+            {dnaEnabled ? ", plus every DNA clue," : ""} is fictional. Replace these values when working in your own private archive.
+          </p>
           <div className="form-grid" style={{ gridTemplateColumns: "1fr" }}>
             <Field label="Title" value={draft.title} onChange={(value) => updateDraft({ title: value })} />
             <TextArea label="Research question" value={draft.question} onChange={(value) => updateDraft({ question: value })} />
@@ -379,15 +397,19 @@ export function CaseWorkspace({ initialResult, initialEvidenceQueue }: Props) {
         <div className="table-heading-row">
           <div>
             <h2>Evidence confidence</h2>
-            <p className="muted">Top 50 evidence items, prioritizing DNA links and low-confidence notes.</p>
+            <p className="muted">
+              {dnaEnabled
+                ? "Top 50 evidence items, prioritizing DNA links and low-confidence notes."
+                : "Top 50 documentary evidence items, prioritizing low-confidence notes."}
+            </p>
           </div>
         </div>
         <div className="evidence-list">
-          {evidenceQueue.map((item) => (
+          {visibleEvidenceQueue.map((item) => (
             <div className="evidence-item" key={`${item.caseId}-${item.id}`}>
               <div className="evidence-item-heading">
                 <strong>{item.title}</strong>
-                {item.linkedDnaMatchId ? <Status tone="warning">DNA linked</Status> : <Status>{item.type}</Status>}
+                {dnaEnabled && item.linkedDnaMatchId ? <Status tone="warning">DNA linked</Status> : <Status>{item.type}</Status>}
               </div>
               <p className="muted">
                 <Link href={`/app/cases/${item.caseId}`}>{item.caseTitle}</Link> · {item.summary}
@@ -396,7 +418,7 @@ export function CaseWorkspace({ initialResult, initialEvidenceQueue }: Props) {
             </div>
           ))}
         </div>
-        {evidenceQueue.length === 0 ? <p className="muted empty-state">No evidence has been linked yet.</p> : null}
+        {visibleEvidenceQueue.length === 0 ? <p className="muted empty-state">No evidence has been linked yet.</p> : null}
       </div>
     </div>
   );

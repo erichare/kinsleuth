@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { withPermission } from "@/lib/api-authorization";
+import {
+  projectCaseApiResponse,
+  unavailableCaseMutationResponse
+} from "@/lib/api-case-projection";
 import { addCaseTask } from "@/lib/workspace-store";
 
 export const dynamic = "force-dynamic";
@@ -19,6 +23,10 @@ type RouteContext = {
 
 export const POST = withPermission("cases:write", async (request, authorization, { params }: RouteContext) => {
   try {
+    const { id } = await params;
+    const unavailable = await unavailableCaseMutationResponse(id, authorization.archiveId);
+    if (unavailable) return unavailable;
+
     const body = await readJson(request);
     if (!body.ok) {
       return body.response;
@@ -31,9 +39,8 @@ export const POST = withPermission("cases:write", async (request, authorization,
       return invalidTaskResponse(body.value, parsed.error.issues[0]?.message);
     }
 
-    const { id } = await params;
     const result = await addCaseTask(id, parsed.data, { archiveId: authorization.archiveId });
-    return NextResponse.json(result, { status: 201 });
+    return NextResponse.json(projectCaseApiResponse(result), { status: 201 });
   } catch (error) {
     const knownResponse = mapTaskError(error);
     if (knownResponse) {

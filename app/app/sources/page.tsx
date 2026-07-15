@@ -10,7 +10,7 @@ export default async function SourcesPage() {
   const capabilities = resolveHostedCapabilities();
   const [branding, caseOptions, personOptions, initialResult] = await Promise.all([
     readArchiveBranding(),
-    listCaseLinkOptions(),
+    listCaseLinkOptions({ includeDnaCases: capabilities.dna }),
     listPersonLinkOptions(),
     searchSourcesPageFromDb(
       {},

@@ -9,6 +9,7 @@ import type {
   SourceSearchStats
 } from "../source-search";
 import { ensureWorkspaceProvisioned, getArchiveId, type WorkspaceStoreOptions } from "../workspace-store";
+import { dnaResearchCaseSql } from "./case-capability-sql";
 
 // SQL-side source reads for the sources workspace and its API, following the
 // people-queries template: scoped queries instead of materializing the whole
@@ -55,6 +56,7 @@ type SourceRow = {
 
 export type SourceQueryOptions = WorkspaceStoreOptions & {
   includeBinaryMetadata?: boolean;
+  includeDnaCases?: boolean;
 };
 
 export async function searchSourcesPageFromDb(
@@ -168,13 +170,16 @@ export async function listPersonLinkOptions(options: WorkspaceStoreOptions = {},
   }));
 }
 
-export async function listCaseLinkOptions(options: WorkspaceStoreOptions = {}, limit = 100): Promise<CaseLinkOption[]> {
+export async function listCaseLinkOptions(options: SourceQueryOptions = {}, limit = 100): Promise<CaseLinkOption[]> {
   await ensureWorkspaceProvisioned(options);
   const archiveId = getArchiveId(options);
+  const caseCapabilityPredicate = (options.includeDnaCases ?? true)
+    ? ""
+    : ` AND NOT (${dnaResearchCaseSql("")})`;
 
   const result = await query<{ id: string; title: string }>(
     `SELECT id, title FROM research_cases
-     WHERE archive_id = $1
+     WHERE archive_id = $1${caseCapabilityPredicate}
      ORDER BY extensions.unaccent(lower(title)) ASC, sort_order ASC, title ASC, id ASC
      LIMIT $2`,
     [archiveId, limit],

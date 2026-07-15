@@ -54,6 +54,388 @@ export type EvidenceQueueItem = {
   linkedDnaMatchId?: string;
 };
 
+type DnaEvidenceCandidate = {
+  type: string;
+  linkedDnaMatchId?: string;
+};
+
+type DnaResearchCaseCandidate = {
+  id?: unknown;
+  title?: unknown;
+  question?: unknown;
+  focus?: unknown;
+};
+
+export function isDnaEvidence(evidence: DnaEvidenceCandidate): boolean {
+  return Boolean(evidence.linkedDnaMatchId) || /^dna(?:\s|$)/i.test(evidence.type.trim());
+}
+
+export function isDnaResearchCase(researchCase: DnaResearchCaseCandidate): boolean {
+  return hasDnaMarker(
+    researchCase.id,
+    researchCase.title,
+    researchCase.question,
+    researchCase.focus
+  );
+}
+
+export function projectResearchCaseForDnaCapability(
+  researchCase: ResearchCase,
+  dnaEnabled: boolean
+): ResearchCase {
+  if (dnaEnabled) {
+    return researchCase;
+  }
+
+  const hiddenEvidenceIds = new Set(
+    researchCase.evidence.filter(isDnaEvidence).map((item) => item.id)
+  );
+  const hiddenHypothesisIds = new Set<string>();
+  const hiddenTaskIds = new Set<string>();
+
+  for (const hypothesis of researchCase.hypotheses) {
+    if (hypothesisContainsDna(hypothesis, hiddenEvidenceIds)) {
+      hiddenHypothesisIds.add(hypothesis.id);
+    }
+  }
+  for (const task of researchCase.tasks) {
+    if (taskContainsDna(task, hiddenEvidenceIds, hiddenHypothesisIds, hiddenTaskIds)) {
+      hiddenTaskIds.add(task.id);
+    }
+  }
+
+  // References can form a graph: a DNA task can target a hypothesis whose
+  // statement is neutral, and another task can reference that hypothesis.
+  // Close the graph before serializing any IDs or guide state.
+  let changed = true;
+  while (changed) {
+    changed = false;
+
+    for (const task of researchCase.tasks) {
+      if (
+        !hiddenTaskIds.has(task.id)
+        && taskContainsDna(task, hiddenEvidenceIds, hiddenHypothesisIds, hiddenTaskIds)
+      ) {
+        hiddenTaskIds.add(task.id);
+        changed = true;
+      }
+    }
+
+    for (const hypothesis of researchCase.hypotheses) {
+      if (hiddenHypothesisIds.has(hypothesis.id)) {
+        continue;
+      }
+      const referencedByHiddenTask = researchCase.tasks.some((task) =>
+        hiddenTaskIds.has(task.id)
+        && (
+          task.targetHypothesisId === hypothesis.id
+          || task.contextRefs?.some((reference) => (
+            reference.type === "hypothesis" && reference.id === hypothesis.id
+          ))
+        )
+      );
+      if (
+        referencedByHiddenTask
+        || hypothesisContainsDna(
+          hypothesis,
+          hiddenEvidenceIds,
+          hiddenHypothesisIds,
+          hiddenTaskIds
+        )
+      ) {
+        hiddenHypothesisIds.add(hypothesis.id);
+        changed = true;
+      }
+    }
+  }
+
+  const evidenceIds = new Set(
+    researchCase.evidence
+      .filter((item) => !hiddenEvidenceIds.has(item.id))
+      .map((item) => item.id)
+  );
+  const hypothesisIds = new Set(
+    researchCase.hypotheses
+      .filter((item) => !hiddenHypothesisIds.has(item.id))
+      .map((item) => item.id)
+  );
+  const taskIds = new Set(
+    researchCase.tasks
+      .filter((item) => !hiddenTaskIds.has(item.id))
+      .map((item) => item.id)
+  );
+  const visibleReference = (reference: ResearchReferenceCandidate): boolean => {
+    if (reference.type === "case") return reference.id === researchCase.id;
+    if (reference.type === "evidence") return evidenceIds.has(reference.id);
+    if (reference.type === "hypothesis") return hypothesisIds.has(reference.id);
+    if (reference.type === "task") return taskIds.has(reference.id);
+    return false;
+  };
+
+  return {
+    ...researchCase,
+    evidence: researchCase.evidence.filter((item) => evidenceIds.has(item.id)),
+    hypotheses: researchCase.hypotheses
+      .filter((item) => hypothesisIds.has(item.id))
+      .map((hypothesis) => ({
+        ...hypothesis,
+        ...(hypothesis.decisions
+          ? {
+              decisions: hypothesis.decisions.map((decision) => ({
+                ...decision,
+                contextRefs: decision.contextRefs.filter(visibleReference)
+              }))
+            }
+          : {})
+      })),
+    tasks: researchCase.tasks
+      .filter((item) => taskIds.has(item.id))
+      .map((task) => ({
+        ...task,
+        ...(task.contextRefs
+          ? { contextRefs: task.contextRefs.filter(visibleReference) }
+          : {}),
+        targetHypothesisId: task.targetHypothesisId && hypothesisIds.has(task.targetHypothesisId)
+          ? task.targetHypothesisId
+          : undefined
+      }))
+  };
+}
+
+export function projectCaseResponseForDnaCapability(
+  value: unknown,
+  dnaEnabled: boolean
+): unknown {
+  if (dnaEnabled) {
+    return value;
+  }
+  if (isResearchCase(value)) {
+    if (isDnaResearchCase(value)) {
+      return null;
+    }
+    return projectResearchCaseForDnaCapability(value, false);
+  }
+  if (!isRecord(value) || !isResearchCase(value.case)) {
+    return value;
+  }
+
+  if (isDnaResearchCase(value.case)) {
+    return null;
+  }
+
+  const projectedCase = projectResearchCaseForDnaCapability(value.case, false);
+  const response: Record<string, unknown> = { ...value, case: projectedCase };
+  projectResponseEntity(response, "evidence", projectedCase.evidence);
+  projectResponseEntity(response, "hypothesis", projectedCase.hypotheses);
+  projectResponseEntity(response, "task", projectedCase.tasks);
+  return response;
+}
+
+type ResearchReferenceCandidate = {
+  type: string;
+  id: string;
+};
+
+function hypothesisContainsDna(
+  hypothesis: ResearchCase["hypotheses"][number],
+  hiddenEvidenceIds: Set<string>,
+  hiddenHypothesisIds: Set<string> = new Set(),
+  hiddenTaskIds: Set<string> = new Set()
+): boolean {
+  return hasDnaMarker(hypothesis.id, hypothesis.statement)
+    || (hypothesis.decisions ?? []).some((decision) => (
+      hasDnaMarker(decision.id, decision.statement, decision.reason)
+      || decision.contextRefs.some((reference) => referenceTargetsHidden(
+        reference,
+        hiddenEvidenceIds,
+        hiddenHypothesisIds,
+        hiddenTaskIds
+      ))
+    ));
+}
+
+function taskContainsDna(
+  task: ResearchCase["tasks"][number],
+  hiddenEvidenceIds: Set<string>,
+  hiddenHypothesisIds: Set<string>,
+  hiddenTaskIds: Set<string>
+): boolean {
+  const outcomeText = (task.outcomes ?? []).flatMap((outcome) => [
+    outcome.id,
+    outcome.note,
+    outcome.searchScope?.repository,
+    outcome.searchScope?.collection,
+    outcome.searchScope?.place,
+    outcome.searchScope?.dateRange,
+    outcome.searchScope?.query
+  ]);
+  const hiddenIds = [
+    ...hiddenEvidenceIds,
+    ...hiddenHypothesisIds,
+    ...hiddenTaskIds
+  ];
+  return hasDnaMarker(
+    task.id,
+    task.title,
+    task.guidance,
+    task.guideKey,
+    task.workFingerprint,
+    ...outcomeText
+  )
+    || Boolean(task.targetHypothesisId && hiddenHypothesisIds.has(task.targetHypothesisId))
+    || (task.contextRefs ?? []).some((reference) => referenceTargetsHidden(
+      reference,
+      hiddenEvidenceIds,
+      hiddenHypothesisIds,
+      hiddenTaskIds
+    ))
+    || [task.guideKey, task.workFingerprint].some((value) => (
+      typeof value === "string" && hiddenIds.some((id) => value.includes(id))
+    ));
+}
+
+function referenceTargetsHidden(
+  reference: ResearchReferenceCandidate,
+  hiddenEvidenceIds: Set<string>,
+  hiddenHypothesisIds: Set<string>,
+  hiddenTaskIds: Set<string>
+): boolean {
+  return (reference.type === "evidence" && hiddenEvidenceIds.has(reference.id))
+    || (reference.type === "hypothesis" && hiddenHypothesisIds.has(reference.id))
+    || (reference.type === "task" && hiddenTaskIds.has(reference.id));
+}
+
+function hasDnaMarker(...values: unknown[]): boolean {
+  return values.some((value) => (
+    typeof value === "string" && /(?:^|[^a-z0-9])dna(?:[^a-z0-9]|$)/i.test(value)
+  ));
+}
+
+function isResearchCase(value: unknown): value is ResearchCase {
+  return isRecord(value)
+    && typeof value.id === "string"
+    && Array.isArray(value.hypotheses)
+    && Array.isArray(value.evidence)
+    && Array.isArray(value.tasks);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function projectResponseEntity(
+  response: Record<string, unknown>,
+  key: "evidence" | "hypothesis" | "task",
+  visible: Array<{ id: string }>
+): void {
+  if (!(key in response)) {
+    return;
+  }
+  const entity = response[key];
+  const id = isRecord(entity) && typeof entity.id === "string" ? entity.id : undefined;
+  const projected = id ? visible.find((item) => item.id === id) : undefined;
+  if (projected) {
+    response[key] = projected;
+  } else {
+    delete response[key];
+  }
+}
+
+export function projectCaseSearchResultForDnaCapability(
+  result: CaseSearchResult,
+  dnaEnabled: boolean
+): CaseSearchResult {
+  if (dnaEnabled) {
+    return result;
+  }
+
+  const hiddenCases = result.items.filter(isDnaResearchCase);
+  const visibleItems = result.items.filter((item) => !isDnaResearchCase(item));
+  const hiddenCaseCount = hiddenCases.length;
+  const hiddenCaseEvidenceCount = hiddenCases.reduce(
+    (count, item) => count + item.evidenceCount,
+    0
+  );
+  const hiddenCaseDnaEvidenceCount = hiddenCases.reduce(
+    (count, item) => count + item.dnaEvidenceCount,
+    0
+  );
+  const visibleDnaEvidenceCount = Math.max(
+    0,
+    result.stats.dnaEvidence - hiddenCaseDnaEvidenceCount
+  );
+  const total = Math.max(0, result.total - hiddenCaseCount);
+  const pageCount = Math.max(1, Math.ceil(total / result.pageSize));
+  const start = visibleItems.length === 0 ? 0 : Math.min(result.start, total);
+
+  return {
+    ...result,
+    items: visibleItems.map((item) => {
+      const hiddenEvidenceCount = Math.min(item.evidenceCount, item.dnaEvidenceCount);
+      return {
+        ...item,
+        // A list aggregate cannot prove which task or hypothesis depends on
+        // disabled evidence. Full-case projections keep exact visible child
+        // records; list responses fail closed instead of leaking their count.
+        hypothesisCount: 0,
+        taskCount: 0,
+        openTaskCount: 0,
+        evidenceCount: item.evidenceCount - hiddenEvidenceCount,
+        dnaEvidenceCount: 0,
+        // The aggregate does not identify which evidence supplied the minimum.
+        // Fail closed until the capability-aware SQL query supplies a safe value.
+        weakestEvidenceConfidence: hiddenEvidenceCount > 0
+          ? undefined
+          : item.weakestEvidenceConfidence
+      };
+    }),
+    total,
+    pageCount,
+    start,
+    end: visibleItems.length === 0 ? 0 : start + visibleItems.length - 1,
+    stats: {
+      ...result.stats,
+      total: Math.max(0, result.stats.total - hiddenCaseCount),
+      active: Math.max(
+        0,
+        result.stats.active - hiddenCases.filter((item) => item.status === "active").length
+      ),
+      planning: Math.max(
+        0,
+        result.stats.planning - hiddenCases.filter((item) => item.status === "planning").length
+      ),
+      resolved: Math.max(
+        0,
+        result.stats.resolved - hiddenCases.filter((item) => item.status === "resolved").length
+      ),
+      evidenceItems: Math.max(
+        0,
+        result.stats.evidenceItems
+          - visibleDnaEvidenceCount
+          - hiddenCaseEvidenceCount
+      ),
+      dnaEvidence: 0,
+      // The aggregate may include disabled evidence. Capability-aware database
+      // reads retain the exact documentary count; this fallback avoids leakage.
+      lowConfidenceEvidence: result.stats.dnaEvidence > 0 || hiddenCaseCount > 0
+        ? 0
+        : result.stats.lowConfidenceEvidence
+    }
+  };
+}
+
+export function projectEvidenceQueueForDnaCapability(
+  queue: EvidenceQueueItem[],
+  dnaEnabled: boolean
+): EvidenceQueueItem[] {
+  return dnaEnabled
+    ? queue
+    : queue.filter((item) => !isDnaEvidence(item) && !isDnaResearchCase({
+        id: item.caseId,
+        title: item.caseTitle
+      }));
+}
+
 export function searchCasesPage(cases: ResearchCase[], filters: CaseSearchFilters = {}, pagination: PaginationInput = { page: 1, pageSize: 25 }): CaseSearchResult {
   const filteredCases = filterCases(cases, filters);
   const page = paginateItems(filteredCases, pagination);
@@ -127,7 +509,7 @@ export function caseEvidenceQueue(cases: ResearchCase[], limit = 50): EvidenceQu
       }))
     )
     .sort((left, right) => {
-      const dnaDelta = Number(Boolean(right.linkedDnaMatchId)) - Number(Boolean(left.linkedDnaMatchId));
+      const dnaDelta = Number(isDnaEvidence(right)) - Number(isDnaEvidence(left));
       const confidenceDelta = left.confidence - right.confidence;
       return dnaDelta || confidenceDelta || left.caseTitle.localeCompare(right.caseTitle, undefined, { sensitivity: "base" });
     })
@@ -207,7 +589,7 @@ function statusRank(status: ResearchCase["status"]): number {
 }
 
 function countDnaEvidence(researchCase: ResearchCase): number {
-  return researchCase.evidence.filter((evidence) => evidence.linkedDnaMatchId).length;
+  return researchCase.evidence.filter(isDnaEvidence).length;
 }
 
 function weakestEvidenceConfidence(researchCase: ResearchCase): number | undefined {

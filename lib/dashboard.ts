@@ -1,6 +1,11 @@
 import type { DnaMatch } from "./models";
 import type { WorkspaceData } from "./workspace-store";
-import { searchCasesPage, type CaseListItem } from "./case-search";
+import {
+  isDnaResearchCase,
+  projectResearchCaseForDnaCapability,
+  searchCasesPage,
+  type CaseListItem
+} from "./case-search";
 import { buildPublicationReview, type PublicationBlocker } from "./publishing";
 import { buildQualityReportPage, type QualityIssue } from "./quality";
 import { scoreDnaMatch } from "./dna";
@@ -45,6 +50,9 @@ export function buildDashboardSummary(workspace: WorkspaceData, options: {
   const dnaEnabled = options.dnaEnabled ?? true;
   const publicPublishingEnabled = options.publicPublishingEnabled ?? true;
   const enabledDnaMatches = dnaEnabled ? workspace.dnaMatches : [];
+  const enabledCases = workspace.cases
+    .filter((researchCase) => dnaEnabled || !isDnaResearchCase(researchCase))
+    .map((researchCase) => projectResearchCaseForDnaCapability(researchCase, dnaEnabled));
   const dnaLeads = enabledDnaMatches
     .map((match) => ({ ...match, helpfulnessScore: scoreDnaMatch(match) }))
     .sort((left, right) => right.helpfulnessScore - left.helpfulnessScore || right.totalCm - left.totalCm)
@@ -58,11 +66,14 @@ export function buildDashboardSummary(workspace: WorkspaceData, options: {
       dnaMatches: enabledDnaMatches.length,
       triagedDnaMatches: enabledDnaMatches.filter((match) => match.triageStatus === "triaged" || match.triageStatus === "high_priority").length,
       highPriorityDnaMatches: enabledDnaMatches.filter((match) => match.triageStatus === "high_priority").length,
-      activeCases: workspace.cases.filter((researchCase) => researchCase.status === "active" || researchCase.status === "planning").length
+      activeCases: enabledCases.filter((researchCase) => researchCase.status === "active" || researchCase.status === "planning").length
     },
-    caseRows: searchCasesPage(workspace.cases, { sort: "status" }, { page: 1, pageSize: caseLimit }).items,
+    caseRows: searchCasesPage(enabledCases, { sort: "status" }, { page: 1, pageSize: caseLimit }).items,
     dnaLeads,
-    actions: buildDashboardActions(workspace, { dnaEnabled, publicPublishingEnabled }).slice(0, actionLimit)
+    actions: buildDashboardActions(
+      { ...workspace, cases: enabledCases, dnaMatches: enabledDnaMatches },
+      { dnaEnabled, publicPublishingEnabled }
+    ).slice(0, actionLimit)
   };
 }
 

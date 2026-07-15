@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { withPermission } from "@/lib/api-authorization";
+import { projectCaseApiResponse } from "@/lib/api-case-projection";
 import { capabilityUnavailableResponse } from "@/lib/api-capabilities";
 import { linkDnaMatchToCase } from "@/lib/workspace-store";
 
@@ -31,7 +32,7 @@ export const POST = withPermission("evidence:write", async (request, _authorizat
       summary: body.summary,
       confidence: body.confidence
     });
-    return NextResponse.json(result, { status: result.created ? 201 : 200 });
+    return NextResponse.json(projectCaseApiResponse(result), { status: result.created ? 201 : 200 });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Evidence link failed" }, { status: 404 });
   }

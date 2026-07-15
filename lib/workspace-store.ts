@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
+import { projectResearchCaseForDnaCapability } from "./case-search";
 import { withTransaction, type DatabaseOptions } from "./db";
 import { createDnaConnectionHypothesis, scoreDnaMatch } from "./dna";
 import { demoCases, demoDnaMatches, demoFictionNotice, demoPeople } from "./demo-data";
@@ -848,13 +849,15 @@ export async function acceptGuideAssignment(
     if (!researchCase) {
       throw new Error("case not found");
     }
+    const dnaEnabled = resolveHostedCapabilities().dna;
+    const visibleResearchCase = projectResearchCaseForDnaCapability(researchCase, dnaEnabled);
 
-    const existing = researchCase.tasks.find((task) => task.guideKey === guideKey);
+    const existing = visibleResearchCase.tasks.find((task) => task.guideKey === guideKey);
     if (existing) {
       return { created: false, case: researchCase, task: existing };
     }
 
-    const assignment = buildResearchGuide(researchCase).assignment;
+    const assignment = buildResearchGuide(visibleResearchCase, { dnaEnabled: true }).assignment;
     if (!assignment || assignment.source !== "generated" || assignment.guideKey !== guideKey) {
       throw guidedResearchError("STALE_GUIDE_KEY", "guide assignment is no longer available");
     }

@@ -7,6 +7,7 @@ import type {
   ResearchTask,
   ResearchTaskOutcome
 } from "./models";
+import { projectResearchCaseForDnaCapability } from "./case-search";
 
 export type ResearchGuidePhase = "resume" | "ready" | "needs_hypothesis" | "paused" | "resolved" | "exhausted";
 
@@ -80,7 +81,14 @@ const priorityOrder: Record<NonNullable<ResearchTask["priority"]>, number> = {
  * is intentionally pure: it performs no I/O and does not consult provider or
  * environment configuration.
  */
-export function buildResearchGuide(researchCase: ResearchCase): ResearchGuidePlan {
+export function buildResearchGuide(
+  inputCase: ResearchCase,
+  options: { dnaEnabled?: boolean } = {}
+): ResearchGuidePlan {
+  const researchCase = projectResearchCaseForDnaCapability(
+    inputCase,
+    options.dnaEnabled ?? true
+  );
   const referenceIndex = buildReferenceIndex(researchCase);
   const memory = buildMemory(researchCase, referenceIndex);
   const progress: ResearchGuideProgress = {

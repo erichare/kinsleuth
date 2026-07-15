@@ -2,6 +2,7 @@ import Link from "next/link";
 import { AppShell } from "@/components/app-shell";
 import { Icons } from "@/components/icons";
 import { Confidence, Metric, Status, TableScroll } from "@/components/ui";
+import { isDnaResearchCase, projectResearchCaseForDnaCapability } from "@/lib/case-search";
 import { buildDashboardSummary } from "@/lib/dashboard";
 import { isGuidedResearchEnabled } from "@/lib/guided-research-config";
 import { resolveHostedCapabilities } from "@/lib/hosted-capabilities";
@@ -18,10 +19,16 @@ export default async function AppDashboardPage() {
     publicPublishingEnabled: capabilities.publicPublishing
   });
   const guidedResearchEnabled = isGuidedResearchEnabled();
+  const visibleCases = workspace.cases
+    .filter((researchCase) => capabilities.dna || !isDnaResearchCase(researchCase))
+    .map((researchCase) => projectResearchCaseForDnaCapability(researchCase, capabilities.dna));
   const guideCandidates = guidedResearchEnabled
-    ? workspace.cases
+    ? visibleCases
         .filter((researchCase) => researchCase.status === "active" || researchCase.status === "planning")
-        .map((researchCase) => ({ researchCase, plan: buildResearchGuide(researchCase) }))
+        .map((researchCase) => ({
+          researchCase,
+          plan: buildResearchGuide(researchCase, { dnaEnabled: true })
+        }))
     : [];
   const guidedEntry =
     guideCandidates.find((entry) => entry.plan.phase === "resume" && entry.plan.assignment) ??

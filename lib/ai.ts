@@ -9,6 +9,7 @@ import type {
   Role,
   SourceDocument
 } from "./models";
+import { isDnaResearchCase, projectResearchCaseForDnaCapability } from "./case-search";
 import { resolveHostedCapabilities } from "./hosted-capabilities";
 import { assertPermission } from "./rbac";
 
@@ -636,12 +637,9 @@ function buildLocalAnalysis(
 function withoutDnaContext(request: AIAnalysisRequest): AIAnalysisRequest {
   return {
     ...request,
-    cases: request.cases.map((researchCase) => ({
-      ...researchCase,
-      evidence: researchCase.evidence.filter((evidence) => (
-        !evidence.linkedDnaMatchId && !/^dna(?:\s|$)/i.test(evidence.type.trim())
-      ))
-    })),
+    cases: request.cases
+      .filter((researchCase) => !isDnaResearchCase(researchCase))
+      .map((researchCase) => projectResearchCaseForDnaCapability(researchCase, false)),
     dnaMatches: [],
     dnaHypotheses: []
   };

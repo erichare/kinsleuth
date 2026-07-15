@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { withPermission } from "@/lib/api-authorization";
+import {
+  projectCaseApiResponse,
+  unavailableCaseMutationResponse
+} from "@/lib/api-case-projection";
 import { isGuidedResearchEnabled } from "@/lib/guided-research-config";
 import { updateCaseHypothesis } from "@/lib/workspace-store";
 
@@ -63,6 +67,10 @@ export const PATCH = withPermission("cases:write", async (request, authorization
   }
 
   try {
+    const { id, hypothesisId } = await params;
+    const unavailable = await unavailableCaseMutationResponse(id, authorization.archiveId);
+    if (unavailable) return unavailable;
+
     const body = await readJson(request);
     if (!body.ok) {
       return body.response;
@@ -78,7 +86,6 @@ export const PATCH = withPermission("cases:write", async (request, authorization
       );
     }
 
-    const { id, hypothesisId } = await params;
     const result = await updateCaseHypothesis(
       id,
       hypothesisId,
@@ -89,7 +96,7 @@ export const PATCH = withPermission("cases:write", async (request, authorization
       },
       { archiveId: authorization.archiveId }
     );
-    return NextResponse.json(result);
+    return NextResponse.json(projectCaseApiResponse(result));
   } catch (error) {
     const knownResponse = mapHypothesisError(error);
     if (knownResponse) {

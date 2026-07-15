@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { withPermission } from "@/lib/api-authorization";
+import {
+  projectCaseApiResponse,
+  unavailableCaseMutationResponse
+} from "@/lib/api-case-projection";
 import { isGuidedResearchEnabled } from "@/lib/guided-research-config";
 import { acceptGuideAssignment } from "@/lib/workspace-store";
 
@@ -21,6 +25,10 @@ export const POST = withPermission("cases:write", async (request, authorization,
   }
 
   try {
+    const { id } = await params;
+    const unavailable = await unavailableCaseMutationResponse(id, authorization.archiveId);
+    if (unavailable) return unavailable;
+
     const body = await readJson(request);
     if (!body.ok) {
       return body.response;
@@ -33,10 +41,9 @@ export const POST = withPermission("cases:write", async (request, authorization,
       return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid guide assignment" }, { status: 400 });
     }
 
-    const { id } = await params;
     const result = await acceptGuideAssignment(id, parsed.data.guideKey, { archiveId: authorization.archiveId });
     const created = isRecord(result) && result.created === false ? false : true;
-    return NextResponse.json(result, { status: created ? 201 : 200 });
+    return NextResponse.json(projectCaseApiResponse(result), { status: created ? 201 : 200 });
   } catch (error) {
     const knownResponse = mapAssignmentError(error);
     if (knownResponse) {

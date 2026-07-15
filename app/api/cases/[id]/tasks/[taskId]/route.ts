@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { withPermission } from "@/lib/api-authorization";
+import {
+  projectCaseApiResponse,
+  unavailableCaseMutationResponse
+} from "@/lib/api-case-projection";
 import { isGuidedResearchEnabled } from "@/lib/guided-research-config";
 import { updateCaseTask } from "@/lib/workspace-store";
 
@@ -32,6 +36,10 @@ type RouteContext = {
 
 export const PATCH = withPermission("cases:write", async (request, authorization, { params }: RouteContext) => {
   try {
+    const { id, taskId } = await params;
+    const unavailable = await unavailableCaseMutationResponse(id, authorization.archiveId);
+    if (unavailable) return unavailable;
+
     const body = await readJson(request);
     if (!body.ok) {
       return body.response;
@@ -49,12 +57,11 @@ export const PATCH = withPermission("cases:write", async (request, authorization
       return invalidTaskResponse(parsed.data);
     }
 
-    const { id, taskId } = await params;
     const result = await updateCaseTask(id, taskId, parsed.data, {
       archiveId: authorization.archiveId,
       ...(!guidedResearchEnabled ? { allowManualCompletionWithoutOutcome: true } : {})
     });
-    return NextResponse.json(result);
+    return NextResponse.json(projectCaseApiResponse(result));
   } catch (error) {
     const knownResponse = mapTaskError(error);
     if (knownResponse) {

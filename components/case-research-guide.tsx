@@ -8,7 +8,15 @@ import { ResearchOutcomeForm, type ResearchOutcomeSubmission } from "./research-
 import { ResearchStepCard } from "./research-step-card";
 import { Status } from "./ui";
 
-export function CaseResearchGuide({ initialCase, canWrite }: { initialCase: ResearchCase; canWrite: boolean }) {
+export function CaseResearchGuide({
+  initialCase,
+  canWrite,
+  dnaEnabled = true
+}: {
+  initialCase: ResearchCase;
+  canWrite: boolean;
+  dnaEnabled?: boolean;
+}) {
   const [researchCase, setResearchCase] = useState(initialCase);
   const [busyId, setBusyId] = useState("");
   const [pendingOutcome, setPendingOutcome] = useState<{
@@ -22,7 +30,10 @@ export function CaseResearchGuide({ initialCase, canWrite }: { initialCase: Rese
   const [hasConflict, setHasConflict] = useState(false);
   const messageRef = useRef<HTMLParagraphElement>(null);
   const outcomeTriggerRef = useRef<HTMLButtonElement | null>(null);
-  const plan = useMemo(() => buildResearchGuide(researchCase), [researchCase]);
+  const plan = useMemo(
+    () => buildResearchGuide(researchCase, { dnaEnabled }),
+    [researchCase, dnaEnabled]
+  );
   const assignmentTask = plan.assignment?.taskId
     ? researchCase.tasks.find((task) => task.id === plan.assignment?.taskId)
     : undefined;

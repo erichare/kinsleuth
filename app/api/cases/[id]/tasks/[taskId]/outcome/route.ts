@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { withPermission } from "@/lib/api-authorization";
+import {
+  projectCaseApiResponse,
+  unavailableCaseMutationResponse
+} from "@/lib/api-case-projection";
 import { isGuidedResearchEnabled } from "@/lib/guided-research-config";
 import { recordCaseTaskOutcome } from "@/lib/workspace-store";
 
@@ -55,6 +59,10 @@ export const POST = withPermission("cases:write", async (request, authorization,
   }
 
   try {
+    const { id, taskId } = await params;
+    const unavailable = await unavailableCaseMutationResponse(id, authorization.archiveId);
+    if (unavailable) return unavailable;
+
     const body = await readJson(request);
     if (!body.ok) {
       return body.response;
@@ -65,7 +73,6 @@ export const POST = withPermission("cases:write", async (request, authorization,
       return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid research outcome" }, { status: 400 });
     }
 
-    const { id, taskId } = await params;
     const { hypothesisDecision, ...outcome } = parsed.data;
     const result = await recordCaseTaskOutcome(
       id,
@@ -88,7 +95,7 @@ export const POST = withPermission("cases:write", async (request, authorization,
       { archiveId: authorization.archiveId }
     );
 
-    return NextResponse.json(result);
+    return NextResponse.json(projectCaseApiResponse(result));
   } catch (error) {
     const knownResponse = mapOutcomeError(error);
     if (knownResponse) {
