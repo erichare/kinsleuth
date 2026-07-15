@@ -36,6 +36,9 @@ export const PATCH = withPermission("dna:write", async (request: Request, _autho
 });
 
 export const DELETE = withPermission("dna:write", async (_request: Request, _authorization, { params }: { params: Promise<{ id: string }> }) => {
+  const unavailable = capabilityUnavailableResponse("dna");
+  if (unavailable) return unavailable;
+
   const { id } = await params;
 
   try {

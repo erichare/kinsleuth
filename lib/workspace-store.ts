@@ -1122,6 +1122,7 @@ export async function updateDnaMatch(matchId: string, input: Partial<DnaMatch>, 
 }
 
 export async function deleteDnaMatch(matchId: string, options: WorkspaceStoreOptions = {}): Promise<{ deleted: string }> {
+  requireHostedCapability("dna");
   return withArchiveMutation(options, async (client, archiveId) => {
     const deleted = await deleteDnaMatchRows(client, archiveId, matchId);
     if (deleted === 0) {
