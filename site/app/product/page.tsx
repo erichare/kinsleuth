@@ -1,10 +1,11 @@
 import { CtaStrip } from "@/components/cta-strip";
 import { PageHero } from "@/components/page-hero";
+import { betaStatus } from "@/lib/beta-status";
 import { pageMetadata } from "@/lib/metadata";
 
 export const metadata = pageMetadata({
   title: "Product",
-  description: "Explore the GEDCOM, source, research-case, DNA-triage, analysis, and publishing workflows in Kin Resolve.",
+  description: betaStatus.metadataDescription,
   path: "/product/"
 });
 
@@ -37,7 +38,7 @@ const productAreas = [
     number: "04",
     eyebrow: "DNA as a clue",
     title: "Triage matches without turning a score into a fact.",
-    body: "Import match CSVs, rank the most useful leads, record shared-match context, and connect promising matches to a research case. Suggested ranges remain hypotheses for human review.",
+    body: "The source product can import match CSVs, rank useful leads, record shared-match context, and connect promising matches to a research case. Hosted DNA is excluded from the proposed first cohort.",
     points: ["CSV import and match scoring", "Surname and place clues", "Shared-match context", "Case evidence links"],
     example: { label: "DNA lead", title: "M. Alder (fictional)", rows: [["Shared DNA", "86 cM"], ["Tree", "Partial"], ["Estimate", "3C or 3C1R"]] }
   },
@@ -45,7 +46,7 @@ const productAreas = [
     number: "05",
     eyebrow: "Optional analysis",
     title: "Use AI as an analyst, not an authority.",
-    body: "Deterministic structural checks work without an AI key. An operator can optionally connect an OpenAI-compatible provider for workspace-grounded answers, referenced context, uncertainty, and staged suggestions.",
+    body: "Deterministic structural checks work without an AI key and are proposed for cohort one. The source product can connect an OpenAI-compatible provider, but external AI is excluded from the proposed hosted cohort.",
     points: ["No-key structural checks", "Operator-selected provider", "Referenced workspace context", "Saved runs and staged suggestions"],
     example: { label: "Analysis run", title: "Mercer–March identity check", rows: [["Context records", "3"], ["Identifiers", "2 independent"], ["Confidence", "Moderate"]] }
   },
@@ -53,7 +54,7 @@ const productAreas = [
     number: "06",
     eyebrow: "Deliberate publishing",
     title: "Review before sharing.",
-    body: "The current beta combines manual person publication with living-person and privacy gates. Publication-readiness checks surface blockers and gaps while more granular fact-level controls are developed.",
+    body: "The source product combines manual person publication with living-person and privacy gates. Publication-readiness checks are proposed for cohort one, while real-data public publishing remains disabled.",
     points: ["Manual person publication", "Living and privacy gates", "Readiness blockers", "Anonymous public profiles"],
     example: { label: "Publishing review", title: "Nora Elise Hartwell", rows: [["Privacy", "Public"], ["Living status", "Deceased"], ["Public facts", "4"]] }
   }
@@ -102,14 +103,14 @@ export default function ProductPage() {
       </section>
 
       <section className="section surface-section">
-        <div className="shell status-table-wrap">
-          <div className="section-heading"><span className="eyebrow">Product status</span><h2>Clear about what exists—and what does not yet.</h2></div>
+        <div className="shell status-table-wrap" data-beta-status-surface="product">
+          <div className="section-heading"><span className="eyebrow">{betaStatus.badge}</span><h2>{betaStatus.headline}</h2><p>{betaStatus.rollout}</p></div>
           <div className="status-table">
-            <div className="status-column"><span className="status-heading"><i className="status-dot available" /> Available</span><ul><li>Single-archive private workspace</li><li>GEDCOM import, review, and export</li><li>Cases, sources, DNA triage, and reports</li><li>Optional provider-backed analysis</li><li>Person-level publication gates</li></ul></div>
-            <div className="status-column"><span className="status-heading"><i className="status-dot developing" /> In development</span><ul><li>Multi-archive hosted tenancy</li><li>Invitations and family collaboration</li><li>Portable object storage</li><li>Granular publication controls</li><li>Observability and restore workflows</li></ul></div>
-            <div className="status-column"><span className="status-heading"><i className="status-dot exploring" /> Exploring</span><ul><li>Grounded GPS research agent</li><li>Semantic evidence retrieval</li><li>Agent-assisted record search</li><li>Pedigree, timeline, and map views</li></ul></div>
+            <div className="status-column"><span className="status-heading"><i className="status-dot available" /> Implemented in source</span><ul>{betaStatus.implementedInSource.map((item) => <li key={item}>{item}</li>)}</ul></div>
+            <div className="status-column"><span className="status-heading"><i className="status-dot developing" /> Proposed cohort one</span><ul>{betaStatus.proposedCohortOne.map((item) => <li key={item}>{item}</li>)}</ul></div>
+            <div className="status-column"><span className="status-heading"><i className="status-dot exploring" /> Excluded from cohort one</span><ul>{betaStatus.excludedFromCohortOne.map((item) => <li key={item}>{item}</li>)}</ul></div>
           </div>
-          <p className="status-footnote">“Exploring” describes roadmap direction, not a shipping commitment. Follow progress in the <a href="https://github.com/erichare/kinresolve">public repository</a>.</p>
+          <p className="status-footnote">“Proposed” is pending owner sign-off and launch-gate evidence. “Excluded” is a cohort-one boundary, not a claim that the source capability is absent. Follow progress in the <a href="https://github.com/erichare/kinresolve">public repository</a>.</p>
         </div>
       </section>
 

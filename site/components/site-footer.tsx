@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Brand } from "@/components/brand";
+import { betaStatus } from "@/lib/beta-status";
 import { navigation, site } from "@/lib/site";
 
 export function SiteFooter() {
@@ -9,7 +10,7 @@ export function SiteFooter() {
         <div className="footer-intro">
           <Brand footer />
           <p>Built for the work between a clue and a conclusion.</p>
-          <span className="status-chip"><i aria-hidden="true" /> Private beta in development</span>
+          <span className="status-chip" data-beta-status-surface="footer"><i aria-hidden="true" /> {betaStatus.summary}</span>
         </div>
         <div>
           <h2>Explore</h2>

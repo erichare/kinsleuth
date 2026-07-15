@@ -1,11 +1,12 @@
 import { BetaForm } from "@/components/beta-form";
 import { PageHero } from "@/components/page-hero";
+import { betaStatus } from "@/lib/beta-status";
 import { pageMetadata } from "@/lib/metadata";
 import { site } from "@/lib/site";
 
 export const metadata = pageMetadata({
   title: "Private beta",
-  description: "Apply to test Kin Resolve with realistic GEDCOM, source, research-case, publishing, or DNA-triage workflows.",
+  description: betaStatus.metadataDescription,
   path: "/beta/"
 });
 
@@ -13,7 +14,8 @@ const faqs = [
   ["Is the beta free?", "Pricing has not been announced. Any cost, limits, and data terms will be clear before a participant is asked to upload family data."],
   ["When will I get access?", "Cohorts will be deliberately small. Applying records interest but does not guarantee immediate access."],
   ["Can I self-host?", "The AGPL source is available now. The current Compose path is suitable for development and beta evaluation while production hardening continues."],
-  ["Can I upload DNA data?", "Only when beta onboarding expressly permits it and explains the controls. Never attach DNA or family records to a beta-interest email."],
+  ["Can I upload family data?", "Not when applying. The first hosted experience uses synthetic records. One isolated plain-GEDCOM pilot may accept real family data only after the legal, restore, deletion, recovery, and security gates pass."],
+  ["Can I upload DNA data?", "No. DNA uploads and triage are disabled for the first hosted cohort. Never attach DNA or family records to a beta-interest email."],
   ["What makes a useful beta tester?", "A real research workflow, comfort with unfinished software, and willingness to describe where the process or interface breaks down."]
 ] as const;
 
@@ -21,17 +23,17 @@ export default function BetaPage() {
   return (
     <>
       <PageHero
-        eyebrow="Invitation-only private beta"
-        lead="We’re prioritizing family historians and genealogists with real GEDCOM, source, case, publishing, or DNA-triage workflows—and the patience to give detailed feedback."
+        eyebrow={betaStatus.badge}
+        lead={`${betaStatus.summary} We’re prioritizing family historians and genealogists with rigorous source, GEDCOM, and case workflows—and the patience to give detailed feedback.`}
         note="Applying does not create an account or guarantee immediate access."
         primary="Start the application"
         primaryHref="#apply"
         title="Help shape a more rigorous genealogy research workspace."
       />
 
-      <section className="shell section beta-fit-grid">
+      <section className="shell section beta-fit-grid" data-beta-status-surface="beta">
         <div><span className="eyebrow">A strong fit</span><h2>You have a research process to test—not just a feature list.</h2></div>
-        <div className="fit-cards"><article><strong>Bring</strong><p>An unresolved question, a representative archive, and a workflow you know well.</p></article><article><strong>Expect</strong><p>A working beta with rough edges, explicit limitations, and small invitation cohorts.</p></article><article><strong>Protect</strong><p>Living people and sensitive data. The application itself should contain no family records.</p></article></div>
+        <div className="fit-cards"><article><strong>Bring</strong><p>An unresolved question and a workflow you know well. Do not send records with the application.</p></article><article><strong>Expect</strong><p>{betaStatus.headline} {betaStatus.rollout} Applying does not guarantee immediate access.</p></article><article><strong>Protect</strong><p>Living people and sensitive data. The application itself should contain no family records.</p></article></div>
       </section>
 
       <section className="section surface-section" id="apply">

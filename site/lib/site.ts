@@ -1,9 +1,10 @@
+import { betaStatus } from "@/lib/beta-status";
+
 export const site = {
   name: "Kin Resolve",
   compactName: "KinResolve",
   url: "https://kinresolve.com",
-  description:
-    "A private genealogy research workspace for source-backed cases, GEDCOM records, DNA match triage, AI-assisted analysis, and deliberate publishing.",
+  description: betaStatus.metadataDescription,
   github: "https://github.com/erichare/kinresolve",
   betaEmail: "beta@kinresolve.com",
   betaIntakeReady: true

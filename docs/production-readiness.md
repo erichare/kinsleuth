@@ -1,6 +1,8 @@
-# Kin Resolve production-readiness plan
+# Kin Resolve production-readiness roadmap (historical)
 
-_Roadmap from the current codebase to a launchable hosted beta + polished OSS 1.0._
+> **Current status — 2026-07-14:** This document preserves the earlier broad roadmap and is not the hosted-launch source of truth. Marketing is live at `kinresolve.com`; `app.kinresolve.com` is not configured, and the legacy product hostname serves a holding page. Use [`docs/hosted-beta-contract.md`](hosted-beta-contract.md) for the proposed cohort boundary and [`plans/hosted-private-beta-launch.md`](../plans/hosted-private-beta-launch.md) for current execution. Statements below about active/draft PRs, unchanged DNS, hosted DNA, billing, or a broad multi-tenant beta are historical unless those current documents explicitly adopt them.
+
+_Historical roadmap from the earlier codebase to a launchable hosted beta + polished OSS 1.0._
 _Companion to [`docs/auth.md`](auth.md) (identity design) and the locked business
 direction (AGPL OSS + hosted service, GPS-AI wedge, DNA hosted with compliance)._
 
@@ -27,16 +29,22 @@ Phase 1 (persistence + read paths + identity) is essentially complete:
 | **Account-based auth + memberships (better-auth)** | **#20 (merged)** |
 | **Reviewed next-slice execution blueprint** | **#21 (merged)** |
 | **Marketing foundation and public-site preview** | **#22 and #23 (merged)** |
-| **Immutable migration repair + released-schema rehearsal** | **#24 (draft review)** |
+| **Immutable migration repair + released-schema rehearsal** | **#24 (merged)** |
+| **Release/environment contract and fail-closed product deployment checks** | **#25–#28 (merged)** |
+| **Explicit method-level API access registry and permission enforcement** | **#29 (merged)** |
+| **Immersive synthetic research challenge and product/marketing integration** | **#30–#34 (merged)** |
+| **Reviewable data sources, private object storage, and durable jobs** | **#35 (merged)** |
 
 The app is a working single-archive vertical slice with real accounts. It is **not
 yet** multi-tenant, billable, observable, compliant, or backed by the AI
 differentiator. This document is the path to those.
 
-Active engineering workstream 1A adds complete product pull-request CI, makes migration
-history immutable, rehearses the v0.17.4 schema upgrade, and replaces legacy release
-assumptions with explicit version, project, environment, and deployment checks. It does
-not promote a release candidate or migrate production; those remain workstream 1B.
+Current `main` now has complete product CI, immutable migration history, database-backed
+accounts/RBAC, an explicit fail-closed API registry, private archive-namespaced object
+storage, durable integration jobs, and review/apply/rollback data-source workflows.
+Those foundations are not deployed as a usable hosted product. Candidate-first release,
+secure hosted invitation/recovery, explicit empty/demo modes, restore/deletion proof,
+observability, and legal terms remain launch work in the current blueprint.
 
 ---
 
@@ -48,7 +56,7 @@ Two distinct release gates — don't conflate them:
   with no Vercel/Supabase dependency, create an account, import within documented and
   tested deployment limits, use every supported feature, export their data, and trust
   that living-person privacy holds.
-- **Hosted beta (`kinresolve.com`)** — invited participants can use the hosted product
+- **Hosted beta (`app.kinresolve.com`)** — invited participants can use the hosted product
   under explicit beta terms before open signup or billing is introduced. A later
   public release may add self-service signup, collaboration, and paid plans once those
   surfaces are implemented and operated safely.

@@ -36,7 +36,7 @@ export default function PrivacyPage() {
 
       <section className="section surface-section" id="current-controls">
         <div className="shell">
-          <div className="section-heading"><span className="eyebrow">Current beta controls</span><h2>What the software does today.</h2></div>
+          <div className="section-heading"><span className="eyebrow">Current source controls</span><h2>What the software implements today.</h2></div>
           <div className="privacy-grid">
             {currentControls.map(([title, body], index) => <article key={title}><span>0{index + 1}</span><h3>{title}</h3><p>{body}</p></article>)}
           </div>

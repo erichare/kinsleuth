@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { CtaStrip } from "@/components/cta-strip";
 import { EvidenceBoard } from "@/components/evidence-board";
+import { betaStatus } from "@/lib/beta-status";
 import { site } from "@/lib/site";
 
 const workflow = [
@@ -31,9 +32,9 @@ const capabilities = [
   ["GEDCOM integrity", "Preview imports, review re-import changes, preserve raw records, and export the archive again."],
   ["Research cases", "Keep evidence, hypotheses, confidence, and next actions attached to the question they support."],
   ["Source workspace", "Search source records and transcripts alongside the people and cases that depend on them."],
-  ["DNA match triage", "Score and review CSV-imported matches as research leads, then connect the useful ones to a case."],
+  ["DNA match triage in source", "The source product can score and review CSV-imported matches as research leads. Hosted DNA is excluded from the proposed first cohort."],
   ["Quality checks", "Surface date conflicts, privacy risks, source gaps, and profiles that are not ready to share."],
-  ["Optional analysis", "Use deterministic checks alone or connect an OpenAI-compatible provider for referenced analysis."]
+  ["Optional analysis in source", "Use deterministic checks alone in the proposed hosted cohort. Operator-configured external AI exists in source but is excluded from cohort one."]
 ] as const;
 
 export default function HomePage() {
@@ -50,7 +51,7 @@ export default function HomePage() {
             <Link className="button" href="/beta">Apply for the private beta</Link>
             <a className="button button-secondary" href={site.github}>View on GitHub <span aria-hidden="true">↗</span></a>
           </div>
-          <p className="cta-note">Invitation-only beta. Source available under AGPL-3.0-only.</p>
+          <p className="cta-note">{betaStatus.rollout} Source available under AGPL-3.0-only.</p>
         </div>
         <EvidenceBoard />
       </section>
@@ -136,10 +137,10 @@ export default function HomePage() {
 
       <section className="section capabilities-section">
         <div className="shell">
-          <div className="section-heading centered-heading">
-            <span className="eyebrow">Current private beta</span>
+          <div className="section-heading centered-heading" data-beta-status-surface="home">
+            <span className="eyebrow">{betaStatus.badge}</span>
             <h2>Built for the work behind the tree.</h2>
-            <p>Practical research tools are available now. Production hardening and the deeper evidence agent remain visible roadmap work.</p>
+            <p>{betaStatus.headline} {betaStatus.rollout} The source product already contains the research tools below; the hosted cohort starts with a narrower, explicit boundary.</p>
           </div>
           <div className="capability-grid">
             {capabilities.map(([title, body], index) => (
@@ -187,7 +188,7 @@ export default function HomePage() {
             <article className="face-card face-private">
               <span className="face-kicker">Private workspace</span>
               <h3>Keep the unfinished work private.</h3>
-              <p>Imported people, sources, DNA matches, cases, notes, and analysis runs stay behind authenticated workspace access.</p>
+              <p>The source product keeps imported people, sources, DNA matches, cases, notes, and analysis runs behind authenticated workspace access. The proposed hosted cohort excludes DNA and external AI.</p>
               <ul><li>Research cases and hypotheses</li><li>DNA match triage</li><li>Source transcripts and notes</li></ul>
             </article>
             <article className="face-card face-public">
@@ -202,17 +203,17 @@ export default function HomePage() {
 
       <section className="shell section status-section">
         <div className="section-heading heading-row">
-          <div><span className="eyebrow">Build in public</span><h2>A working beta, with the hardening work visible.</h2></div>
+          <div><span className="eyebrow">Build in public</span><h2>{betaStatus.headline}</h2><p>{betaStatus.rollout}</p></div>
           <a className="arrow-link" href={site.github}>Follow the roadmap <span aria-hidden="true">↗</span></a>
         </div>
         <div className="status-grid">
           <article>
-            <span className="status-heading"><i className="status-dot available" aria-hidden="true" /> Available in the current beta</span>
-            <ul><li>Single-archive research workspace</li><li>Account-based owner setup</li><li>GEDCOM, cases, sources, DNA, and publishing workflows</li><li>Self-hostable AGPL source</li></ul>
+            <span className="status-heading"><i className="status-dot available" aria-hidden="true" /> Implemented in the source product</span>
+            <ul>{betaStatus.implementedInSource.slice(0, 4).map((item) => <li key={item}>{item}</li>)}</ul>
           </article>
           <article>
-            <span className="status-heading"><i className="status-dot developing" aria-hidden="true" /> In development</span>
-            <ul><li>Multi-archive hosting and family invitations</li><li>Portable object storage and production Compose</li><li>Observability, restore tooling, and durable rate limits</li><li>Stronger citation grounding and conflict workflows</li></ul>
+            <span className="status-heading"><i className="status-dot developing" aria-hidden="true" /> Proposed for the first hosted cohort</span>
+            <ul>{betaStatus.proposedCohortOne.map((item) => <li key={item}>{item}</li>)}</ul>
           </article>
         </div>
       </section>

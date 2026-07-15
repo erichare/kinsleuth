@@ -41,6 +41,17 @@ for (const file of htmlFiles) {
   for (const forbidden of ["href=\"#\"", "example.com", "kinsleuth.com", "MIT open source", "production-ready genealogy platform"]) {
     if (html.includes(forbidden)) problems.push(`${file}: contains forbidden placeholder or claim ${forbidden}`);
   }
+
+  for (const forbiddenClaim of [
+    "current private beta",
+    "a working beta",
+    "available in the current beta",
+    "private beta in development"
+  ]) {
+    if (html.toLowerCase().includes(forbiddenClaim)) {
+      problems.push(`${file}: contains stale hosted-beta claim ${forbiddenClaim}`);
+    }
+  }
 }
 
 const requiredRoutes = ["index.html", "product/index.html", "method/index.html", "privacy/index.html", "open-source/index.html", "about/index.html", "beta/index.html", "challenge/index.html", "icon.png", "manifest.webmanifest", "robots.txt", "sitemap.xml"];
@@ -51,6 +62,30 @@ for (const route of requiredRoutes) {
 const home = readFileSync(join(outputRoot, "index.html"), "utf8");
 for (const metadata of ["og:image", "twitter:image", "canonical", "rel=\"icon\""]) {
   if (!home.includes(metadata)) problems.push(`Homepage is missing ${metadata} metadata.`);
+}
+
+const expectedBetaStatus = [
+  "Private beta applications are open.",
+  "Hosted access is rolling out in small invitation cohorts."
+];
+for (const [page, surface] of [
+  ["index.html", "home"],
+  ["product/index.html", "product"],
+  ["beta/index.html", "beta"]
+]) {
+  const html = readFileSync(join(outputRoot, page), "utf8");
+  if (!html.includes(`data-beta-status-surface="${surface}"`)) {
+    problems.push(`${page}: is not wired to the centralized beta-status surface.`);
+  }
+  for (const wording of expectedBetaStatus) {
+    if (!html.includes(wording)) problems.push(`${page}: is missing beta status wording: ${wording}`);
+  }
+}
+for (const file of htmlFiles) {
+  const html = readFileSync(file, "utf8");
+  if (!html.includes('data-beta-status-surface="footer"')) {
+    problems.push(`${file}: footer is not wired to the centralized beta-status surface.`);
+  }
 }
 
 const pageUrls = new Map([
@@ -89,6 +124,9 @@ if (!home.includes('href="/challenge/"')) {
 }
 
 const beta = readFileSync(join(outputRoot, "beta/index.html"), "utf8");
+if (!/DNA uploads and triage are disabled for the first hosted cohort/i.test(beta)) {
+  problems.push("Beta page is missing the cohort-one hosted DNA exclusion.");
+}
 if (!beta.includes(`action="mailto:beta@kinresolve.com`)) {
   problems.push("Beta application is missing its configured mailto destination.");
 }
