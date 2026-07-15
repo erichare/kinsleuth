@@ -7,6 +7,7 @@ export const runtime = "nodejs";
 export async function GET() {
   const status = await getRuntimeStatus();
   const ready =
+    status.capabilities.valid &&
     status.database.connected &&
     status.database.provisioned &&
     status.database.datasetModeMatches &&
@@ -27,8 +28,10 @@ export async function GET() {
         demoFixtureVersion: status.database.demoFixtureVersion
       },
       ai: {
+        enabled: status.ai.enabled,
         configured: status.ai.configured
       },
+      capabilities: status.capabilities,
       storage: {
         configured: status.storage.configured
       }

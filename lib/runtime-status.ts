@@ -1,5 +1,6 @@
 import { query } from "./db";
-import { datasetModes, resolveDatasetConfiguration, type DatasetMode } from "./hosted-config";
+import { datasetModes, type DatasetMode, type DeploymentMode } from "./hosted-config";
+import { resolveHostedCapabilities, type HostedCapabilities } from "./hosted-capabilities";
 import { demoFixtureVersion, getArchiveId } from "./workspace-store";
 import { APP_VERSION } from "./app-version";
 
@@ -24,6 +25,7 @@ export type RuntimeStatus = {
     error?: string;
   };
   ai: {
+    enabled: boolean;
     configured: boolean;
     baseUrl: string;
     chatModel: string;
@@ -33,27 +35,42 @@ export type RuntimeStatus = {
   storage: {
     configured: boolean;
   };
+  capabilities: {
+    valid: boolean;
+    deploymentMode: DeploymentMode | null;
+    datasetMode: DatasetMode | null;
+    dna: boolean;
+    externalAi: boolean;
+    publicArchive: boolean;
+    publicPublishing: boolean;
+    evidenceBinaryUploads: boolean;
+    packageMedia: boolean;
+    plainGedcom: boolean;
+    gedcomFileLimitBytes: number | null;
+    gedcomPersonLimit: number | null;
+  };
 };
 
 export async function getRuntimeStatus(): Promise<RuntimeStatus> {
   const databaseUrl = process.env.DATABASE_URL;
   const archiveId = getArchiveId();
-  const ai = getAIStatus();
+  const capabilityResolution = resolveRuntimeCapabilities();
+  const capabilities = capabilityResolution.status;
+  const ai = getAIStatus(capabilities);
   const storage = getStorageStatus();
-  let expectedDatasetMode: DatasetMode | null = null;
+  const expectedDatasetMode = capabilities.valid && (
+    capabilities.deploymentMode === "hosted" || Boolean(process.env.KINRESOLVE_DATASET_MODE?.trim())
+  )
+    ? capabilities.datasetMode
+    : null;
 
-  try {
-    const configuration = resolveDatasetConfiguration();
-    expectedDatasetMode =
-      configuration.deploymentMode === "hosted" || configuration.explicitDatasetMode
-        ? configuration.datasetMode
-        : null;
-  } catch (error) {
+  if (!capabilities.valid) {
     return {
       product: "KinSleuth",
       version: APP_VERSION,
       ai,
       storage,
+      capabilities,
       database: {
         configured: Boolean(databaseUrl),
         connected: false,
@@ -69,7 +86,7 @@ export async function getRuntimeStatus(): Promise<RuntimeStatus> {
         expectedDatasetMode: null,
         datasetModeMatches: false,
         demoFixtureVersion: null,
-        error: error instanceof Error ? error.message : "Dataset configuration is invalid"
+        error: capabilityResolution.error ?? "Hosted capability configuration is invalid"
       }
     };
   }
@@ -80,6 +97,7 @@ export async function getRuntimeStatus(): Promise<RuntimeStatus> {
       version: APP_VERSION,
       ai,
       storage,
+      capabilities,
       database: {
         configured: false,
         connected: false,
@@ -142,6 +160,7 @@ export async function getRuntimeStatus(): Promise<RuntimeStatus> {
       version: APP_VERSION,
       ai,
       storage,
+      capabilities,
       database: {
         configured: true,
         connected: true,
@@ -166,6 +185,7 @@ export async function getRuntimeStatus(): Promise<RuntimeStatus> {
       version: APP_VERSION,
       ai,
       storage,
+      capabilities,
       database: {
         configured: true,
         connected: false,
@@ -191,13 +211,66 @@ function isDatasetMode(value: string): value is DatasetMode {
   return datasetModes.some((mode) => mode === value);
 }
 
-export function getAIStatus(): RuntimeStatus["ai"] {
+export function getAIStatus(
+  capabilities: RuntimeStatus["capabilities"] = resolveRuntimeCapabilities().status
+): RuntimeStatus["ai"] {
+  const enabled = capabilities.valid && capabilities.externalAi;
   return {
-    configured: Boolean(process.env.AI_API_KEY || process.env.OPENAI_API_KEY),
+    enabled,
+    configured: enabled && Boolean(process.env.AI_API_KEY || process.env.OPENAI_API_KEY),
     baseUrl: process.env.AI_BASE_URL ?? "https://api.openai.com/v1",
     chatModel: process.env.AI_CHAT_MODEL ?? "gpt-5-mini",
     embeddingModel: process.env.AI_EMBEDDING_MODEL ?? "text-embedding-3-small",
     mode: process.env.AI_API_MODE === "chat" ? "chat" : "responses"
+  };
+}
+
+function resolveRuntimeCapabilities(): {
+  status: RuntimeStatus["capabilities"];
+  error?: string;
+} {
+  try {
+    const capabilities = resolveHostedCapabilities();
+    return {
+      status: {
+        valid: true,
+        ...publicCapabilityManifest(capabilities)
+      }
+    };
+  } catch (error) {
+    return {
+      status: {
+        valid: false,
+        deploymentMode: null,
+        datasetMode: null,
+        dna: false,
+        externalAi: false,
+        publicArchive: false,
+        publicPublishing: false,
+        evidenceBinaryUploads: false,
+        packageMedia: false,
+        plainGedcom: false,
+        gedcomFileLimitBytes: null,
+        gedcomPersonLimit: null
+      },
+      error: error instanceof Error ? error.message : "Hosted capability configuration is invalid"
+    };
+  }
+}
+
+function publicCapabilityManifest(capabilities: HostedCapabilities): HostedCapabilities {
+  return {
+    deploymentMode: capabilities.deploymentMode,
+    datasetMode: capabilities.datasetMode,
+    dna: capabilities.dna,
+    externalAi: capabilities.externalAi,
+    publicArchive: capabilities.publicArchive,
+    publicPublishing: capabilities.publicPublishing,
+    evidenceBinaryUploads: capabilities.evidenceBinaryUploads,
+    packageMedia: capabilities.packageMedia,
+    plainGedcom: capabilities.plainGedcom,
+    gedcomFileLimitBytes: capabilities.gedcomFileLimitBytes,
+    gedcomPersonLimit: capabilities.gedcomPersonLimit
   };
 }
 
