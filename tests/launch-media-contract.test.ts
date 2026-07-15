@@ -49,7 +49,10 @@ describe("synthetic launch-media contract", () => {
     expect(capture).toContain("body.storage.configured !== true");
     expect(capture).toContain('getByText("Synthetic demo", { exact: true })');
     expect(capture).toContain('locator(".sync-change-groups")');
+    expect(capture).toContain("did not observe the GEDCOM connection response");
+    expect(capture).toContain("did not observe the GEDCOM refresh-queue response");
     expect(capture).toContain('url.pathname === "/api/sources"');
+    expect(capture).toContain("did not observe the settled source-register response");
     expect(capture).toContain("settledSourceResponse.status() !== 200");
     expect(capture).toContain('section.people-search-card[aria-busy="false"]');
     expect(capture).toContain('getByText("No API tokens yet.", { exact: true })');

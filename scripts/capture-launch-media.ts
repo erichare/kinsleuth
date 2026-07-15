@@ -120,12 +120,16 @@ async function main(): Promise<void> {
       return url.origin === configuration.origin
         && url.pathname === "/api/integrations"
         && response.request().method() === "POST";
+    }).catch(() => {
+      throw new Error("Launch-media capture did not observe the GEDCOM connection response.");
     });
     const runResponse = page.waitForResponse((response) => {
       const url = new URL(response.url());
       return url.origin === configuration.origin
         && /^\/api\/integrations\/[^/]+\/sync-runs$/.test(url.pathname)
         && response.request().method() === "POST";
+    }).catch(() => {
+      throw new Error("Launch-media capture did not observe the GEDCOM refresh-queue response.");
     });
     await gedcomCard.getByLabel("Choose GEDCOM source file", { exact: true })
       .setInputFiles(configuration.gedcomFixturePath!);
@@ -167,6 +171,8 @@ async function main(): Promise<void> {
       return url.origin === configuration.origin
         && url.pathname === "/api/sources"
         && response.request().method() === "GET";
+    }).catch(() => {
+      throw new Error("Launch-media capture did not observe the settled source-register response.");
     });
     await exactGoto(page, configuration.origin, "/app/sources");
     await page.getByRole("heading", { level: 1, name: "Sources" }).waitFor();
