@@ -418,3 +418,65 @@ jobs:
         run: |
           rm -f .vercel/project.json
           rm -f "$RUNNER_TEMP/public-demo-safety-"*.json
+
+  emergency-pause:
+    name: Independently pause the demo project after containment failure
+    needs: [authorize, contain]
+    if: >-
+      always() &&
+      needs.authorize.result == 'success' &&
+      needs.authorize.outputs.authorized == 'true' &&
+      needs.contain.result != 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: demo-containment
+    steps:
+      - name: Idempotently pause and attest the exact isolated demo project
+        env:
+          EXPECTED_VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+          EXPECTED_VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+          MARKETING_VERCEL_PROJECT_ID: ${{ vars.MARKETING_VERCEL_PROJECT_ID }}
+          PRODUCTION_VERCEL_PROJECT_ID: ${{ vars.PRODUCTION_VERCEL_PROJECT_ID }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          [[ "$EXPECTED_VERCEL_ORG_ID" =~ ^[A-Za-z0-9_]{4,128}$ ]]
+          [[ "$EXPECTED_VERCEL_PROJECT_ID" =~ ^[A-Za-z0-9_]{4,128}$ ]]
+          [[ "$MARKETING_VERCEL_PROJECT_ID" =~ ^[A-Za-z0-9_]{4,128}$ ]]
+          [[ "$PRODUCTION_VERCEL_PROJECT_ID" =~ ^[A-Za-z0-9_]{4,128}$ ]]
+          [[ "$VERCEL_ORG_ID" =~ ^[A-Za-z0-9_]{4,128}$ ]]
+          [[ "$VERCEL_PROJECT_ID" =~ ^[A-Za-z0-9_]{4,128}$ ]]
+          test "$VERCEL_ORG_ID" = "$EXPECTED_VERCEL_ORG_ID"
+          test "$VERCEL_PROJECT_ID" = "$EXPECTED_VERCEL_PROJECT_ID"
+          test "$VERCEL_PROJECT_ID" != "$MARKETING_VERCEL_PROJECT_ID"
+          test "$VERCEL_PROJECT_ID" != "$PRODUCTION_VERCEL_PROJECT_ID"
+          test -n "$VERCEL_TOKEN"
+          scope_query=""
+          if [[ "$VERCEL_ORG_ID" == team_* ]]; then scope_query="?teamId=$VERCEL_ORG_ID"; fi
+          project_api="https://api.vercel.com/v9/projects/$VERCEL_PROJECT_ID$scope_query"
+          curl --connect-timeout 10 --max-time 30 --retry 2 --retry-all-errors \
+            --fail --silent --show-error --request PATCH \
+            --header "Authorization: Bearer $VERCEL_TOKEN" \
+            --header "Content-Type: application/json" \
+            --data '{"autoAssignCustomDomains":false}' \
+            "$project_api" --output "$RUNNER_TEMP/public-demo-emergency-patch.json" || true
+          curl --connect-timeout 10 --max-time 30 --retry 2 --retry-all-errors \
+            --fail --silent --show-error --request POST \
+            --header "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v1/projects/$VERCEL_PROJECT_ID/pause$scope_query" \
+            --output "$RUNNER_TEMP/public-demo-emergency-pause.json" || true
+          curl --connect-timeout 10 --max-time 30 --retry 2 --retry-all-errors \
+            --fail --silent --show-error \
+            --header "Authorization: Bearer $VERCEL_TOKEN" \
+            "$project_api" --output "$RUNNER_TEMP/public-demo-emergency-project.json"
+          node -e '
+            const { readFileSync } = require("node:fs");
+            const project = JSON.parse(readFileSync(process.argv[1], "utf8"));
+            const orgIds = [project.accountId, project.teamId].filter((value) => value !== undefined);
+            if (project.id !== process.env.VERCEL_PROJECT_ID ||
+                orgIds.length === 0 || orgIds.some((value) => value !== process.env.VERCEL_ORG_ID) ||
+                project.name !== "kinresolve-demo" || project.paused !== true ||
+                project.autoAssignCustomDomains !== false) process.exit(1);
+          ' "$RUNNER_TEMP/public-demo-emergency-project.json"

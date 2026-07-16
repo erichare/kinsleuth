@@ -68,7 +68,7 @@ describe("failed public demo release safety workflow", () => {
 
   it("restores and proves the pinned public-demo holding deployment or pauses the exact project", async () => {
     const contents = await workflow();
-    const contain = job(contents, "contain");
+    const contain = job(contents, "contain", "emergency-pause");
     const targetBinding = contain.indexOf("Validate and link the isolated public demo project");
     const holdingRecord = contain.indexOf("Fetch and validate the pinned demo holding record");
     const restore = contain.indexOf("Restore the pinned demo holding deployment");
@@ -137,7 +137,7 @@ describe("failed public demo release safety workflow", () => {
 
   it("records a receipt only after containment reaches a proved safe state", async () => {
     const contents = await workflow();
-    const contain = job(contents, "contain");
+    const contain = job(contents, "contain", "emergency-pause");
     const finalGate = contain.indexOf(
       "Require verified demo holding restoration or fail-closed pause"
     );
@@ -152,5 +152,31 @@ describe("failed public demo release safety workflow", () => {
     );
     expect(receiptStep).toContain("SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}");
     expect(receiptStep).toContain("Pinned holding restored or demo fail-closed paused: true");
+  });
+
+  it("runs an independent exact-project pause when the containment job fails or times out", async () => {
+    const contents = await workflow();
+    const pause = job(contents, "emergency-pause");
+
+    expect(pause).toContain("needs: [authorize, contain]");
+    expect(pause).toContain("if: >-");
+    expect(pause).toContain("always() &&");
+    expect(pause).toContain("needs.authorize.outputs.authorized == 'true'");
+    expect(pause).toContain("needs.contain.result != 'success'");
+    expect(pause).toContain("environment: demo-containment");
+    expect(pause).toContain("timeout-minutes: 10");
+    expect(pause).toContain("EXPECTED_VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}");
+    expect(pause).toContain("EXPECTED_VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}");
+    expect(pause).toContain("MARKETING_VERCEL_PROJECT_ID: ${{ vars.MARKETING_VERCEL_PROJECT_ID }}");
+    expect(pause).toContain("PRODUCTION_VERCEL_PROJECT_ID: ${{ vars.PRODUCTION_VERCEL_PROJECT_ID }}");
+    expect(pause).toContain('test "$VERCEL_PROJECT_ID" = "$EXPECTED_VERCEL_PROJECT_ID"');
+    expect(pause).toContain('test "$VERCEL_PROJECT_ID" != "$MARKETING_VERCEL_PROJECT_ID"');
+    expect(pause).toContain('test "$VERCEL_PROJECT_ID" != "$PRODUCTION_VERCEL_PROJECT_ID"');
+    expect(pause).toContain(`--data '{"autoAssignCustomDomains":false}'`);
+    expect(pause).toContain("https://api.vercel.com/v1/projects/$VERCEL_PROJECT_ID/pause");
+    expect(pause).toContain("|| true");
+    expect(pause).toContain('project.name !== "kinresolve-demo"');
+    expect(pause).toContain('project.paused !== true');
+    expect(pause).toContain('project.autoAssignCustomDomains !== false');
   });
 });

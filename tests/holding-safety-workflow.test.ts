@@ -71,7 +71,7 @@ describe("failed holding auto-assignment safety workflow", () => {
   });
 
   it("pins trusted actions, proves exact main provenance twice, and queues by target resource", () => {
-    const repair = job("repair");
+    const repair = job("repair", "emergency-pause");
     expect(workflow.split(
       "actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4"
     )).toHaveLength(3);
@@ -94,7 +94,7 @@ describe("failed holding auto-assignment safety workflow", () => {
   });
 
   it("PATCHes v9, independently GET-validates, and pauses closed when repair cannot be proved", () => {
-    const repair = job("repair");
+    const repair = job("repair", "emergency-pause");
     const normalStart = repair.indexOf(
       "Repair and independently attest target domain auto-assignment"
     );
@@ -152,7 +152,7 @@ describe("failed holding auto-assignment safety workflow", () => {
   });
 
   it("repairs and proves the dedicated demo hostname or pauses closed", () => {
-    const repair = job("repair");
+    const repair = job("repair", "emergency-pause");
     const proofStart = repair.indexOf("Prove public demo hostname and exact holding bytes");
     const pauseStart = repair.indexOf(
       "Fail closed by pausing the target when repair cannot be proved"
@@ -187,5 +187,30 @@ describe("failed holding auto-assignment safety workflow", () => {
     expect(readme).toContain(
       "`production-containment` is an automatic safety environment with no required reviewers"
     );
+  });
+
+  it("runs an independent idempotent pause when the repair job fails or times out", () => {
+    const pause = job("emergency-pause");
+
+    expect(pause).toContain("needs: [authorize, repair]");
+    expect(pause).toContain("if: >-");
+    expect(pause).toContain("always() &&");
+    expect(pause).toContain("needs.authorize.outputs.authorized == 'true'");
+    expect(pause).toContain("needs.authorize.outputs.promotion_exposure == 'true'");
+    expect(pause).toContain("needs.repair.result != 'success'");
+    expect(pause).toContain("environment: ${{ needs.authorize.outputs.safety_environment }}");
+    expect(pause).toContain("timeout-minutes: 10");
+    expect(pause).toContain(
+      "group: ${{ needs.authorize.outputs.target == 'public-demo' && 'kinresolve-public-demo-release' || format('kinresolve-beta-holding-safety-{0}', needs.authorize.outputs.target) }}"
+    );
+    expect(pause).toContain("EXPECTED_VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}");
+    expect(pause).toContain("EXPECTED_VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}");
+    expect(pause).toContain("TARGET: ${{ needs.authorize.outputs.target }}");
+    expect(pause).toContain('test "$VERCEL_PROJECT_ID" = "$EXPECTED_VERCEL_PROJECT_ID"');
+    expect(pause).toContain(`--data '{"autoAssignCustomDomains":false}'`);
+    expect(pause).toContain("https://api.vercel.com/v1/projects/$VERCEL_PROJECT_ID/pause");
+    expect(pause).toContain("|| true");
+    expect(pause).toContain('project.paused !== true');
+    expect(pause).toContain('project.autoAssignCustomDomains !== false');
   });
 });
