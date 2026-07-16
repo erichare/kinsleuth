@@ -4,7 +4,15 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const workspaceMocks = vi.hoisted(() => ({
   readWorkspace: vi.fn()
 }));
+const authMocks = vi.hoisted(() => ({
+  getSessionContext: vi.fn(),
+  workspaceOptionsForSession: vi.fn((session: { archiveId: string }) => ({
+    archiveId: session.archiveId
+  }))
+}));
 
+vi.mock("next/headers", () => ({ headers: vi.fn(async () => new Headers()) }));
+vi.mock("@/lib/auth-session", () => authMocks);
 vi.mock("@/lib/workspace-store", () => workspaceMocks);
 
 import PublishingPage from "@/app/app/publishing/page";
@@ -13,6 +21,14 @@ import { demoPeople } from "@/lib/demo-data";
 beforeEach(() => {
   vi.unstubAllEnvs();
   vi.resetAllMocks();
+  authMocks.getSessionContext.mockResolvedValue({
+    kind: "member",
+    userId: "owner-private-beta",
+    email: "owner@example.test",
+    name: "Owner",
+    role: "owner",
+    archiveId: "archive-private-beta"
+  });
   workspaceMocks.readWorkspace.mockResolvedValue({
     archiveName: "Synthetic private archive",
     people: [{ ...demoPeople[0], published: true }]
@@ -42,6 +58,9 @@ describe("publishing readiness capability UI", () => {
 
     expect(html).toContain('href="/people"');
     expect(html).toMatch(/Public Index/i);
+    expect(workspaceMocks.readWorkspace).toHaveBeenCalledWith({
+      archiveId: "archive-private-beta"
+    });
   });
 });
 

@@ -2,8 +2,14 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const workspaceMocks = vi.hoisted(() => ({ readWorkspace: vi.fn() }));
-const authMocks = vi.hoisted(() => ({ getSessionContext: vi.fn() }));
+const authMocks = vi.hoisted(() => ({
+  getSessionContext: vi.fn(),
+  workspaceOptionsForSession: vi.fn((session: { archiveId: string }) => ({
+    archiveId: session.archiveId
+  }))
+}));
 
+vi.mock("next/headers", () => ({ headers: vi.fn(async () => new Headers()) }));
 vi.mock("@/lib/workspace-store", () => workspaceMocks);
 vi.mock("@/lib/auth-session", () => authMocks);
 
@@ -15,6 +21,7 @@ beforeEach(() => {
   vi.unstubAllEnvs();
   vi.clearAllMocks();
   authMocks.getSessionContext.mockResolvedValue({
+    kind: "member",
     userId: "owner-private-beta",
     email: "owner@example.test",
     name: "Owner",

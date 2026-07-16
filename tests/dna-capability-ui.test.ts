@@ -2,6 +2,12 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+const authMocks = vi.hoisted(() => ({
+  getSessionContext: vi.fn(),
+  workspaceOptionsForSession: vi.fn((session: { archiveId: string }) => ({
+    archiveId: session.archiveId
+  }))
+}));
 const dnaQueryMocks = vi.hoisted(() => ({
   createDnaHypothesesForMatches: vi.fn(),
   listCaseOptions: vi.fn(),
@@ -16,6 +22,8 @@ const peopleQueryMocks = vi.hoisted(() => ({
 
 vi.mock("@/lib/store/dna-queries", () => dnaQueryMocks);
 vi.mock("@/lib/store/people-queries", () => peopleQueryMocks);
+vi.mock("@/lib/auth-session", () => authMocks);
+vi.mock("next/headers", () => ({ headers: vi.fn(async () => new Headers()) }));
 vi.mock("next/navigation", () => navigationMocks);
 
 import DnaPage from "@/app/app/dna/page";
@@ -39,6 +47,14 @@ const capabilitySettings = {
 beforeEach(() => {
   vi.unstubAllEnvs();
   vi.resetAllMocks();
+  authMocks.getSessionContext.mockResolvedValue({
+    kind: "member",
+    userId: "owner-capability",
+    email: "owner@example.test",
+    name: "Owner",
+    role: "owner",
+    archiveId: "archive-default"
+  });
   navigationMocks.notFound.mockImplementation(() => {
     throw Object.assign(new Error("DNA workspace not found"), {
       digest: "NEXT_HTTP_ERROR_FALLBACK;404"
@@ -102,7 +118,10 @@ describe("DNA workspace capability UI", () => {
     expect(peopleQueryMocks.readArchiveBranding).toHaveBeenCalledOnce();
     expect(dnaQueryMocks.searchDnaMatchesPageFromDb).toHaveBeenCalledOnce();
     expect(dnaQueryMocks.listCaseOptions).toHaveBeenCalledOnce();
-    expect(dnaQueryMocks.createDnaHypothesesForMatches).toHaveBeenCalledWith([]);
+    expect(dnaQueryMocks.createDnaHypothesesForMatches).toHaveBeenCalledWith(
+      [],
+      { archiveId: "archive-default" }
+    );
   });
 });
 

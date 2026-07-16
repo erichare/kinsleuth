@@ -1,6 +1,6 @@
 type JsonObject = Record<string, unknown>;
 
-export type ReleaseSafetySource = "release" | "recovery" | "holding" | "demo";
+export type ReleaseSafetySource = "release" | "recovery" | "holding" | "demo" | "public-demo";
 
 export type WorkflowRunList = {
   total_count: number;
@@ -75,6 +75,10 @@ const sourceWorkflowContract: Record<ReleaseSafetySource, { name: string; path: 
   demo: {
     name: "Operate Kin Resolve synthetic staging demo session",
     path: ".github/workflows/staging-demo-session.yml"
+  },
+  "public-demo": {
+    name: "Release Kin Resolve public demo",
+    path: ".github/workflows/public-demo-release.yml"
   }
 };
 
@@ -254,7 +258,8 @@ function safetyRunsForSource(
   if (source === "release") return runs.containmentRuns;
   if (source === "recovery") return runs.cleanupRuns;
   if (source === "holding") return runs.holdingSafetyRuns;
-  return runs.demoSafetyRuns;
+  if (source === "demo") return runs.demoSafetyRuns;
+  return [];
 }
 
 function isMarkedSourceRun(source: ReleaseSafetySource, run: NormalizedRun): boolean {
@@ -268,15 +273,23 @@ function isMarkedSourceRun(source: ReleaseSafetySource, run: NormalizedRun): boo
     return run.displayTitle === `Kin Resolve static holding beta-staging run ${run.id} attempt ${run.attempt}`
       || run.displayTitle === `Kin Resolve static holding production run ${run.id} attempt ${run.attempt}`;
   }
-  return run.displayTitle === `Kin Resolve staging demo open run ${run.id} attempt ${run.attempt}`
-    || run.displayTitle === `Kin Resolve staging demo close run ${run.id} attempt ${run.attempt}`;
+  if (source === "demo") {
+    return run.displayTitle === `Kin Resolve staging demo open run ${run.id} attempt ${run.attempt}`
+      || run.displayTitle === `Kin Resolve staging demo close run ${run.id} attempt ${run.attempt}`;
+  }
+  if (!("headSha" in run) || typeof run.headSha !== "string") return false;
+  return ["release", "rollback", "contain"].some((action) =>
+    run.displayTitle
+      === `Public demo ${action} ${run.headSha} run ${run.id} attempt ${run.attempt}`
+  );
 }
 
 function safetyReceiptTitle(source: ReleaseSafetySource, run: NormalizedRun): string {
   if (source === "release") return `Contain release run ${run.id} attempt ${run.attempt}`;
   if (source === "recovery") return `Clean recovery run ${run.id} attempt ${run.attempt}`;
   if (source === "holding") return `Repair holding run ${run.id} attempt ${run.attempt}`;
-  return `Close demo session run ${run.id} attempt ${run.attempt}`;
+  if (source === "demo") return `Close demo session run ${run.id} attempt ${run.attempt}`;
+  return `Contain public demo run ${run.id} attempt ${run.attempt}`;
 }
 
 function normalizeList(value: WorkflowRunList, label: string): NormalizedRun[] {

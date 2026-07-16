@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { Icons } from "@/components/icons";
+import { searchDnaMatchesPage } from "@/lib/dna-search";
 import type {
   DnaCaseOption,
   DnaHelpfulnessFilter,
@@ -45,9 +46,11 @@ type CaseEvidenceResponse = {
 };
 
 type Props = {
+  clientSideSearch?: boolean;
   initialResult: DnaSearchResult;
   initialHypotheses?: DnaConnectionHypothesis[];
   initialCases: DnaCaseOption[];
+  readOnly?: boolean;
 };
 
 type MatchEditForm = {
@@ -81,7 +84,13 @@ const defaultForm = {
 
 const pageSizeOptions = [10, 25, 50, 100];
 
-export function DnaTriageWorkspace({ initialResult, initialHypotheses = [], initialCases }: Props) {
+export function DnaTriageWorkspace({
+  clientSideSearch = false,
+  initialResult,
+  initialHypotheses = [],
+  initialCases,
+  readOnly = false
+}: Props) {
   const [result, setResult] = useState(initialResult);
   const [hypotheses, setHypotheses] = useState(() => indexHypotheses(initialHypotheses));
   const [selected, setSelected] = useState<ScoredDnaMatch | undefined>(initialResult.items[0]);
@@ -129,6 +138,28 @@ export function DnaTriageWorkspace({ initialResult, initialHypotheses = [], init
     const controller = new AbortController();
 
     async function loadMatches() {
+      if (clientSideSearch) {
+        const body = searchDnaMatchesPage(
+          initialResult.items,
+          {
+            query: debouncedQuery,
+            status: statusFilter,
+            side: sideFilter,
+            treeStatus: treeFilter,
+            helpfulness: helpfulnessFilter,
+            sort
+          },
+          { page, pageSize }
+        );
+        setResult(body);
+        setSelected((current) => {
+          const fresh = current ? body.items.find((item) => item.id === current.id) : undefined;
+          return fresh ?? current ?? body.items[0];
+        });
+        setFetchError("");
+        return;
+      }
+
       try {
         const response = await fetch(
           buildDnaApiPath({
@@ -168,7 +199,7 @@ export function DnaTriageWorkspace({ initialResult, initialHypotheses = [], init
 
     void loadMatches();
     return () => controller.abort();
-  }, [debouncedQuery, statusFilter, sideFilter, treeFilter, helpfulnessFilter, sort, page, pageSize, refreshKey]);
+  }, [clientSideSearch, debouncedQuery, statusFilter, sideFilter, treeFilter, helpfulnessFilter, sort, page, pageSize, refreshKey, initialResult]);
 
   // Explicit row clicks reset the forms in selectMatch (and update the ref
   // first), so this only reacts to implicit selection changes coming from the
@@ -585,58 +616,62 @@ export function DnaTriageWorkspace({ initialResult, initialHypotheses = [], init
           </div>
         </div>
 
-        <section aria-busy={importStatus === "loading"} className="section">
-          <h2>Import DNA matches</h2>
-          <div className="form-grid">
-            <label className="field">
-              <span>CSV file</span>
-              <input accept=".csv,text/csv" ref={importFileInputRef} type="file" onChange={(event) => setImportFile(event.target.files?.[0] ?? null)} />
-            </label>
-            <label className="field">
-              <span>Expected columns</span>
-              <input readOnly value="Match name, shared cM, side, tree, surnames, places, notes" />
-            </label>
-          </div>
-          <div className="hero-actions">
-            <button aria-busy={importStatus === "loading"} className="button" disabled={importStatus === "loading"} onClick={importCsv} type="button">
-              {importStatus === "loading" ? "Importing..." : "Import CSV"}
-            </button>
-            {importStatus === "error" ? <Status tone="warning">Import failed</Status> : null}
-            {importStatus === "success" ? <Status>Import complete</Status> : null}
-          </div>
-          {importMessage ? (
-            <p aria-atomic="true" className={importStatus === "error" ? "form-error" : "muted"} role={importStatus === "error" ? "alert" : "status"}>
-              {importMessage}
-            </p>
-          ) : null}
-        </section>
+        {!readOnly ? (
+          <>
+            <section aria-busy={importStatus === "loading"} className="section">
+              <h2>Import DNA matches</h2>
+              <div className="form-grid">
+                <label className="field">
+                  <span>CSV file</span>
+                  <input accept=".csv,text/csv" ref={importFileInputRef} type="file" onChange={(event) => setImportFile(event.target.files?.[0] ?? null)} />
+                </label>
+                <label className="field">
+                  <span>Expected columns</span>
+                  <input readOnly value="Match name, shared cM, side, tree, surnames, places, notes" />
+                </label>
+              </div>
+              <div className="hero-actions">
+                <button aria-busy={importStatus === "loading"} className="button" disabled={importStatus === "loading"} onClick={importCsv} type="button">
+                  {importStatus === "loading" ? "Importing..." : "Import CSV"}
+                </button>
+                {importStatus === "error" ? <Status tone="warning">Import failed</Status> : null}
+                {importStatus === "success" ? <Status>Import complete</Status> : null}
+              </div>
+              {importMessage ? (
+                <p aria-atomic="true" className={importStatus === "error" ? "form-error" : "muted"} role={importStatus === "error" ? "alert" : "status"}>
+                  {importMessage}
+                </p>
+              ) : null}
+            </section>
 
-        <section aria-busy={status === "loading"} className="section">
-          <h2>Analyze a match</h2>
-          <p className="fiction-disclosure" role="note"><strong>Built-in example only:</strong> these Hartwell–Mercer names, locations, relationship estimates, shared-match names, and DNA values are entirely fictional.</p>
-          <div className="form-grid">
-            <TextField label="Match name" value={form.displayName} onChange={(value) => setForm({ ...form, displayName: value })} />
-            <TextField inputMode="decimal" label="Total cM" min={0} step={0.1} type="number" value={form.totalCm} onChange={(value) => setForm({ ...form, totalCm: value })} />
-            <TextField inputMode="decimal" label="Longest segment cM" min={0} step={0.1} type="number" value={form.longestSegmentCm} onChange={(value) => setForm({ ...form, longestSegmentCm: value })} />
-            <TextField label="Predicted relationship" value={form.predictedRelationship} onChange={(value) => setForm({ ...form, predictedRelationship: value })} />
-            <SelectField label="Side" value={form.side} onChange={(value) => setForm({ ...form, side: value })} options={["maternal", "paternal", "both", "unknown"]} />
-            <SelectField label="Tree status" value={form.treeStatus} onChange={(value) => setForm({ ...form, treeStatus: value })} options={["public", "partial", "private", "none", "unknown"]} />
-            <TextField label="Surnames" value={form.surnames} onChange={(value) => setForm({ ...form, surnames: value })} />
-            <TextField label="Places" value={form.places} onChange={(value) => setForm({ ...form, places: value })} />
-            <TextField label="Shared matches" value={form.sharedMatches} onChange={(value) => setForm({ ...form, sharedMatches: value })} />
-            <label className="field" style={{ gridColumn: "1 / -1" }}>
-              <span>Notes</span>
-              <textarea value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} />
-            </label>
-          </div>
-          <div className="hero-actions">
-            <button aria-busy={status === "loading"} className="button" disabled={status === "loading"} onClick={analyzeMatch} type="button">
-              {status === "loading" ? "Analyzing..." : "Analyze match"}
-            </button>
-            {status === "error" ? <Status tone="warning">Analysis failed</Status> : selected ? <Status>Helpfulness {selected.helpfulnessScore}</Status> : null}
-          </div>
-          {error ? <p aria-atomic="true" className="form-error" role="alert">{error}</p> : null}
-        </section>
+            <section aria-busy={status === "loading"} className="section">
+              <h2>Analyze a match</h2>
+              <p className="fiction-disclosure" role="note"><strong>Built-in example only:</strong> these Hartwell–Mercer names, locations, relationship estimates, shared-match names, and DNA values are entirely fictional.</p>
+              <div className="form-grid">
+                <TextField label="Match name" value={form.displayName} onChange={(value) => setForm({ ...form, displayName: value })} />
+                <TextField inputMode="decimal" label="Total cM" min={0} step={0.1} type="number" value={form.totalCm} onChange={(value) => setForm({ ...form, totalCm: value })} />
+                <TextField inputMode="decimal" label="Longest segment cM" min={0} step={0.1} type="number" value={form.longestSegmentCm} onChange={(value) => setForm({ ...form, longestSegmentCm: value })} />
+                <TextField label="Predicted relationship" value={form.predictedRelationship} onChange={(value) => setForm({ ...form, predictedRelationship: value })} />
+                <SelectField label="Side" value={form.side} onChange={(value) => setForm({ ...form, side: value })} options={["maternal", "paternal", "both", "unknown"]} />
+                <SelectField label="Tree status" value={form.treeStatus} onChange={(value) => setForm({ ...form, treeStatus: value })} options={["public", "partial", "private", "none", "unknown"]} />
+                <TextField label="Surnames" value={form.surnames} onChange={(value) => setForm({ ...form, surnames: value })} />
+                <TextField label="Places" value={form.places} onChange={(value) => setForm({ ...form, places: value })} />
+                <TextField label="Shared matches" value={form.sharedMatches} onChange={(value) => setForm({ ...form, sharedMatches: value })} />
+                <label className="field" style={{ gridColumn: "1 / -1" }}>
+                  <span>Notes</span>
+                  <textarea value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} />
+                </label>
+              </div>
+              <div className="hero-actions">
+                <button aria-busy={status === "loading"} className="button" disabled={status === "loading"} onClick={analyzeMatch} type="button">
+                  {status === "loading" ? "Analyzing..." : "Analyze match"}
+                </button>
+                {status === "error" ? <Status tone="warning">Analysis failed</Status> : selected ? <Status>Helpfulness {selected.helpfulnessScore}</Status> : null}
+              </div>
+              {error ? <p aria-atomic="true" className="form-error" role="alert">{error}</p> : null}
+            </section>
+          </>
+        ) : null}
       </div>
 
       <aside className="app-card" id="dna-match-details">
@@ -672,6 +707,8 @@ export function DnaTriageWorkspace({ initialResult, initialHypotheses = [], init
               </ul>
             </div>
 
+            {!readOnly ? (
+              <>
             <div aria-busy={linkStatus === "saving"} className="section dna-edit-panel">
               <h2>Link to case</h2>
               {initialCases.length > 0 ? (
@@ -748,9 +785,11 @@ export function DnaTriageWorkspace({ initialResult, initialHypotheses = [], init
                 </p>
               ) : null}
             </div>
+              </>
+            ) : null}
           </>
         ) : (
-          <p className="muted">Import or analyze a DNA match to begin triage.</p>
+          <p className="muted">{readOnly ? "No DNA matches are available in this demo sandbox." : "Import or analyze a DNA match to begin triage."}</p>
         )}
       </aside>
     </div>

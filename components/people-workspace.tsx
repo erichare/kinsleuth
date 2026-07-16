@@ -5,8 +5,10 @@ import { useEffect, useState } from "react";
 import { Icons } from "@/components/icons";
 import { Metric, Status, TableScroll } from "@/components/ui";
 import { type PeopleListItem, type PeopleLivingFilter, type PeoplePrivacyFilter, type PeoplePublicationFilter, type PeopleSearchResult, type PeopleSortKey } from "@/lib/people-search";
+import { paginateItems } from "@/lib/pagination";
 
 type Props = {
+  clientSideSearch?: boolean;
   initialResult: PeopleSearchResult;
   publicArchiveEnabled?: boolean;
   publicPublishingEnabled?: boolean;
@@ -15,6 +17,7 @@ type Props = {
 const pageSizeOptions = [25, 50, 100, 250];
 
 export function PeopleWorkspace({
+  clientSideSearch = false,
   initialResult,
   publicArchiveEnabled = true,
   publicPublishingEnabled = true
@@ -41,6 +44,20 @@ export function PeopleWorkspace({
     const controller = new AbortController();
 
     async function loadPeople() {
+      if (clientSideSearch) {
+        setResult(searchInitialPeople(initialResult, {
+          query: debouncedQuery,
+          publication,
+          privacy,
+          livingStatus,
+          sort,
+          page,
+          pageSize
+        }));
+        setError("");
+        return;
+      }
+
       try {
         const response = await fetch(buildPeopleApiPath({ query: debouncedQuery, publication, privacy, livingStatus, sort, page, pageSize }), {
           signal: controller.signal
@@ -61,7 +78,7 @@ export function PeopleWorkspace({
 
     void loadPeople();
     return () => controller.abort();
-  }, [debouncedQuery, publication, privacy, livingStatus, sort, page, pageSize]);
+  }, [clientSideSearch, debouncedQuery, initialResult, publication, privacy, livingStatus, sort, page, pageSize]);
 
   function resetPaging() {
     setPage(1);
@@ -280,6 +297,70 @@ export function PeopleWorkspace({
       </div>
     </div>
   );
+}
+
+function searchInitialPeople(
+  initialResult: PeopleSearchResult,
+  input: {
+    query: string;
+    publication: PeoplePublicationFilter;
+    privacy: PeoplePrivacyFilter;
+    livingStatus: PeopleLivingFilter;
+    sort: PeopleSortKey;
+    page: number;
+    pageSize: number;
+  }
+): PeopleSearchResult {
+  const terms = normalizeSearchTerms(input.query);
+  const items = initialResult.items
+    .filter((person) => {
+      if (input.publication === "published" && !person.published) return false;
+      if (input.publication === "unpublished" && person.published) return false;
+      if (input.privacy !== "all" && person.privacy !== input.privacy) return false;
+      if (input.livingStatus !== "all" && person.livingStatus !== input.livingStatus) return false;
+      if (terms.length === 0) return true;
+
+      const searchable = normalizeSearchValue([
+        person.id,
+        person.slug,
+        person.displayName,
+        person.surname,
+        person.birthDate,
+        person.birthPlace,
+        person.deathDate,
+        person.deathPlace,
+        person.livingStatus,
+        person.privacy,
+        person.factCount
+      ].filter((value) => value !== undefined).join(" "));
+      return terms.every((term) => searchable.includes(term));
+    })
+    .sort((left, right) => comparePeopleListItems(left, right, input.sort));
+  const page = paginateItems(items, { page: input.page, pageSize: input.pageSize });
+  return { ...page, stats: initialResult.stats };
+}
+
+function comparePeopleListItems(left: PeopleListItem, right: PeopleListItem, sort: PeopleSortKey): number {
+  const byName = () => left.displayName.localeCompare(right.displayName, undefined, { sensitivity: "base" });
+  if (sort === "facts") return right.factCount - left.factCount || byName();
+  if (sort === "birth") return compareOptionalText(left.birthDate, right.birthDate) || byName();
+  if (sort === "death") return compareOptionalText(left.deathDate, right.deathDate) || byName();
+  return byName();
+}
+
+function compareOptionalText(left?: string, right?: string): number {
+  if (!left && !right) return 0;
+  if (!left) return 1;
+  if (!right) return -1;
+  return left.localeCompare(right, undefined, { numeric: true, sensitivity: "base" });
+}
+
+function normalizeSearchTerms(value: string): string[] {
+  return normalizeSearchValue(value).split(/\s+/).filter(Boolean);
+}
+
+function normalizeSearchValue(value: string): string {
+  return value.toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "");
 }
 
 function PaginationControls({ page, pageCount, onPageChange }: { page: number; pageCount: number; onPageChange: (page: number) => void }) {

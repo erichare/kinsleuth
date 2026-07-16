@@ -1,4 +1,4 @@
-import { query } from "../db";
+import type { PoolClient } from "pg";
 import { maximumPageSize, type PaginationInput } from "../pagination";
 import type {
   CaseLinkOption,
@@ -8,7 +8,7 @@ import type {
   SourceSearchResult,
   SourceSearchStats
 } from "../source-search";
-import { ensureWorkspaceProvisioned, getArchiveId, type WorkspaceStoreOptions } from "../workspace-store";
+import { withWorkspaceReadTransaction, type WorkspaceStoreOptions } from "../workspace-store";
 import { dnaResearchCaseSql } from "./case-capability-sql";
 
 // SQL-side source reads for the sources workspace and its API, following the
@@ -64,9 +64,8 @@ export async function searchSourcesPageFromDb(
   pagination: PaginationInput = { page: 1, pageSize: 50 },
   options: SourceQueryOptions = {}
 ): Promise<SourceSearchResult> {
-  await ensureWorkspaceProvisioned(options);
-  const archiveId = getArchiveId(options);
-  const includeBinaryMetadata = options.includeBinaryMetadata ?? true;
+  return withWorkspaceReadTransaction(options, async (client, archiveId) => {
+    const includeBinaryMetadata = options.includeBinaryMetadata ?? true;
 
   const params: unknown[] = [archiveId];
   const conditions: string[] = ["s.archive_id = $1"];
@@ -103,9 +102,9 @@ export async function searchSourcesPageFromDb(
   const countJoinsSql = terms.length > 0 ? linkJoinsSql : "";
 
   const [stats, types, filteredTotal] = await Promise.all([
-    loadSourceStats(archiveId, options),
-    loadSourceTypes(archiveId, options),
-    countFilteredSources(whereSql, countJoinsSql, params, options)
+    loadSourceStats(client, archiveId),
+    loadSourceTypes(client, archiveId),
+    countFilteredSources(client, whereSql, countJoinsSql, params)
   ]);
 
   const pageSize = clampInteger(pagination.pageSize, 1, maximumPageSize);
@@ -113,7 +112,7 @@ export async function searchSourcesPageFromDb(
   const page = clampInteger(pagination.page, 1, pageCount);
   const offset = (page - 1) * pageSize;
 
-  const pageResult = await query<SourceRow>(
+  const pageResult = await client.query<SourceRow>(
     `SELECT s.id, s.title, s.source_type, s.repository, s.file_name, s.citation_date,
        s.linked_person_id, pp.display_name AS linked_person_name,
        s.linked_case_id, rc.title AS linked_case_title,
@@ -123,8 +122,7 @@ export async function searchSourcesPageFromDb(
      WHERE ${whereSql}
      ORDER BY ${orderBySql(filters.sort ?? "created")}
      LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
-    [...params, pageSize, offset],
-    options
+    [...params, pageSize, offset]
   );
 
   const items = pageResult.rows.map((row) => toListItem(row, includeBinaryMetadata));
@@ -140,64 +138,61 @@ export async function searchSourcesPageFromDb(
     stats,
     types
   };
+  });
 }
 
 export async function listPersonLinkOptions(options: WorkspaceStoreOptions = {}, limit = 30): Promise<PersonLinkOption[]> {
-  await ensureWorkspaceProvisioned(options);
-  const archiveId = getArchiveId(options);
+  return withWorkspaceReadTransaction(options, async (client, archiveId) => {
+    const result = await client.query<{ id: string; display_name: string; slug: string; birth_date: string | null; birth_place: string | null }>(
+      `SELECT p.id, p.display_name, p.slug, p.birth_date, p.birth_place
+       FROM people p
+       WHERE p.archive_id = $1
+       ORDER BY
+         EXISTS (
+           SELECT 1 FROM sources s
+           WHERE s.archive_id = p.archive_id AND s.linked_person_id = p.id
+         ) DESC,
+         p.published DESC,
+         extensions.unaccent(lower(p.display_name)) ASC,
+         p.sort_order ASC, p.display_name ASC, p.id ASC
+       LIMIT $2`,
+      [archiveId, limit]
+    );
 
-  const result = await query<{ id: string; display_name: string; slug: string; birth_date: string | null; birth_place: string | null }>(
-    `SELECT p.id, p.display_name, p.slug, p.birth_date, p.birth_place
-     FROM people p
-     WHERE p.archive_id = $1
-     ORDER BY
-       EXISTS (
-         SELECT 1 FROM sources s
-         WHERE s.archive_id = p.archive_id AND s.linked_person_id = p.id
-       ) DESC,
-       p.published DESC,
-       extensions.unaccent(lower(p.display_name)) ASC,
-       p.sort_order ASC, p.display_name ASC, p.id ASC
-     LIMIT $2`,
-    [archiveId, limit],
-    options
-  );
-
-  return result.rows.map((row) => ({
-    id: row.id,
-    displayName: row.display_name,
-    detail: [row.birth_date, row.birth_place].filter(Boolean).join(" · ") || row.slug
-  }));
+    return result.rows.map((row) => ({
+      id: row.id,
+      displayName: row.display_name,
+      detail: [row.birth_date, row.birth_place].filter(Boolean).join(" · ") || row.slug
+    }));
+  });
 }
 
 export async function listCaseLinkOptions(options: SourceQueryOptions = {}, limit = 100): Promise<CaseLinkOption[]> {
-  await ensureWorkspaceProvisioned(options);
-  const archiveId = getArchiveId(options);
-  const caseCapabilityPredicate = (options.includeDnaCases ?? true)
-    ? ""
-    : ` AND NOT (${dnaResearchCaseSql("")})`;
+  return withWorkspaceReadTransaction(options, async (client, archiveId) => {
+    const caseCapabilityPredicate = (options.includeDnaCases ?? true)
+      ? ""
+      : ` AND NOT (${dnaResearchCaseSql("")})`;
 
-  const result = await query<{ id: string; title: string }>(
-    `SELECT id, title FROM research_cases
-     WHERE archive_id = $1${caseCapabilityPredicate}
-     ORDER BY extensions.unaccent(lower(title)) ASC, sort_order ASC, title ASC, id ASC
-     LIMIT $2`,
-    [archiveId, limit],
-    options
-  );
+    const result = await client.query<{ id: string; title: string }>(
+      `SELECT id, title FROM research_cases
+       WHERE archive_id = $1${caseCapabilityPredicate}
+       ORDER BY extensions.unaccent(lower(title)) ASC, sort_order ASC, title ASC, id ASC
+       LIMIT $2`,
+      [archiveId, limit]
+    );
 
-  return result.rows.map((row) => ({ id: row.id, title: row.title }));
+    return result.rows.map((row) => ({ id: row.id, title: row.title }));
+  });
 }
 
-async function loadSourceStats(archiveId: string, options: WorkspaceStoreOptions): Promise<SourceSearchStats> {
-  const result = await query<{ total: number; linked: number; public_count: number; transcripts: number }>(
+async function loadSourceStats(client: PoolClient, archiveId: string): Promise<SourceSearchStats> {
+  const result = await client.query<{ total: number; linked: number; public_count: number; transcripts: number }>(
     `SELECT count(*)::int AS total,
        count(*) FILTER (WHERE ${linkedExprSql("")})::int AS linked,
        count(*) FILTER (WHERE privacy = 'public')::int AS public_count,
        count(*) FILTER (WHERE transcript ~ '\\S')::int AS transcripts
      FROM sources WHERE archive_id = $1`,
-    [archiveId],
-    options
+    [archiveId]
   );
   const row = result.rows[0];
   return {
@@ -210,13 +205,12 @@ async function loadSourceStats(archiveId: string, options: WorkspaceStoreOptions
   };
 }
 
-async function loadSourceTypes(archiveId: string, options: WorkspaceStoreOptions): Promise<string[]> {
-  const result = await query<{ source_type: string }>(
+async function loadSourceTypes(client: PoolClient, archiveId: string): Promise<string[]> {
+  const result = await client.query<{ source_type: string }>(
     `SELECT DISTINCT source_type FROM sources
      WHERE archive_id = $1 AND source_type IS NOT NULL AND source_type <> ''
      ORDER BY source_type`,
-    [archiveId],
-    options
+    [archiveId]
   );
   return result.rows
     .map((row) => row.source_type)
@@ -224,15 +218,14 @@ async function loadSourceTypes(archiveId: string, options: WorkspaceStoreOptions
 }
 
 async function countFilteredSources(
+  client: PoolClient,
   whereSql: string,
   joinsSql: string,
-  params: unknown[],
-  options: WorkspaceStoreOptions
+  params: unknown[]
 ): Promise<number> {
-  const result = await query<{ total: number }>(
+  const result = await client.query<{ total: number }>(
     `SELECT count(*)::int AS total FROM sources s ${joinsSql} WHERE ${whereSql}`,
-    params,
-    options
+    params
   );
   return result.rows[0].total;
 }

@@ -6,6 +6,7 @@ const workflowFiles = {
   recovery: "recovery-evidence.yml",
   holding: "vercel-holding.yml",
   demo: "staging-demo-session.yml",
+  publicDemo: "public-demo-release.yml",
   containment: "release-containment.yml",
   cleanup: "recovery-cleanup.yml",
   holdingSafety: "holding-safety.yml",
@@ -168,7 +169,7 @@ function repositoryName(value) {
 }
 
 function currentSourceName(value) {
-  if (!["release", "recovery", "holding", "demo"].includes(value)) {
+  if (!["release", "recovery", "holding", "demo", "public-demo"].includes(value)) {
     throw new Error("RELEASE_SAFETY_CURRENT_WORKFLOW is malformed.");
   }
   return value;

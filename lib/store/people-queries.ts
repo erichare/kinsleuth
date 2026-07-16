@@ -1,8 +1,8 @@
-import { query } from "../db";
+import type { PoolClient } from "pg";
 import type { PersonFact, PersonSummary } from "../models";
 import type { PeopleListItem, PeopleSearchFilters, PeopleSearchResult, PeopleSearchStats } from "../people-search";
 import { maximumPageSize, type PaginationInput } from "../pagination";
-import { ensureWorkspaceProvisioned, getArchiveId, type WorkspaceStoreOptions } from "../workspace-store";
+import { withWorkspaceReadTransaction, type WorkspaceStoreOptions } from "../workspace-store";
 
 // SQL-side people reads for the hot paths (people search, public archive
 // pages, shell branding). These run scoped queries instead of materializing
@@ -80,257 +80,250 @@ export async function searchPeoplePageFromDb(
   pagination: PaginationInput = { page: 1, pageSize: 50 },
   options: WorkspaceStoreOptions = {}
 ): Promise<PeopleSearchResult> {
-  await ensureWorkspaceProvisioned(options);
-  const archiveId = getArchiveId(options);
+  return withWorkspaceReadTransaction(options, async (client, archiveId) => {
+    const params: unknown[] = [archiveId];
+    const conditions: string[] = ["p.archive_id = $1"];
 
-  const params: unknown[] = [archiveId];
-  const conditions: string[] = ["p.archive_id = $1"];
+    const publication = filters.publication ?? "all";
+    if (publication === "published") {
+      conditions.push("p.published");
+    } else if (publication === "unpublished") {
+      conditions.push("NOT p.published");
+    }
+    if ((filters.privacy ?? "all") !== "all") {
+      params.push(filters.privacy);
+      conditions.push(`p.privacy = $${params.length}`);
+    }
+    if ((filters.livingStatus ?? "all") !== "all") {
+      params.push(filters.livingStatus);
+      conditions.push(`p.living_status = $${params.length}`);
+    }
+    const terms = normalizeSearchTerms(filters.query);
+    for (const term of terms) {
+      params.push(`%${escapeLikePattern(term)}%`);
+      conditions.push(`${searchHaystackSql} ILIKE $${params.length} ESCAPE '\\'`);
+    }
 
-  const publication = filters.publication ?? "all";
-  if (publication === "published") {
-    conditions.push("p.published");
-  } else if (publication === "unpublished") {
-    conditions.push("NOT p.published");
-  }
-  if ((filters.privacy ?? "all") !== "all") {
-    params.push(filters.privacy);
-    conditions.push(`p.privacy = $${params.length}`);
-  }
-  if ((filters.livingStatus ?? "all") !== "all") {
-    params.push(filters.livingStatus);
-    conditions.push(`p.living_status = $${params.length}`);
-  }
-  const terms = normalizeSearchTerms(filters.query);
-  for (const term of terms) {
-    params.push(`%${escapeLikePattern(term)}%`);
-    conditions.push(`${searchHaystackSql} ILIKE $${params.length} ESCAPE '\\'`);
-  }
+    const whereSql = conditions.join(" AND ");
+    // The count query only needs the facts join when a term can match facts_text.
+    const countLateralSql = terms.length > 0 ? factsSearchLateralSql : "";
+    const pageLateralSql = terms.length > 0 ? factsSearchLateralSql : factsCountLateralSql;
 
-  const whereSql = conditions.join(" AND ");
-  // The count query only needs the facts join when a term can match facts_text.
-  const countLateralSql = terms.length > 0 ? factsSearchLateralSql : "";
-  const pageLateralSql = terms.length > 0 ? factsSearchLateralSql : factsCountLateralSql;
+    const [stats, filteredTotal] = await Promise.all([
+      loadPeopleStats(client, archiveId),
+      countFilteredPeople(client, whereSql, countLateralSql, params)
+    ]);
 
-  const [stats, filteredTotal] = await Promise.all([
-    loadPeopleStats(archiveId, options),
-    countFilteredPeople(whereSql, countLateralSql, params, options)
-  ]);
+    // Same clamping as paginateItems so API consumers see identical paging.
+    const pageSize = clampInteger(pagination.pageSize, 1, maximumPageSize);
+    const pageCount = Math.max(1, Math.ceil(filteredTotal / pageSize));
+    const page = clampInteger(pagination.page, 1, pageCount);
+    const offset = (page - 1) * pageSize;
 
-  // Same clamping as paginateItems so API consumers see identical paging.
-  const pageSize = clampInteger(pagination.pageSize, 1, maximumPageSize);
-  const pageCount = Math.max(1, Math.ceil(filteredTotal / pageSize));
-  const page = clampInteger(pagination.page, 1, pageCount);
-  const offset = (page - 1) * pageSize;
+    const pageResult = await client.query<PersonRow>(
+      `SELECT p.id, p.slug, p.display_name, p.surname, p.birth_date, p.birth_place,
+         p.death_date, p.death_place, p.living_status, p.privacy, p.published, f.fact_count
+       FROM people p
+       ${pageLateralSql}
+       WHERE ${whereSql}
+       ORDER BY ${orderBySql(filters.sort ?? "name")}
+       LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+      [...params, pageSize, offset]
+    );
 
-  const pageResult = await query<PersonRow>(
-    `SELECT p.id, p.slug, p.display_name, p.surname, p.birth_date, p.birth_place,
-       p.death_date, p.death_place, p.living_status, p.privacy, p.published, f.fact_count
-     FROM people p
-     ${pageLateralSql}
-     WHERE ${whereSql}
-     ORDER BY ${orderBySql(filters.sort ?? "name")}
-     LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
-    [...params, pageSize, offset],
-    options
-  );
+    const items = pageResult.rows.map(toListItem);
 
-  const items = pageResult.rows.map(toListItem);
-
-  return {
-    items,
-    page,
-    pageSize,
-    pageCount,
-    total: filteredTotal,
-    start: items.length === 0 ? 0 : offset + 1,
-    end: offset + items.length,
-    stats
-  };
+    return {
+      items,
+      page,
+      pageSize,
+      pageCount,
+      total: filteredTotal,
+      start: items.length === 0 ? 0 : offset + 1,
+      end: offset + items.length,
+      stats
+    };
+  });
 }
 
 export async function listPublicPeople(
   options: WorkspaceStoreOptions & { archiveId: string }
 ): Promise<PersonSummary[]> {
-  await ensureWorkspaceProvisioned(options);
-  const archiveId = requireExplicitArchiveId(options);
+  requireExplicitArchiveId(options);
 
-  const peopleResult = await query<PersonRow>(
-    `SELECT p.id, p.slug, p.display_name, p.given_name, p.surname, p.sex,
-       p.birth_date, p.birth_place, p.death_date, p.death_place,
-       p.living_status, p.privacy, p.published, ARRAY[]::text[] AS relatives
-     FROM people p
-     WHERE p.archive_id = $1
-       AND p.published
-       AND p.privacy = 'public'
-       AND p.living_status = 'deceased'
-     ORDER BY p.sort_order ASC, p.display_name ASC`,
-    [archiveId],
-    options
-  );
-  const publishable = peopleResult.rows.map((row) => mapPerson(row, []));
-  if (publishable.length === 0) {
-    return [];
-  }
+  return withWorkspaceReadTransaction(options, async (client, archiveId) => {
+    const peopleResult = await client.query<PersonRow>(
+      `SELECT p.id, p.slug, p.display_name, p.given_name, p.surname, p.sex,
+         p.birth_date, p.birth_place, p.death_date, p.death_place,
+         p.living_status, p.privacy, p.published, ARRAY[]::text[] AS relatives
+       FROM people p
+       WHERE p.archive_id = $1
+         AND p.published
+         AND p.privacy = 'public'
+         AND p.living_status = 'deceased'
+       ORDER BY p.sort_order ASC, p.display_name ASC`,
+      [archiveId]
+    );
+    const publishable = peopleResult.rows.map((row) => mapPerson(row, []));
+    if (publishable.length === 0) {
+      return [];
+    }
 
-  const factsResult = await query<FactRow>(
-    `SELECT pf.id, pf.person_id, pf.fact_type, pf.date_text, pf.place_text,
-       pf.value_text, pf.source_text, pf.privacy, pf.confidence
-     FROM person_facts pf
-     WHERE pf.archive_id = $1
-       AND pf.person_id = ANY($2)
-       AND pf.privacy = 'public'
-     ORDER BY pf.sort_order ASC, pf.id ASC`,
-    [archiveId, publishable.map((person) => person.id)],
-    options
-  );
-  const factsByPerson = new Map<string, PersonFact[]>();
-  for (const row of factsResult.rows) {
-    const facts = factsByPerson.get(row.person_id) ?? [];
-    factsByPerson.set(row.person_id, [...facts, mapFact(row)]);
-  }
+    const factsResult = await client.query<FactRow>(
+      `SELECT pf.id, pf.person_id, pf.fact_type, pf.date_text, pf.place_text,
+         pf.value_text, pf.source_text, pf.privacy, pf.confidence
+       FROM person_facts pf
+       WHERE pf.archive_id = $1
+         AND pf.person_id = ANY($2)
+         AND pf.privacy = 'public'
+       ORDER BY pf.sort_order ASC, pf.id ASC`,
+      [archiveId, publishable.map((person) => person.id)]
+    );
+    const factsByPerson = new Map<string, PersonFact[]>();
+    for (const row of factsResult.rows) {
+      const facts = factsByPerson.get(row.person_id) ?? [];
+      factsByPerson.set(row.person_id, [...facts, mapFact(row)]);
+    }
 
-  return publishable.map((person) => ({ ...person, facts: factsByPerson.get(person.id) ?? [] }));
+    return publishable.map((person) => ({ ...person, facts: factsByPerson.get(person.id) ?? [] }));
+  });
 }
 
 export async function getPublicPersonBySlug(
   slug: string,
   options: WorkspaceStoreOptions & { archiveId: string }
 ): Promise<{ person: PersonSummary; publishedRelatives: PersonSummary[] } | undefined> {
-  await ensureWorkspaceProvisioned(options);
-  const archiveId = requireExplicitArchiveId(options);
+  requireExplicitArchiveId(options);
 
-  const personResult = await query<PersonRow>(
-    `SELECT p.id, p.slug, p.display_name, p.given_name, p.surname, p.sex,
-       p.birth_date, p.birth_place, p.death_date, p.death_place,
-       p.living_status, p.privacy, p.published, ARRAY[]::text[] AS relatives
-     FROM people p
-     WHERE p.archive_id = $1
-       AND p.slug = $2
-       AND p.published
-       AND p.privacy = 'public'
-       AND p.living_status = 'deceased'
-     LIMIT 1`,
-    [archiveId, slug],
-    options
-  );
-  const row = personResult.rows[0];
-  if (!row) {
-    return undefined;
-  }
+  return withWorkspaceReadTransaction(options, async (client, archiveId) => {
+    const personResult = await client.query<PersonRow>(
+      `SELECT p.id, p.slug, p.display_name, p.given_name, p.surname, p.sex,
+         p.birth_date, p.birth_place, p.death_date, p.death_place,
+         p.living_status, p.privacy, p.published, ARRAY[]::text[] AS relatives
+       FROM people p
+       WHERE p.archive_id = $1
+         AND p.slug = $2
+         AND p.published
+         AND p.privacy = 'public'
+         AND p.living_status = 'deceased'
+       LIMIT 1`,
+      [archiveId, slug]
+    );
+    const row = personResult.rows[0];
+    if (!row) {
+      return undefined;
+    }
 
-  const withoutFacts = mapPerson(row, []);
+    const withoutFacts = mapPerson(row, []);
 
-  const factsResult = await query<FactRow>(
-    `SELECT pf.id, pf.person_id, pf.fact_type, pf.date_text, pf.place_text,
-       pf.value_text, pf.source_text, pf.privacy, pf.confidence
-     FROM person_facts pf
-     WHERE pf.archive_id = $1
-       AND pf.person_id = $2
-       AND pf.privacy = 'public'
-     ORDER BY pf.sort_order ASC, pf.id ASC`,
-    [archiveId, withoutFacts.id],
-    options
-  );
-  const relativeRows = await query<PersonRow>(
-    `SELECT relative_person.id, relative_person.slug, relative_person.display_name, relative_person.given_name,
-       relative_person.surname, relative_person.sex, relative_person.birth_date, relative_person.birth_place,
-       relative_person.death_date, relative_person.death_place, relative_person.living_status,
-       relative_person.privacy, relative_person.published, ARRAY[]::text[] AS relatives
-     FROM people subject
-     CROSS JOIN LATERAL unnest(subject.relatives) WITH ORDINALITY AS link(relative_id, position)
-     JOIN people relative_person
-       ON relative_person.archive_id = subject.archive_id
-      AND relative_person.id = link.relative_id
-     WHERE subject.archive_id = $1
-       AND subject.id = $2
-       AND relative_person.published
-       AND relative_person.privacy = 'public'
-       AND relative_person.living_status = 'deceased'
-     ORDER BY link.position ASC`,
-    [archiveId, withoutFacts.id],
-    options
-  );
-  const publishedRelatives = relativeRows.rows.map((relative) => mapPerson(relative, []));
-  const person = {
-    ...withoutFacts,
-    facts: factsResult.rows.map(mapFact),
-    relatives: publishedRelatives.map((relative) => relative.id)
-  };
+    const factsResult = await client.query<FactRow>(
+      `SELECT pf.id, pf.person_id, pf.fact_type, pf.date_text, pf.place_text,
+         pf.value_text, pf.source_text, pf.privacy, pf.confidence
+       FROM person_facts pf
+       WHERE pf.archive_id = $1
+         AND pf.person_id = $2
+         AND pf.privacy = 'public'
+       ORDER BY pf.sort_order ASC, pf.id ASC`,
+      [archiveId, withoutFacts.id]
+    );
+    const relativeRows = await client.query<PersonRow>(
+      `SELECT relative_person.id, relative_person.slug, relative_person.display_name, relative_person.given_name,
+         relative_person.surname, relative_person.sex, relative_person.birth_date, relative_person.birth_place,
+         relative_person.death_date, relative_person.death_place, relative_person.living_status,
+         relative_person.privacy, relative_person.published, ARRAY[]::text[] AS relatives
+       FROM people subject
+       CROSS JOIN LATERAL unnest(subject.relatives) WITH ORDINALITY AS link(relative_id, position)
+       JOIN people relative_person
+         ON relative_person.archive_id = subject.archive_id
+        AND relative_person.id = link.relative_id
+       WHERE subject.archive_id = $1
+         AND subject.id = $2
+         AND relative_person.published
+         AND relative_person.privacy = 'public'
+         AND relative_person.living_status = 'deceased'
+       ORDER BY link.position ASC`,
+      [archiveId, withoutFacts.id]
+    );
+    const publishedRelatives = relativeRows.rows.map((relative) => mapPerson(relative, []));
+    const person = {
+      ...withoutFacts,
+      facts: factsResult.rows.map(mapFact),
+      relatives: publishedRelatives.map((relative) => relative.id)
+    };
 
-  return { person, publishedRelatives };
+    return { person, publishedRelatives };
+  });
 }
 
 export async function listPublicPlaces(
   options: WorkspaceStoreOptions & { archiveId: string }
 ): Promise<PublicPlaceProjection[]> {
-  await ensureWorkspaceProvisioned(options);
-  const archiveId = requireExplicitArchiveId(options);
+  requireExplicitArchiveId(options);
 
-  const result = await query<PublicPlaceRow>(
-    `SELECT pf.place_text AS name,
-       count(*)::int AS reference_count,
-       array_agg(DISTINCT p.display_name ORDER BY p.display_name) AS person_names
-     FROM people p
-     JOIN person_facts pf
-       ON pf.archive_id = p.archive_id
-      AND pf.person_id = p.id
-     WHERE p.archive_id = $1
-       AND p.published
-       AND p.privacy = 'public'
-       AND p.living_status = 'deceased'
-       AND pf.privacy = 'public'
-       AND nullif(btrim(pf.place_text), '') IS NOT NULL
-     GROUP BY pf.place_text
-     ORDER BY pf.place_text ASC`,
-    [archiveId],
-    options
-  );
+  return withWorkspaceReadTransaction(options, async (client, archiveId) => {
+    const result = await client.query<PublicPlaceRow>(
+      `SELECT pf.place_text AS name,
+         count(*)::int AS reference_count,
+         array_agg(DISTINCT p.display_name ORDER BY p.display_name) AS person_names
+       FROM people p
+       JOIN person_facts pf
+         ON pf.archive_id = p.archive_id
+        AND pf.person_id = p.id
+       WHERE p.archive_id = $1
+         AND p.published
+         AND p.privacy = 'public'
+         AND p.living_status = 'deceased'
+         AND pf.privacy = 'public'
+         AND nullif(btrim(pf.place_text), '') IS NOT NULL
+       GROUP BY pf.place_text
+       ORDER BY pf.place_text ASC`,
+      [archiveId]
+    );
 
-  return result.rows.map((row) => ({
-    name: row.name,
-    referenceCount: row.reference_count,
-    personNames: row.person_names
-  }));
+    return result.rows.map((row) => ({
+      name: row.name,
+      referenceCount: row.reference_count,
+      personNames: row.person_names
+    }));
+  });
 }
 
 export async function readArchiveBranding(
   options: WorkspaceStoreOptions & { archiveId: string }
 ): Promise<{ name: string; tagline: string }> {
-  await ensureWorkspaceProvisioned(options);
-  const archiveId = requireExplicitArchiveId(options);
+  requireExplicitArchiveId(options);
 
-  const result = await query<{ name: string; tagline: string }>(
-    "SELECT name, tagline FROM archives WHERE id = $1",
-    [archiveId],
-    options
-  );
-  return { name: result.rows[0].name, tagline: result.rows[0].tagline };
+  return withWorkspaceReadTransaction(options, async (client, archiveId) => {
+    const result = await client.query<{ name: string; tagline: string }>(
+      "SELECT name, tagline FROM archives WHERE id = $1",
+      [archiveId]
+    );
+    return { name: result.rows[0].name, tagline: result.rows[0].tagline };
+  });
 }
 
-async function loadPeopleStats(archiveId: string, options: WorkspaceStoreOptions): Promise<PeopleSearchStats> {
-  const result = await query<{ total: number; published: number; protected: number; living: number }>(
+async function loadPeopleStats(client: PoolClient, archiveId: string): Promise<PeopleSearchStats> {
+  const result = await client.query<{ total: number; published: number; protected: number; living: number }>(
     `SELECT count(*)::int AS total,
        count(*) FILTER (WHERE published)::int AS published,
        count(*) FILTER (WHERE privacy <> 'public')::int AS protected,
        count(*) FILTER (WHERE living_status = 'living')::int AS living
      FROM people WHERE archive_id = $1`,
-    [archiveId],
-    options
+    [archiveId]
   );
   const row = result.rows[0];
   return { total: row.total, published: row.published, protectedCount: row.protected, living: row.living };
 }
 
 async function countFilteredPeople(
+  client: PoolClient,
   whereSql: string,
   lateralSql: string,
-  params: unknown[],
-  options: WorkspaceStoreOptions
+  params: unknown[]
 ): Promise<number> {
-  const result = await query<{ total: number }>(
+  const result = await client.query<{ total: number }>(
     `SELECT count(*)::int AS total FROM people p ${lateralSql} WHERE ${whereSql}`,
-    params,
-    options
+    params
   );
   return result.rows[0].total;
 }

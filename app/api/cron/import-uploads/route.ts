@@ -8,6 +8,7 @@ import {
 } from "@/lib/beta-operations";
 import { cleanupAllStaleGedcomUploads } from "@/lib/gedcom/blob-storage";
 import { getActiveReleaseFence } from "@/lib/release-fence";
+import { resolvePublicDemoConfiguration } from "@/lib/public-demo-config";
 import { releaseFenceLockedResponse } from "@/lib/release-fence-http";
 import { getScheduledWritesStatus } from "@/lib/scheduled-writes";
 import { isHostedDeployment } from "@/lib/hosted-config";
@@ -38,11 +39,14 @@ export async function GET(request: Request) {
 
   const requestId = createApiRequestId();
   const operationOptions = { archiveId: getArchiveId() };
+  let retentionEnabled = false;
   try {
     const activeFence = await getActiveReleaseFence();
     if (activeFence) return releaseFenceLockedResponse(activeFence, { discloseControlIdentity: true });
+    const demoEnabled = resolvePublicDemoConfiguration().enabled;
+    retentionEnabled = isHostedDeployment() && !demoEnabled;
     await recordWorkerStarted("import-upload-cleanup", requestId, operationOptions);
-    if (isHostedDeployment()) {
+    if (retentionEnabled) {
       await recordWorkerStarted("retention-cleanup", requestId, operationOptions);
     }
     await emitOperationalEvent({
@@ -53,13 +57,13 @@ export async function GET(request: Request) {
       workerKind: "import-upload-cleanup"
     });
     const [deleted, retention] = await Promise.all([
-      cleanupAllStaleGedcomUploads(),
-      isHostedDeployment()
+      demoEnabled ? Promise.resolve(0) : cleanupAllStaleGedcomUploads(),
+      retentionEnabled
         ? cleanupExpiredBetaStateForSystem({ requestId }, operationOptions)
         : Promise.resolve(null)
     ]);
     await recordWorkerSucceeded("import-upload-cleanup", requestId, operationOptions);
-    if (isHostedDeployment()) {
+    if (retentionEnabled) {
       await recordWorkerSucceeded("retention-cleanup", requestId, operationOptions);
       await emitOperationalEvent({
         event: "retention_cleanup_completed",
@@ -85,7 +89,7 @@ export async function GET(request: Request) {
         operationalErrorCode(error),
         operationOptions
       );
-      if (isHostedDeployment()) {
+      if (retentionEnabled) {
         await recordWorkerFailed(
           "retention-cleanup",
           requestId,

@@ -5,7 +5,15 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const workspaceMocks = vi.hoisted(() => ({
   readWorkspace: vi.fn()
 }));
+const authMocks = vi.hoisted(() => ({
+  getSessionContext: vi.fn(),
+  workspaceOptionsForSession: vi.fn((session: { archiveId: string }) => ({
+    archiveId: session.archiveId
+  }))
+}));
 
+vi.mock("next/headers", () => ({ headers: vi.fn(async () => new Headers()) }));
+vi.mock("@/lib/auth-session", () => authMocks);
 vi.mock("@/lib/workspace-store", () => workspaceMocks);
 
 import AppPersonPage from "@/app/app/people/[id]/page";
@@ -15,6 +23,14 @@ import { demoPeople } from "@/lib/demo-data";
 beforeEach(() => {
   vi.unstubAllEnvs();
   vi.resetAllMocks();
+  authMocks.getSessionContext.mockResolvedValue({
+    kind: "member",
+    userId: "owner-private-beta",
+    email: "owner@example.test",
+    name: "Owner",
+    role: "owner",
+    archiveId: "archive-private-beta"
+  });
   workspaceMocks.readWorkspace.mockResolvedValue({
     archiveName: "Synthetic private archive",
     people: [{ ...demoPeople[0], published: true }]
@@ -53,6 +69,9 @@ describe("person curation publishing capability", () => {
 
     expect(html).toMatch(/>Private beta</i);
     expect(html).not.toMatch(/>Published</i);
+    expect(workspaceMocks.readWorkspace).toHaveBeenCalledWith({
+      archiveId: "archive-private-beta"
+    });
   });
 });
 

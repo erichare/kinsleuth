@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { Icons } from "@/components/icons";
 import {
   isDnaEvidence,
+  type CaseListItem,
   type CaseEvidenceFilter,
   type CasePrivacyFilter,
   type CaseSearchResult,
@@ -12,12 +13,15 @@ import {
   type CaseStatusFilter,
   type EvidenceQueueItem
 } from "@/lib/case-search";
+import { paginateItems } from "@/lib/pagination";
 import { Confidence, Metric, Status, TableScroll } from "./ui";
 
 type Props = {
+  clientSideSearch?: boolean;
   initialResult: CaseSearchResult;
   initialEvidenceQueue: EvidenceQueueItem[];
   dnaEnabled?: boolean;
+  readOnly?: boolean;
 };
 
 type CaseDraft = {
@@ -38,7 +42,13 @@ const initialDraft: CaseDraft = {
 
 const pageSizeOptions = [10, 25, 50, 100];
 
-export function CaseWorkspace({ initialResult, initialEvidenceQueue, dnaEnabled = true }: Props) {
+export function CaseWorkspace({
+  clientSideSearch = false,
+  initialResult,
+  initialEvidenceQueue,
+  dnaEnabled = true,
+  readOnly = false
+}: Props) {
   const [draft, setDraft] = useState(initialDraft);
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
@@ -70,6 +80,20 @@ export function CaseWorkspace({ initialResult, initialEvidenceQueue, dnaEnabled 
     const controller = new AbortController();
 
     async function loadCases() {
+      if (clientSideSearch) {
+        setResult(searchInitialCases(initialResult, {
+          query: debouncedQuery,
+          status: statusFilter,
+          privacy,
+          evidence,
+          sort,
+          page,
+          pageSize
+        }));
+        setSearchError("");
+        return;
+      }
+
       try {
         const response = await fetch(buildCasesApiPath({ query: debouncedQuery, status: statusFilter, privacy, evidence, sort, page, pageSize }), {
           signal: controller.signal
@@ -90,7 +114,7 @@ export function CaseWorkspace({ initialResult, initialEvidenceQueue, dnaEnabled 
 
     void loadCases();
     return () => controller.abort();
-  }, [debouncedQuery, statusFilter, privacy, evidence, sort, page, pageSize, refreshNonce]);
+  }, [clientSideSearch, debouncedQuery, statusFilter, privacy, evidence, sort, page, pageSize, refreshNonce, initialResult]);
 
   useEffect(() => {
     // The server rendered the initial queue; only refetch after a mutation.
@@ -192,7 +216,7 @@ export function CaseWorkspace({ initialResult, initialEvidenceQueue, dnaEnabled 
         <Metric label="Active" value={result.stats.active.toLocaleString()} detail={`${result.stats.planning.toLocaleString()} planning`} />
       </div>
 
-      <div className="app-grid">
+      <div className="app-grid" style={readOnly ? { gridTemplateColumns: "minmax(0, 1fr)" } : undefined}>
         <div className="app-card people-search-card">
           <div className="people-search-header">
             <div>
@@ -363,34 +387,36 @@ export function CaseWorkspace({ initialResult, initialEvidenceQueue, dnaEnabled 
           </div>
         </div>
 
-        <aside aria-busy={status === "loading"} className="app-card">
-          <h2>New case</h2>
-          <p className="fiction-disclosure" role="note">
-            <strong>Built-in example only:</strong> every Hartwell–Mercer name, date, place, record, and photograph
-            {dnaEnabled ? ", plus every DNA clue," : ""} is fictional. Replace these values when working in your own private archive.
-          </p>
-          <div className="form-grid" style={{ gridTemplateColumns: "1fr" }}>
-            <Field label="Title" value={draft.title} onChange={(value) => updateDraft({ title: value })} />
-            <TextArea label="Research question" value={draft.question} onChange={(value) => updateDraft({ question: value })} />
-            <Field label="Focus" value={draft.focus} onChange={(value) => updateDraft({ focus: value })} />
-            <TextArea label="First hypothesis" value={draft.firstHypothesis} onChange={(value) => updateDraft({ firstHypothesis: value })} />
-            <TextArea label="First evidence note" value={draft.firstEvidence} onChange={(value) => updateDraft({ firstEvidence: value })} />
-            <button aria-busy={status === "loading"} className="button" disabled={status === "loading"} onClick={createCase} type="button">
-              {status === "loading" ? "Creating..." : "Create case"}
-            </button>
-            {status === "success" ? (
-              <div aria-atomic="true" role="status">
-                <Status>Case created</Status>
-              </div>
-            ) : null}
-            {status === "error" ? (
-              <div aria-atomic="true" role="alert">
-                <Status tone="warning">Case creation failed</Status>
-                {error ? <p className="muted">{error}</p> : null}
-              </div>
-            ) : null}
-          </div>
-        </aside>
+        {!readOnly ? (
+          <aside aria-busy={status === "loading"} className="app-card">
+            <h2>New case</h2>
+            <p className="fiction-disclosure" role="note">
+              <strong>Built-in example only:</strong> every Hartwell–Mercer name, date, place, record, and photograph
+              {dnaEnabled ? ", plus every DNA clue," : ""} is fictional. Replace these values when working in your own private archive.
+            </p>
+            <div className="form-grid" style={{ gridTemplateColumns: "1fr" }}>
+              <Field label="Title" value={draft.title} onChange={(value) => updateDraft({ title: value })} />
+              <TextArea label="Research question" value={draft.question} onChange={(value) => updateDraft({ question: value })} />
+              <Field label="Focus" value={draft.focus} onChange={(value) => updateDraft({ focus: value })} />
+              <TextArea label="First hypothesis" value={draft.firstHypothesis} onChange={(value) => updateDraft({ firstHypothesis: value })} />
+              <TextArea label="First evidence note" value={draft.firstEvidence} onChange={(value) => updateDraft({ firstEvidence: value })} />
+              <button aria-busy={status === "loading"} className="button" disabled={status === "loading"} onClick={createCase} type="button">
+                {status === "loading" ? "Creating..." : "Create case"}
+              </button>
+              {status === "success" ? (
+                <div aria-atomic="true" role="status">
+                  <Status>Case created</Status>
+                </div>
+              ) : null}
+              {status === "error" ? (
+                <div aria-atomic="true" role="alert">
+                  <Status tone="warning">Case creation failed</Status>
+                  {error ? <p className="muted">{error}</p> : null}
+                </div>
+              ) : null}
+            </div>
+          </aside>
+        ) : null}
       </div>
 
       <div className="app-card">
@@ -422,6 +448,73 @@ export function CaseWorkspace({ initialResult, initialEvidenceQueue, dnaEnabled 
       </div>
     </div>
   );
+}
+
+function searchInitialCases(
+  initialResult: CaseSearchResult,
+  input: {
+    query: string;
+    status: CaseStatusFilter;
+    privacy: CasePrivacyFilter;
+    evidence: CaseEvidenceFilter;
+    sort: CaseSortKey;
+    page: number;
+    pageSize: number;
+  }
+): CaseSearchResult {
+  const terms = normalizeSearchTerms(input.query);
+  const items = initialResult.items
+    .filter((researchCase) => {
+      if (input.status !== "all" && researchCase.status !== input.status) return false;
+      if (input.privacy !== "all" && researchCase.privacy !== input.privacy) return false;
+      if (input.evidence === "dna" && researchCase.dnaEvidenceCount === 0) return false;
+      if (input.evidence === "no_evidence" && researchCase.evidenceCount > 0) return false;
+      if (input.evidence === "low_confidence" && (researchCase.weakestEvidenceConfidence ?? 1) >= 0.5) return false;
+      if (terms.length === 0) return true;
+
+      const searchable = normalizeSearchValue([
+        researchCase.id,
+        researchCase.title,
+        researchCase.question,
+        researchCase.status,
+        researchCase.privacy,
+        researchCase.focus
+      ].join(" "));
+      return terms.every((term) => searchable.includes(term));
+    })
+    .sort((left, right) => compareCaseListItems(left, right, input.sort));
+  const page = paginateItems(items, { page: input.page, pageSize: input.pageSize });
+  return { ...page, stats: initialResult.stats };
+}
+
+function compareCaseListItems(left: CaseListItem, right: CaseListItem, sort: CaseSortKey): number {
+  if (sort === "title") {
+    return left.title.localeCompare(right.title, undefined, { sensitivity: "base" });
+  }
+  if (sort === "evidence") {
+    return right.evidenceCount - left.evidenceCount || compareCaseStatus(left, right);
+  }
+  return compareCaseStatus(left, right);
+}
+
+function compareCaseStatus(left: CaseListItem, right: CaseListItem): number {
+  return caseStatusRank(left.status) - caseStatusRank(right.status)
+    || left.title.localeCompare(right.title, undefined, { sensitivity: "base" });
+}
+
+function caseStatusRank(status: CaseListItem["status"]): number {
+  if (status === "active") return 0;
+  if (status === "planning") return 1;
+  if (status === "paused") return 2;
+  return 3;
+}
+
+function normalizeSearchTerms(value: string): string[] {
+  return normalizeSearchValue(value).split(/\s+/).filter(Boolean);
+}
+
+function normalizeSearchValue(value: string): string {
+  return value.toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "");
 }
 
 function PaginationControls({ page, pageCount, onPageChange }: { page: number; pageCount: number; onPageChange: (page: number) => void }) {

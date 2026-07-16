@@ -6,10 +6,10 @@ import {
   type CaseSortKey,
   type EvidenceQueueItem
 } from "../case-search";
-import { query } from "../db";
+import type { PoolClient } from "pg";
 import type { ResearchCase } from "../models";
 import { maximumPageSize, type PaginationInput } from "../pagination";
-import { ensureWorkspaceProvisioned, getArchiveId, type WorkspaceStoreOptions } from "../workspace-store";
+import { withWorkspaceReadTransaction, type WorkspaceStoreOptions } from "../workspace-store";
 import { dnaResearchCaseSql } from "./case-capability-sql";
 
 // SQL-side case reads for the cases workspace and its API, following the
@@ -148,9 +148,8 @@ export async function searchCasesPageFromDb(
   pagination: PaginationInput = { page: 1, pageSize: 25 },
   options: CaseQueryOptions = {}
 ): Promise<CaseSearchResult> {
-  await ensureWorkspaceProvisioned(options);
-  const archiveId = getArchiveId(options);
-  const includeDnaEvidence = options.includeDnaEvidence ?? true;
+  return withWorkspaceReadTransaction(options, async (client, archiveId) => {
+    const includeDnaEvidence = options.includeDnaEvidence ?? true;
 
   const params: unknown[] = [archiveId];
   const conditions: string[] = ["c.archive_id = $1"];
@@ -216,8 +215,8 @@ export async function searchCasesPageFromDb(
       : `${hypothesesCountSql}\n${evidenceCountLateralSql(includeDnaEvidence)}\n${tasksCountSql}`;
 
   const [stats, filteredTotal] = await Promise.all([
-    loadCaseStats(archiveId, options),
-    countFilteredCases(whereSql, countLateralsSql, params, options)
+    loadCaseStats(client, archiveId, includeDnaEvidence),
+    countFilteredCases(client, whereSql, countLateralsSql, params)
   ]);
 
   // Same clamping as paginateItems so API consumers see identical paging.
@@ -226,7 +225,7 @@ export async function searchCasesPageFromDb(
   const page = clampInteger(pagination.page, 1, pageCount);
   const offset = (page - 1) * pageSize;
 
-  const pageResult = await query<CaseRow>(
+  const pageResult = await client.query<CaseRow>(
     `SELECT c.id, c.title, c.question, c.status, c.privacy, c.focus,
        h.hypothesis_count, e.evidence_count, e.dna_evidence_count, e.weakest_confidence,
        t.task_count, t.open_task_count
@@ -235,8 +234,7 @@ export async function searchCasesPageFromDb(
      WHERE ${whereSql}
      ORDER BY ${orderBySql(filters.sort ?? "status")}
      LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
-    [...params, pageSize, offset],
-    options
+    [...params, pageSize, offset]
   );
 
   const items = pageResult.rows.map(toListItem);
@@ -251,19 +249,19 @@ export async function searchCasesPageFromDb(
     end: offset + items.length,
     stats
   };
+  });
 }
 
 // Cross-case evidence flatten for the review queue: DNA-linked first, then
 // weakest confidence, then case title, capped like the in-memory default.
 export async function caseEvidenceQueueFromDb(options: CaseQueryOptions = {}, limit = 50): Promise<EvidenceQueueItem[]> {
-  await ensureWorkspaceProvisioned(options);
-  const archiveId = getArchiveId(options);
-  const includeDnaEvidence = options.includeDnaEvidence ?? true;
+  return withWorkspaceReadTransaction(options, async (client, archiveId) => {
+    const includeDnaEvidence = options.includeDnaEvidence ?? true;
 
   // Tie-breaks past the case title mirror the in-memory flatten order: cases
   // in workspace load order (sort_order, title), then each case's evidence in
   // its own load order (sort_order, id).
-  const result = await query<EvidenceQueueRow>(
+  const result = await client.query<EvidenceQueueRow>(
     `SELECT ce.id, ce.case_id, rc.title AS case_title, ce.title, ce.evidence_type,
        ce.summary, ce.confidence, ce.linked_dna_match_id
      FROM evidence_items ce
@@ -274,8 +272,7 @@ export async function caseEvidenceQueueFromDb(options: CaseQueryOptions = {}, li
        extensions.unaccent(lower(rc.title)) ASC,
        rc.sort_order ASC, rc.title ASC, ce.sort_order ASC, ce.id ASC
      LIMIT $2`,
-    [archiveId, clampInteger(limit, 0, maximumPageSize)],
-    options
+    [archiveId, clampInteger(limit, 0, maximumPageSize)]
   );
 
   return result.rows.map((row) => ({
@@ -288,34 +285,36 @@ export async function caseEvidenceQueueFromDb(options: CaseQueryOptions = {}, li
     confidence: Number(row.confidence),
     linkedDnaMatchId: row.linked_dna_match_id ?? undefined
   }));
+  });
 }
 
-async function loadCaseStats(archiveId: string, options: CaseQueryOptions): Promise<CaseSearchStats> {
-  const includeDnaEvidence = options.includeDnaEvidence ?? true;
+async function loadCaseStats(
+  client: PoolClient,
+  archiveId: string,
+  includeDnaEvidence: boolean
+): Promise<CaseSearchStats> {
   const caseCapabilityPredicate = includeDnaEvidence
     ? ""
     : ` AND NOT (${dnaResearchCaseSql("c.")})`;
   // Every evidence_items row belongs to a research_cases row (composite FK),
   // so the archive-wide evidence counts equal summarizeCases' per-case sums.
   const [caseResult, evidenceResult] = await Promise.all([
-    query<{ total: number; active: number; planning: number; resolved: number }>(
+    client.query<{ total: number; active: number; planning: number; resolved: number }>(
       `SELECT count(*)::int AS total,
          count(*) FILTER (WHERE c.status = 'active')::int AS active,
          count(*) FILTER (WHERE c.status = 'planning')::int AS planning,
          count(*) FILTER (WHERE c.status = 'resolved')::int AS resolved
        FROM research_cases c WHERE c.archive_id = $1${caseCapabilityPredicate}`,
-      [archiveId],
-      options
+      [archiveId]
     ),
-    query<{ evidence_items: number; dna_evidence: number; low_confidence_evidence: number }>(
+    client.query<{ evidence_items: number; dna_evidence: number; low_confidence_evidence: number }>(
       `SELECT count(*)::int AS evidence_items,
          count(*) FILTER (WHERE ${dnaEvidenceSql("ce.")})::int AS dna_evidence,
          count(*) FILTER (WHERE ce.confidence < 0.5)::int AS low_confidence_evidence
        FROM evidence_items ce
        JOIN research_cases c ON c.archive_id = ce.archive_id AND c.id = ce.case_id
        WHERE ce.archive_id = $1${evidenceCapabilityPredicate(includeDnaEvidence, "ce.")}${caseCapabilityPredicate}`,
-      [archiveId],
-      options
+      [archiveId]
     )
   ]);
 
@@ -333,15 +332,14 @@ async function loadCaseStats(archiveId: string, options: CaseQueryOptions): Prom
 }
 
 async function countFilteredCases(
+  client: PoolClient,
   whereSql: string,
   lateralsSql: string,
-  params: unknown[],
-  options: WorkspaceStoreOptions
+  params: unknown[]
 ): Promise<number> {
-  const result = await query<{ total: number }>(
+  const result = await client.query<{ total: number }>(
     `SELECT count(*)::int AS total FROM research_cases c ${lateralsSql} WHERE ${whereSql}`,
-    params,
-    options
+    params
   );
   return result.rows[0].total;
 }

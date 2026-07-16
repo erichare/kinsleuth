@@ -1,7 +1,12 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const authMocks = vi.hoisted(() => ({ getSessionContext: vi.fn() }));
+const authMocks = vi.hoisted(() => ({
+  getSessionContext: vi.fn(),
+  workspaceOptionsForSession: vi.fn((session: { archiveId: string }) => ({
+    archiveId: session.archiveId
+  }))
+}));
 const caseQueryMocks = vi.hoisted(() => ({
   caseEvidenceQueueFromDb: vi.fn(),
   searchCasesPageFromDb: vi.fn()
@@ -181,6 +186,7 @@ beforeEach(() => {
   });
 
   authMocks.getSessionContext.mockResolvedValue({
+    kind: "member",
     userId: "owner-capability",
     email: "owner@example.test",
     name: "Owner",

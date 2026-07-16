@@ -277,6 +277,25 @@ export async function readWorkspaceSnapshot(
   return loadWorkspace(client, archiveId);
 }
 
+// Keeps provisioning and the demo-guest generation fence locked for the
+// complete scoped SQL read. Demo reset must not be able to rotate a session's
+// archive generation after validation but before a later pool-level query.
+export async function withWorkspaceReadTransaction<T>(
+  options: WorkspaceStoreOptions,
+  action: (client: PoolClient, archiveId: string) => Promise<T>
+): Promise<T>;
+export async function withWorkspaceReadTransaction(
+  options: WorkspaceStoreOptions,
+  action: (client: PoolClient, archiveId: string) => Promise<unknown>
+): Promise<unknown> {
+  const archiveId = getArchiveId(options);
+
+  return withTransaction(options, async (client) => {
+    await requireProvisionedArchiveRow(client, archiveId, options);
+    return action(client, archiveId);
+  });
+}
+
 // Scoped SQL readers call this before querying archive-owned rows. It validates
 // provisioning without creating or loading a workspace.
 export async function ensureWorkspaceProvisioned(options: WorkspaceStoreOptions = {}): Promise<void> {

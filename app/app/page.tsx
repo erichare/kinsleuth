@@ -2,6 +2,7 @@ import Link from "next/link";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
+import { DemoSampleImportPanel } from "@/components/demo-sample-import-panel";
 import { Icons } from "@/components/icons";
 import { Confidence, Metric, Status, TableScroll } from "@/components/ui";
 import { isDnaResearchCase, projectResearchCaseForDnaCapability } from "@/lib/case-search";
@@ -80,6 +81,8 @@ export default async function AppDashboardPage() {
           detail={capabilities.dna ? `${dashboard.metrics.highPriorityDnaMatches.toLocaleString()} high-priority DNA` : "private research in progress"}
         />
       </div>
+
+      {session.kind === "demo-guest" ? <DemoSampleImportPanel /> : null}
 
       <div className="dashboard-columns">
         <div className="dashboard-column">

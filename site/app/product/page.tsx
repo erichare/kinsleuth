@@ -120,6 +120,9 @@ export default function ProductPage() {
       </section>
 
       <div className="shell section">
+        <p className="status-footnote">
+          Prefer a no-sign-in puzzle first? <Link href="/challenge">Test your genealogical skills in the fictional research challenge</Link>.
+        </p>
         <CtaStrip
           body="Start in a temporary fictional workspace, then investigate thirty synthetic record images and transcripts across five immersive cases."
           eyebrow="Try the working product"

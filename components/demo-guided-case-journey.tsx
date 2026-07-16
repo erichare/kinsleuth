@@ -183,6 +183,13 @@ export function DemoGuidedCaseJourney({ initialCase }: { initialCase: ResearchCa
           <span className="card-kicker">Next assignment</span>
           <h3>{nextAssignment.title}</h3>
           <p>{nextAssignment.summary}</p>
+          <a
+            className="button-secondary"
+            href="https://kinresolve.com/beta"
+            onClick={trackBetaCta}
+          >
+            Apply for the private beta
+          </a>
         </section>
       ) : null}
 
@@ -226,6 +233,16 @@ export function DemoGuidedCaseJourney({ initialCase }: { initialCase: ResearchCa
       </p>
     </section>
   );
+}
+
+function trackBetaCta(): void {
+  void fetch("/api/demo/events", {
+    method: "POST",
+    credentials: "same-origin",
+    keepalive: true,
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ eventName: "beta_cta_clicked" })
+  }).catch(() => undefined);
 }
 
 const defaultNextAssignment = {

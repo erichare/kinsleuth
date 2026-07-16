@@ -3,10 +3,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Icons } from "@/components/icons";
 import { type PeopleSearchResult } from "@/lib/people-search";
+import { paginateItems } from "@/lib/pagination";
 import {
   type CaseLinkOption,
   type PersonLinkOption,
   type SourceLinkFilter,
+  type SourceListItem,
   type SourcePrivacyFilter,
   type SourceSearchResult,
   type SourceSortKey
@@ -14,10 +16,12 @@ import {
 import { Confidence, Metric, Status, TableScroll } from "./ui";
 
 type Props = {
+  clientSideSearch?: boolean;
   initialResult: SourceSearchResult;
   initialPersonOptions: PersonLinkOption[];
   caseOptions: CaseLinkOption[];
   evidenceBinaryUploadsEnabled?: boolean;
+  readOnly?: boolean;
 };
 
 const pageSizeOptions = [25, 50, 100, 250];
@@ -58,10 +62,12 @@ export function buildSourceSubmission(
 }
 
 export function SourceWorkspace({
+  clientSideSearch = false,
   initialResult,
   initialPersonOptions,
   caseOptions,
-  evidenceBinaryUploadsEnabled = true
+  evidenceBinaryUploadsEnabled = true,
+  readOnly = false
 }: Props) {
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
@@ -113,6 +119,21 @@ export function SourceWorkspace({
 
     async function loadSources() {
       setIsSearching(true);
+      if (clientSideSearch) {
+        setResult(searchInitialSources(initialResult, {
+          query: debouncedQuery,
+          privacy,
+          sourceType,
+          linkStatus,
+          sort,
+          page,
+          pageSize
+        }));
+        setSearchError("");
+        setIsSearching(false);
+        return;
+      }
+
       try {
         const response = await fetch(buildSourceApiPath({ query: debouncedQuery, privacy, sourceType, linkStatus, sort, page, pageSize }), {
           signal: controller.signal
@@ -137,7 +158,7 @@ export function SourceWorkspace({
 
     void loadSources();
     return () => controller.abort();
-  }, [debouncedQuery, privacy, sourceType, linkStatus, sort, page, pageSize, refreshKey]);
+  }, [clientSideSearch, debouncedQuery, privacy, sourceType, linkStatus, sort, page, pageSize, refreshKey, initialResult]);
 
   useEffect(() => {
     if (!debouncedPersonQuery.trim()) {
@@ -147,6 +168,16 @@ export function SourceWorkspace({
     const controller = new AbortController();
 
     async function loadPeople() {
+      if (clientSideSearch) {
+        const terms = normalizeSearchTerms(debouncedPersonQuery);
+        setSearchedPersonOptions(initialPersonOptions.filter((person) => {
+          const searchable = normalizeSearchValue([person.id, person.displayName, person.detail].join(" "));
+          return terms.every((term) => searchable.includes(term));
+        }).slice(0, 25));
+        setLookupError("");
+        return;
+      }
+
       try {
         const response = await fetch(`/api/people?query=${encodeURIComponent(debouncedPersonQuery)}&page=1&pageSize=25&sort=name`, {
           signal: controller.signal
@@ -174,7 +205,7 @@ export function SourceWorkspace({
 
     void loadPeople();
     return () => controller.abort();
-  }, [debouncedPersonQuery, initialPersonOptions]);
+  }, [clientSideSearch, debouncedPersonQuery, initialPersonOptions]);
 
   function resetPaging() {
     setPage(1);
@@ -227,7 +258,7 @@ export function SourceWorkspace({
         <Metric label="Transcripts" value={result.stats.transcripts.toLocaleString()} detail={`${result.stats.protectedCount.toLocaleString()} protected`} />
       </div>
 
-      <div className="app-grid">
+      <div className="app-grid" style={readOnly ? { gridTemplateColumns: "minmax(0, 1fr)" } : undefined}>
         <section aria-busy={isSearching} className="app-card people-search-card">
           <div className="people-search-header">
             <div>
@@ -389,64 +420,66 @@ export function SourceWorkspace({
           </div>
         </section>
 
-        <aside aria-busy={status === "saving"} className="app-card">
-          <h2>Add source</h2>
-          {!evidenceBinaryUploadsEnabled ? (
-            <p className="muted" role="status">
-              Transcript-only in this private beta. Paste text or a transcript below; binary files stay on your device.
-            </p>
-          ) : null}
-          <div className="form-grid" style={{ gridTemplateColumns: "1fr" }}>
-            <Field label="Title" value={form.title} onChange={(value) => updateForm({ title: value })} />
-            <Field label="Type" value={form.sourceType} onChange={(value) => updateForm({ sourceType: value })} />
-            <Field label="Repository" value={form.repository} onChange={(value) => updateForm({ repository: value })} />
-            <Field label="Citation date" value={form.citationDate} onChange={(value) => updateForm({ citationDate: value })} />
-            <Field label="Find linked person" value={personQuery} onChange={setPersonQuery} />
-            {lookupError ? <p aria-atomic="true" className="form-error" role="alert">{lookupError}</p> : null}
-            <SelectField label="Linked person" value={form.linkedPersonId} onChange={(value) => updateForm({ linkedPersonId: value })} options={[["", "Unlinked"], ...visiblePersonOptions.map((person) => [person.id, `${person.displayName} - ${person.detail}`] as [string, string])]} />
-            <SelectField label="Linked case" value={form.linkedCaseId} onChange={(value) => updateForm({ linkedCaseId: value })} options={[["", "Unlinked"], ...caseOptions.map((researchCase) => [researchCase.id, researchCase.title] as [string, string])]} />
-            <SelectField
-              label="Privacy"
-              value={form.privacy}
-              onChange={(value) => updateForm({ privacy: value })}
-              options={[
-                ["private", "Private"],
-                ["sensitive", "Sensitive"],
-                ["public", "Public"]
-              ]}
-            />
-            <Field inputMode="decimal" label="Confidence 0-1" max={1} min={0} step={0.05} type="number" value={form.confidence} onChange={(value) => updateForm({ confidence: value })} />
-            {evidenceBinaryUploadsEnabled ? (
-              <label className="field">
-                <span>File</span>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  onChange={(event) => {
-                    setFile(event.target.files?.[0] ?? null);
-                    setStatus((current) => (current === "saved" ? "idle" : current));
-                  }}
-                />
-              </label>
+        {!readOnly ? (
+          <aside aria-busy={status === "saving"} className="app-card">
+            <h2>Add source</h2>
+            {!evidenceBinaryUploadsEnabled ? (
+              <p className="muted" role="status">
+                Transcript-only in this private beta. Paste text or a transcript below; binary files stay on your device.
+              </p>
             ) : null}
-            <TextArea label="Transcript" value={form.transcript} onChange={(value) => updateForm({ transcript: value })} />
-            <TextArea label="Notes" value={form.notes} onChange={(value) => updateForm({ notes: value })} />
-            <button aria-busy={status === "saving"} className="button" disabled={status === "saving"} onClick={saveSource} type="button">
-              {status === "saving" ? "Saving..." : "Save source"}
-            </button>
-            {status === "saved" ? (
-              <div aria-atomic="true" role="status">
-                <Status>Source saved</Status>
-              </div>
-            ) : null}
-            {status === "error" || error ? (
-              <div aria-atomic="true" role="alert">
-                {status === "error" ? <Status tone="warning">{sourceSaveFailureLabel(evidenceBinaryUploadsEnabled)}</Status> : null}
-                {error ? <p className={status === "error" ? "muted" : "form-error"}>{error}</p> : null}
-              </div>
-            ) : null}
-          </div>
-        </aside>
+            <div className="form-grid" style={{ gridTemplateColumns: "1fr" }}>
+              <Field label="Title" value={form.title} onChange={(value) => updateForm({ title: value })} />
+              <Field label="Type" value={form.sourceType} onChange={(value) => updateForm({ sourceType: value })} />
+              <Field label="Repository" value={form.repository} onChange={(value) => updateForm({ repository: value })} />
+              <Field label="Citation date" value={form.citationDate} onChange={(value) => updateForm({ citationDate: value })} />
+              <Field label="Find linked person" value={personQuery} onChange={setPersonQuery} />
+              {lookupError ? <p aria-atomic="true" className="form-error" role="alert">{lookupError}</p> : null}
+              <SelectField label="Linked person" value={form.linkedPersonId} onChange={(value) => updateForm({ linkedPersonId: value })} options={[["", "Unlinked"], ...visiblePersonOptions.map((person) => [person.id, `${person.displayName} - ${person.detail}`] as [string, string])]} />
+              <SelectField label="Linked case" value={form.linkedCaseId} onChange={(value) => updateForm({ linkedCaseId: value })} options={[["", "Unlinked"], ...caseOptions.map((researchCase) => [researchCase.id, researchCase.title] as [string, string])]} />
+              <SelectField
+                label="Privacy"
+                value={form.privacy}
+                onChange={(value) => updateForm({ privacy: value })}
+                options={[
+                  ["private", "Private"],
+                  ["sensitive", "Sensitive"],
+                  ["public", "Public"]
+                ]}
+              />
+              <Field inputMode="decimal" label="Confidence 0-1" max={1} min={0} step={0.05} type="number" value={form.confidence} onChange={(value) => updateForm({ confidence: value })} />
+              {evidenceBinaryUploadsEnabled ? (
+                <label className="field">
+                  <span>File</span>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    onChange={(event) => {
+                      setFile(event.target.files?.[0] ?? null);
+                      setStatus((current) => (current === "saved" ? "idle" : current));
+                    }}
+                  />
+                </label>
+              ) : null}
+              <TextArea label="Transcript" value={form.transcript} onChange={(value) => updateForm({ transcript: value })} />
+              <TextArea label="Notes" value={form.notes} onChange={(value) => updateForm({ notes: value })} />
+              <button aria-busy={status === "saving"} className="button" disabled={status === "saving"} onClick={saveSource} type="button">
+                {status === "saving" ? "Saving..." : "Save source"}
+              </button>
+              {status === "saved" ? (
+                <div aria-atomic="true" role="status">
+                  <Status>Source saved</Status>
+                </div>
+              ) : null}
+              {status === "error" || error ? (
+                <div aria-atomic="true" role="alert">
+                  {status === "error" ? <Status tone="warning">{sourceSaveFailureLabel(evidenceBinaryUploadsEnabled)}</Status> : null}
+                  {error ? <p className={status === "error" ? "muted" : "form-error"}>{error}</p> : null}
+                </div>
+              ) : null}
+            </div>
+          </aside>
+        ) : null}
       </div>
 
       <section className="app-card">
@@ -475,6 +508,82 @@ export function SourceWorkspace({
 
 export function sourceSaveFailureLabel(evidenceBinaryUploadsEnabled: boolean): string {
   return evidenceBinaryUploadsEnabled ? "Upload failed" : "Save failed";
+}
+
+function searchInitialSources(
+  initialResult: SourceSearchResult,
+  input: {
+    query: string;
+    privacy: SourcePrivacyFilter;
+    sourceType: string;
+    linkStatus: SourceLinkFilter;
+    sort: SourceSortKey;
+    page: number;
+    pageSize: number;
+  }
+): SourceSearchResult {
+  const terms = normalizeSearchTerms(input.query);
+  const items = initialResult.items
+    .filter((source) => {
+      if (input.privacy !== "all" && source.privacy !== input.privacy) return false;
+      if (input.sourceType !== "all" && source.sourceType !== input.sourceType) return false;
+      const linked = Boolean(source.linkedPersonId || source.linkedCaseId);
+      if (input.linkStatus === "linked" && !linked) return false;
+      if (input.linkStatus === "unlinked" && linked) return false;
+      if (input.linkStatus === "person" && !source.linkedPersonId) return false;
+      if (input.linkStatus === "case" && !source.linkedCaseId) return false;
+      if (terms.length === 0) return true;
+
+      const searchable = normalizeSearchValue([
+        source.id,
+        source.title,
+        source.sourceType,
+        source.repository,
+        source.fileName,
+        source.citationDate,
+        source.linkedPersonId,
+        source.linkedPersonName,
+        source.linkedCaseId,
+        source.linkedCaseTitle,
+        source.transcriptPreview,
+        source.notesPreview,
+        source.privacy
+      ].filter(Boolean).join(" "));
+      return terms.every((term) => searchable.includes(term));
+    })
+    .sort((left, right) => compareSourceListItems(left, right, input.sort));
+  const page = paginateItems(items, { page: input.page, pageSize: input.pageSize });
+  return { ...page, stats: initialResult.stats, types: initialResult.types };
+}
+
+function compareSourceListItems(left: SourceListItem, right: SourceListItem, sort: SourceSortKey): number {
+  if (sort === "title") {
+    return left.title.localeCompare(right.title, undefined, { sensitivity: "base" });
+  }
+  if (sort === "confidence") {
+    return right.confidence - left.confidence || compareSourceCreatedAt(left, right);
+  }
+  return compareSourceCreatedAt(left, right);
+}
+
+function compareSourceCreatedAt(left: SourceListItem, right: SourceListItem): number {
+  return compareOptionalText(right.createdAt, left.createdAt)
+    || left.title.localeCompare(right.title, undefined, { sensitivity: "base" });
+}
+
+function compareOptionalText(left?: string, right?: string): number {
+  if (!left && !right) return 0;
+  if (!left) return 1;
+  if (!right) return -1;
+  return left.localeCompare(right, undefined, { numeric: true, sensitivity: "base" });
+}
+
+function normalizeSearchTerms(value: string): string[] {
+  return normalizeSearchValue(value).split(/\s+/).filter(Boolean);
+}
+
+function normalizeSearchValue(value: string): string {
+  return value.toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "");
 }
 
 function PaginationControls({ page, pageCount, onPageChange }: { page: number; pageCount: number; onPageChange: (page: number) => void }) {

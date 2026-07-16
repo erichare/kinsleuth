@@ -23,7 +23,14 @@ import SettingsPage from "@/app/app/settings/page";
 
 beforeEach(() => {
   vi.clearAllMocks();
-  settingsMocks.getSessionContext.mockResolvedValue(null);
+  settingsMocks.getSessionContext.mockResolvedValue({
+    kind: "member",
+    userId: "owner-private-beta",
+    email: "owner@example.test",
+    name: "Owner",
+    role: "owner",
+    archiveId: "archive-private-beta"
+  });
   vi.unstubAllEnvs();
   vi.stubEnv("DATABASE_URL", "");
   vi.stubEnv("AI_API_KEY", "stray-key-must-not-surface");

@@ -14,7 +14,14 @@ describe("publishing readiness", () => {
   });
 
   it("blocks private profiles before publication", () => {
-    const profile = evaluatePublicationReadiness(demoPeople[1]);
+    const privateProfile: PersonSummary = {
+      ...demoPeople[1],
+      id: "p-private-test",
+      slug: "private-test-person",
+      privacy: "private",
+      published: false
+    };
+    const profile = evaluatePublicationReadiness(privateProfile);
 
     expect(profile.status).toBe("blocked");
     expect(profile.issues).toEqual(
@@ -42,21 +49,39 @@ describe("publishing readiness", () => {
     expect(profile.recommendedAction).toContain("Resolve blockers");
   });
 
-  it("summarizes the publication queue", () => {
+  it("keeps all eight fictional demo profiles curated and public", () => {
     const plan = buildPublicationPlan(demoPeople);
 
     expect(plan.summary.total).toBe(demoPeople.length);
-    expect(plan.summary.ready).toBe(1);
-    expect(plan.summary.blocked).toBeGreaterThan(0);
-    expect(plan.profiles[0].status).toBe("blocked");
+    expect(plan.summary.ready).toBe(7);
+    expect(plan.summary.needsReview).toBe(1);
+    expect(plan.summary.blocked).toBe(0);
+    expect(plan.summary.published).toBe(demoPeople.length);
+    expect(plan.summary.draft).toBe(0);
+    expect(demoPeople).toHaveLength(8);
+    expect(demoPeople.every((person) => person.livingStatus === "deceased")).toBe(true);
+    expect(demoPeople.every((person) => person.privacy === "public" && person.published)).toBe(true);
+    expect(plan.profiles.find((profile) => profile.personId === "p-samuel-mercer")?.status).toBe("needs_review");
   });
 
   it("paginates profile and blocker review queues", () => {
-    const review = buildPublicationReview(demoPeople, { profilePage: 1, blockerPage: 1, pageSize: 1 });
+    const blockedPerson: PersonSummary = {
+      ...demoPeople[0],
+      id: "p-blocked-review-test",
+      slug: "blocked-review-test",
+      displayName: "Blocked Review Test",
+      privacy: "private",
+      published: false
+    };
+    const review = buildPublicationReview([...demoPeople, blockedPerson], {
+      profilePage: 1,
+      blockerPage: 1,
+      pageSize: 1
+    });
 
     expect(review.profiles.items).toHaveLength(1);
-    expect(review.profiles.total).toBe(demoPeople.length);
+    expect(review.profiles.total).toBe(demoPeople.length + 1);
     expect(review.blockers.items).toHaveLength(1);
-    expect(review.summary.blockerCount).toBeGreaterThan(1);
+    expect(review.summary.blockerCount).toBe(1);
   });
 });

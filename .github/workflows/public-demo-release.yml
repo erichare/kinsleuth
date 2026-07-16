@@ -82,7 +82,7 @@ jobs:
       - name: Refuse unresolved release or containment safety work
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_SAFETY_CURRENT_WORKFLOW: demo
+          RELEASE_SAFETY_CURRENT_WORKFLOW: public-demo
         run: node --experimental-strip-types scripts/validate-release-safety-queue.mjs
 
   release:

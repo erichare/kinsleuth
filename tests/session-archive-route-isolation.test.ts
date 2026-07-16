@@ -17,11 +17,15 @@ const routeMocks = vi.hoisted(() => ({
 
 vi.mock("@/lib/auth-session", () => ({
   getSessionContext: vi.fn(async () => ({
+    kind: "member",
     userId: "owner-private",
     email: "owner@example.com",
     name: "Owner",
     role: "owner",
     archiveId: "archive-private"
+  })),
+  workspaceOptionsForSession: vi.fn((session: { archiveId: string }) => ({
+    archiveId: session.archiveId
   }))
 }));
 vi.mock("@/lib/publishing", () => ({ buildPublicationReview: routeMocks.buildPublicationReview }));

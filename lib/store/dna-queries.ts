@@ -1,4 +1,4 @@
-import { query } from "../db";
+import type { PoolClient } from "pg";
 import { createDnaConnectionHypothesis } from "../dna";
 import {
   maximumDnaPageSize,
@@ -10,7 +10,7 @@ import {
 } from "../dna-search";
 import type { DnaConnectionHypothesis, DnaMatch } from "../models";
 import type { PaginationInput } from "../pagination";
-import { ensureWorkspaceProvisioned, getArchiveId, type WorkspaceStoreOptions } from "../workspace-store";
+import { withWorkspaceReadTransaction, type WorkspaceStoreOptions } from "../workspace-store";
 import { mapDnaMatch, mapPersonRow } from "./mappers";
 
 // SQL-side DNA match reads for the triage workspace and its API, following the
@@ -58,8 +58,7 @@ export async function searchDnaMatchesPageFromDb(
   pagination: PaginationInput = { page: 1, pageSize: 25 },
   options: WorkspaceStoreOptions = {}
 ): Promise<DnaSearchResult> {
-  await ensureWorkspaceProvisioned(options);
-  const archiveId = getArchiveId(options);
+  return withWorkspaceReadTransaction(options, async (client, archiveId) => {
 
   const params: unknown[] = [archiveId];
   const conditions: string[] = ["d.archive_id = $1"];
@@ -93,8 +92,8 @@ export async function searchDnaMatchesPageFromDb(
   const whereSql = conditions.join(" AND ");
 
   const [stats, filteredTotal] = await Promise.all([
-    loadDnaStats(archiveId, options),
-    countFilteredMatches(whereSql, params, options)
+    loadDnaStats(client, archiveId),
+    countFilteredMatches(client, whereSql, params)
   ]);
 
   // Same clamping as paginateDnaMatches so API consumers see identical paging.
@@ -103,7 +102,7 @@ export async function searchDnaMatchesPageFromDb(
   const page = clampInteger(pagination.page, 1, pageCount);
   const offset = (page - 1) * pageSize;
 
-  const pageResult = await query<Record<string, unknown>>(
+  const pageResult = await client.query<Record<string, unknown>>(
     `SELECT d.id, d.display_name, d.total_cm, d.longest_segment_cm, d.shared_dna_percent,
        d.predicted_relationship, d.side, d.tree_status, d.surnames, d.places,
        d.shared_matches, d.notes, d.ancestry_url, d.triage_status,
@@ -112,8 +111,7 @@ export async function searchDnaMatchesPageFromDb(
      WHERE ${whereSql}
      ORDER BY ${orderBySql(filters.sort ?? "helpfulness")}
      LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
-    [...params, pageSize, offset],
-    options
+    [...params, pageSize, offset]
   );
 
   const items: ScoredDnaMatch[] = pageResult.rows.map((row) => ({
@@ -131,6 +129,7 @@ export async function searchDnaMatchesPageFromDb(
     end: offset + items.length,
     stats
   };
+  });
 }
 
 // Hypotheses compare a match against every person's surname/place columns, so
@@ -145,51 +144,45 @@ export async function createDnaHypothesesForMatches(
     return [];
   }
 
-  await ensureWorkspaceProvisioned(options);
-  const archiveId = getArchiveId(options);
+  return withWorkspaceReadTransaction(options, async (client, archiveId) => {
+    const result = await client.query<Record<string, unknown>>(
+      "SELECT * FROM people WHERE archive_id = $1 ORDER BY sort_order ASC, display_name ASC",
+      [archiveId]
+    );
+    const people = result.rows.map((row) => mapPersonRow(row, []));
 
-  const result = await query<Record<string, unknown>>(
-    "SELECT * FROM people WHERE archive_id = $1 ORDER BY sort_order ASC, display_name ASC",
-    [archiveId],
-    options
-  );
-  const people = result.rows.map((row) => mapPersonRow(row, []));
-
-  return matches.map((match) => createDnaConnectionHypothesis(match, people));
+    return matches.map((match) => createDnaConnectionHypothesis(match, people));
+  });
 }
 
 export async function listCaseOptions(options: WorkspaceStoreOptions = {}): Promise<DnaCaseOption[]> {
-  await ensureWorkspaceProvisioned(options);
-  const archiveId = getArchiveId(options);
-
-  // Same ordering as the workspace loader's cases read, so the picker lists
-  // cases exactly like the readWorkspace-backed page did.
-  const result = await query<{ id: string; title: string }>(
-    "SELECT id, title FROM research_cases WHERE archive_id = $1 ORDER BY sort_order ASC, title ASC",
-    [archiveId],
-    options
-  );
-  return result.rows.map((row) => ({ id: row.id, title: row.title }));
+  return withWorkspaceReadTransaction(options, async (client, archiveId) => {
+    // Same ordering as the workspace loader's cases read, so the picker lists
+    // cases exactly like the readWorkspace-backed page did.
+    const result = await client.query<{ id: string; title: string }>(
+      "SELECT id, title FROM research_cases WHERE archive_id = $1 ORDER BY sort_order ASC, title ASC",
+      [archiveId]
+    );
+    return result.rows.map((row) => ({ id: row.id, title: row.title }));
+  });
 }
 
-async function loadDnaStats(archiveId: string, options: WorkspaceStoreOptions): Promise<DnaSearchStats> {
-  const result = await query<{ total: number; high_priority: number; needs_review: number }>(
+async function loadDnaStats(client: PoolClient, archiveId: string): Promise<DnaSearchStats> {
+  const result = await client.query<{ total: number; high_priority: number; needs_review: number }>(
     `SELECT count(*)::int AS total,
        count(*) FILTER (WHERE triage_status = 'high_priority')::int AS high_priority,
        count(*) FILTER (WHERE triage_status = 'needs_review')::int AS needs_review
      FROM dna_matches WHERE archive_id = $1`,
-    [archiveId],
-    options
+    [archiveId]
   );
   const row = result.rows[0];
   return { total: row.total, highPriority: row.high_priority, needsReview: row.needs_review };
 }
 
-async function countFilteredMatches(whereSql: string, params: unknown[], options: WorkspaceStoreOptions): Promise<number> {
-  const result = await query<{ total: number }>(
+async function countFilteredMatches(client: PoolClient, whereSql: string, params: unknown[]): Promise<number> {
+  const result = await client.query<{ total: number }>(
     `SELECT count(*)::int AS total FROM dna_matches d WHERE ${whereSql}`,
-    params,
-    options
+    params
   );
   return result.rows[0].total;
 }

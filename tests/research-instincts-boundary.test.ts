@@ -92,7 +92,10 @@ describe("research instincts static public boundary", () => {
     ]);
 
     expect(home).toMatch(/href=["']\/challenge["']/);
-    expect(product).toMatch(/primaryHref=["']\/challenge["']/);
+    expect(product).toMatch(/href=["']\/challenge["']/);
+    expect(product).toMatch(/primaryHref=\{site\.demoUrl\}/);
+    expect(product).toMatch(/primaryLabel=["']Try Kin Resolve["']/);
+    expect(product).toMatch(/secondaryHref=["']\/beta["']/);
     expect(challenge).toMatch(/ResearchInstinctsChallenge/);
     expect(challenge).toMatch(/@\/components\/research-instincts-challenge/);
     expect(challenge).toMatch(/robots[\s\S]*index:\s*false/);

@@ -6,6 +6,7 @@ export const demoGuestCommandCapabilities = [
   "demo:ai",
   "demo:export",
   "demo:feedback",
+  "demo:analytics",
   "demo:session-control"
 ] as const;
 

@@ -6,6 +6,7 @@ import { resolveHostedCapabilities } from "@/lib/hosted-capabilities";
 import { getSessionContext, workspaceOptionsForSession } from "@/lib/auth-session";
 import { createDnaHypothesesForMatches, listCaseOptions, searchDnaMatchesPageFromDb } from "@/lib/store/dna-queries";
 import { readArchiveBranding } from "@/lib/store/people-queries";
+import { maximumDnaPageSize } from "@/lib/dna-search";
 
 export const dynamic = "force-dynamic";
 
@@ -19,14 +20,24 @@ export default async function DnaPage() {
 
   const [branding, initialResult, initialCases] = await Promise.all([
     readArchiveBranding(archiveOptions),
-    searchDnaMatchesPageFromDb({}, { page: 1, pageSize: 25 }, archiveOptions),
+    searchDnaMatchesPageFromDb(
+      {},
+      { page: 1, pageSize: session.kind === "demo-guest" ? maximumDnaPageSize : 25 },
+      archiveOptions
+    ),
     listCaseOptions(archiveOptions)
   ]);
   const initialHypotheses = await createDnaHypothesesForMatches(initialResult.items, archiveOptions);
 
   return (
     <AppShell title="DNA Match Triage" active="/app/dna" archiveName={branding.name}>
-      <DnaTriageWorkspace initialCases={initialCases} initialResult={initialResult} initialHypotheses={initialHypotheses} />
+      <DnaTriageWorkspace
+        clientSideSearch={session.kind === "demo-guest"}
+        initialCases={initialCases}
+        initialResult={initialResult}
+        initialHypotheses={initialHypotheses}
+        readOnly={session.kind === "demo-guest"}
+      />
     </AppShell>
   );
 }

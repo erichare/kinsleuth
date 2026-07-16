@@ -1,5 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { DemoStartForm } from "@/components/demo-start-form";
 import { Icons } from "@/components/icons";
@@ -7,6 +8,7 @@ import { PublicShell } from "@/components/public-shell";
 import { Status, TableScroll } from "@/components/ui";
 import { publicDemoGuidedCaseTitle } from "@/lib/public-demo-contract";
 import { publicDemoEnabled } from "@/lib/public-demo-config";
+import { recordPublicDemoEvent } from "@/lib/public-demo-session-store";
 import { privateWorkspaceLoginPath, publicArchiveEnabled, resolvePublicArchiveId } from "@/lib/public-surface";
 import { listPublicPeople, readArchiveBranding } from "@/lib/store/people-queries";
 
@@ -17,6 +19,14 @@ export default async function HomePage() {
     redirect(privateWorkspaceLoginPath);
   }
   if (publicDemoEnabled()) {
+    const requestHeaders = await headers();
+    if (!requestHeaders.has("x-kinresolve-demo-canary")) {
+      try {
+        await recordPublicDemoEvent({ eventName: "landing_viewed" });
+      } catch {
+        // Aggregate telemetry must never prevent the public landing page.
+      }
+    }
     return <PublicDemoLanding />;
   }
   const publicArchiveId = resolvePublicArchiveId();

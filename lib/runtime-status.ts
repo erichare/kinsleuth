@@ -69,6 +69,11 @@ export type RuntimeStatus = {
 };
 
 export function isRuntimeReady(status: RuntimeStatus): boolean {
+  const storageFreeHostedDemo = status.capabilities.deploymentMode === "hosted"
+    && status.capabilities.datasetMode === "demo"
+    && !status.capabilities.evidenceBinaryUploads
+    && !status.capabilities.packageMedia
+    && !status.capabilities.plainGedcom;
   return status.capabilities.valid
     && status.scheduledWrites.valid
     && status.api.configured
@@ -80,9 +85,11 @@ export function isRuntimeReady(status: RuntimeStatus): boolean {
       && status.database.identityMatchesConfigured
       && status.database.transportVerified
     ))
-    && status.storage.configured
-    && (status.capabilities.deploymentMode !== "hosted" || (
-      status.storage.identityConfigured && status.storage.identityVerified
+    && (storageFreeHostedDemo || (
+      status.storage.configured
+      && (status.capabilities.deploymentMode !== "hosted" || (
+        status.storage.identityConfigured && status.storage.identityVerified
+      ))
     ));
 }
 
