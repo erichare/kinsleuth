@@ -245,7 +245,7 @@ jobs:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
           set -euo pipefail
-          deployment_host="${PRODUCTION_APP_BASE_URL#https://}"
+          deployment_host="${APP_BASE_URL#https://}"
           [[ "${deployment_host}" =~ ^[A-Za-z0-9.-]{4,253}$ ]]
           scope_query=""
           if [[ "${VERCEL_ORG_ID}" == team_* ]]; then scope_query="?teamId=${VERCEL_ORG_ID}"; fi
