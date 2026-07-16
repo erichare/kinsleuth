@@ -189,7 +189,7 @@ jobs:
             && env -u GITHUB_OUTPUT node --experimental-strip-types \
               scripts/validate-vercel-deployment.mjs holding \
               "$RUNNER_TEMP/staging-demo-safety-current.json" \
-              "$deployment_host" >/dev/null 2>&1; then
+              "${APP_BASE_URL#https://}" >/dev/null 2>&1; then
             exit 0
           fi
           vercel promote "$HOLDING_DEPLOYMENT_URL" --yes --timeout=5m
