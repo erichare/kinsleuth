@@ -738,7 +738,11 @@ async function validateDisabledCapabilities(
   currentStage = "disabled person publishing UI";
   await exactGoto(page, configuration, `/app/people/${encodeURIComponent(publicationTargetPersonId)}`);
   await expectVisible(page.getByText("Privacy curation", { exact: true }));
-  await expectVisible(page.getByText("Publishing is disabled", { exact: true }));
+  await expectVisible(page.getByText(
+    "Public publishing is disabled for this private beta. Privacy review remains available.",
+    { exact: true }
+  ));
+  await expectVisible(page.getByRole("button", { name: "Remove from public archive" }));
   if (await page.getByLabel("Published", { exact: true }).count() !== 0) throw new Error();
   currentStage = "disabled person publishing API";
   await assertNotFoundJson(
@@ -747,7 +751,7 @@ async function validateDisabledCapabilities(
       configuration,
       "PATCH",
       `/api/people/${encodeURIComponent(publicationTargetPersonId)}/curation`,
-      { data: { published: false } }
+      { data: { published: true } }
     ),
     "Person not found"
   );

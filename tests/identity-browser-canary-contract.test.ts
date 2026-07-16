@@ -147,7 +147,8 @@ describe("identity canary artifact boundary", () => {
     expect(state).toContain("published = true");
     expect(state).toContain("invariant.rows[0]?.published !== true");
     expect(state).not.toContain("unpublishedPersonId");
-    expect(runner).toContain("data: { published: false }");
+    expect(runner).toContain('getByRole("button", { name: "Remove from public archive" })');
+    expect(runner).toContain("data: { published: true }");
     expect(runner).not.toContain("unpublishedPersonId");
   });
 
