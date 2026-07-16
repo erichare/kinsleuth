@@ -1,51 +1,82 @@
 # Kin Resolve hosted private beta launch blueprint
 
-- **Status:** Execution in progress; owner, legal, and live-infrastructure approvals remain open
+- **Status:** Execution in progress; source integration and safe holding surfaces are complete, while owner, legal, runtime, and recovery gates remain open
 - **Planning date:** 2026-07-14
-- **Planning base:** blueprint drafted at `be6aca1b7b1f449a988fd496b24be9fde16ce55d`; current implementation branch is based on `main` at `cd1d92fceaa8b9a8a37cde6e036860c71cefd6d4`
+- **Last execution update:** 2026-07-15
+- **Planning base:** blueprint drafted at `be6aca1b7b1f449a988fd496b24be9fde16ce55d`; B0–B7 plus release-safety hardening are merged on `main` through `ab2cddf19017cee4b8c73868210582ac363214f7`
 - **Primary product origin:** `https://app.kinresolve.com`
 - **Marketing origin:** `https://kinresolve.com`
 - **Recommended launch window:** 30–40 engineering days for one primary engineer, or roughly 4–5 elapsed weeks with two engineering streams plus an independent owner/legal track
 - **Launch owner:** Eric
 
-### Implementation snapshot — 2026-07-15
+### Live execution snapshot — 2026-07-15
+
+- B0–B7 source work is merged on `main` through PR 44. PRs 45–47 then hardened custom
+  GitHub run-name containment, Vercel protection-redirect validation, and exact canonical
+  hostname-to-deployment proof. The integrated head is
+  `ab2cddf19017cee4b8c73868210582ac363214f7`.
+- `kinresolve.com`, `/developers`, and `/beta/thanks` serve the truthful applications-open
+  prelaunch package from Vercel deployment `dpl_AHHAfGM5J7oDFR9AtaGpagZ6ykro`, produced by
+  GitHub Actions run `29460468707`. The copy still says invitations have not started.
+- `demo.kinresolve.com` points to the exact checked-in zero-runtime holding artifact at
+  Vercel deployment `dpl_FK2eGhDVNRBXQmiYhHHWtnQX9TsQ`. Stage-only run `29463530811`
+  passed the pre-promotion controls; promotion and canonical-hostname proof passed in run
+  `29463602384`.
+- `app.kinresolve.com` points to the same exact zero-runtime holding artifact at Vercel
+  deployment `dpl_HHU4A9yHZSw7YFCWtNLVMxqtroqd`. Stage-only run `29464019356` passed the
+  pre-promotion controls; promotion and canonical-hostname proof passed in run
+  `29464086035`. The holding deployment IDs are recorded in the protected staging,
+  production, containment, and recovery environments that consume them.
+- **Not live:** neither product hostname serves the Kin Resolve runtime, authentication,
+  invitations, or API; `/api/health` correctly returns `404` on both holding surfaces.
+  The beta-live marketing claim has not been switched, API launch and native intake remain
+  off, staging has no runtime environment contract, and legal approval has not been
+  recorded.
+- `main` is protected with strict Product CI and CodeQL requirements, PR-only changes,
+  resolved conversations, and force-push/deletion blocks. Because Eric is currently the
+  only repository collaborator, the rule requires zero outside approvals and retains the
+  administrator recovery path.
+- The current critical path is owner D1–D8 sign-off; counsel-approved legal bytes and an
+  approved applicant access/DSAR process; fresh isolated staging database and object
+  storage; verified transactional email, support, and monitoring routes; a persistent
+  synthetic-demo open/close lifecycle; and an evidence-retaining staging dress rehearsal.
+  Production additionally requires isolated pilot and recovery resources, observed
+  restore/deletion/monitoring, exact candidate promotion, and coordinated claim publication.
+- No real family data is authorized. The first public launch remains a synthetic,
+  invitation-only beta until every applicable gate in section 8 has recorded evidence.
+
+### Merged implementation detail
 
 - B0 and B1a–B1d are merged through PRs 36–40: truthful beta scope, explicit dataset
   provisioning, server-enforced capability limits, the private hosted surface, and the
   same-origin mutation perimeter are on `main`.
-- B2 merged through PR 41: candidate-first staging and
-  production workflows, static zero-runtime holding deployments, durable write fencing,
-  exact migration/identity proofs, attested database-plus-object recovery evidence,
-  attempt-scoped cleanup leases, exact automatic-safety receipts, fail-closed Vercel
-  auto-assignment repair, the archived `v0.17.4` incompatibility harness, and both
-  large-data release gates are on `main`.
-- B3 and B4 are merged through PRs 42–43: paused-by-default invitations,
-  verified-email access, recovery/session revocation,
-  exact legal-byte acceptance, durable abuse limits, transactional email, the
-  audience-bound signed operator CLI, redacted monitoring, operator export/deletion,
-  backup/restore evidence, and recovery operations are on `main`.
-- B5 is implemented and validated on `fix/beta-api-v1`: scoped one-time-display tokens,
-  durable quotas, stable non-content UUIDs, archive-safe projections, OpenAPI 3.1,
-  developer documentation, revocation, retention, and real-Postgres contract proofs are
-  complete locally.
-- B6 is in progress on the same integration branch. Release mode now keeps API v1 off by
-  default and requires a fresh SHA-bound, attested Vercel WAF/configuration/probe packet
-  for `api-launch`; the standalone browser golden path and ephemeral production token
-  canary are the remaining code gates.
-- B7 prelaunch marketing/legal material and the disabled-by-default native application
-  source are complete locally. The fixed-field product endpoint, exact-origin and abuse
-  controls, minimal-PII persistence, receipt/founder delivery, 90-day cleanup, signed
-  count-only deletion, static dual-mode form, and thank-you page are implemented. Public
-  copy says applications are open but invitations have not started and separates source
-  controls from live behavior. Counsel-approved legal bytes, an approved identity-verified
-  applicant access/DSAR delivery process, provider/mail-route proof, synthetic launch
-  media, protected environment activation, and the evidence-backed live claim switch
-  remain external/launch-time gates.
-- B8 remains protected execution work: live DNS, provider configuration, legal approval,
-  observed recovery/deletion/monitoring, exact candidate promotion, and coordinated claim
-  publication have not been authorized or performed.
-- No real family data is authorized. The first public launch remains a synthetic,
-  invitation-only beta until every applicable gate in section 8 has recorded evidence.
+- B2 merged through PR 41: candidate-first staging and production workflows, static
+  zero-runtime holding deployments, durable write fencing, exact migration/identity proofs,
+  attested database-plus-object recovery evidence, attempt-scoped cleanup leases, exact
+  automatic-safety receipts, fail-closed Vercel auto-assignment repair, the archived
+  `v0.17.4` incompatibility harness, and both large-data release gates are on `main`.
+- B3 and B4 are merged through PRs 42–43: paused-by-default invitations, verified-email
+  access, recovery/session revocation, exact legal-byte acceptance, durable abuse limits,
+  transactional email, the audience-bound signed operator CLI, redacted monitoring,
+  operator export/deletion, backup/restore evidence, and recovery operations are on `main`.
+- B5–B7 merged through PR 44: scoped one-time-display API tokens, durable quotas, stable
+  non-content UUIDs, archive-safe projections, OpenAPI 3.1, developer documentation,
+  revocation and retention, the browser golden path and production-safe canaries, truthful
+  prelaunch marketing and application intake, and disabled-by-default native application
+  source are on `main`. Release mode keeps API v1 off by default and requires a fresh
+  SHA-bound, attested Vercel WAF/configuration/probe packet for `api-launch`.
+- The B7 source package also includes the fixed-field product endpoint, exact-origin and
+  abuse controls, minimal-PII persistence, receipt/founder delivery, 90-day cleanup,
+  signed count-only deletion, static dual-mode form, thank-you page, and synthetic launch
+  media. Public copy says applications are open but invitations have not started and
+  separates source controls from live behavior. Counsel-approved legal bytes, an approved
+  identity-verified applicant access/DSAR delivery process, provider/mail-route proof,
+  protected runtime activation, and the evidence-backed live claim switch remain
+  external/launch-time gates.
+- B8 remains protected runtime execution work. DNS and the exact safe holding deployments
+  are complete; legal approval, full provider/runtime configuration, observed
+  recovery/deletion/monitoring, exact runtime candidate promotion, and coordinated claim
+  publication have not been completed.
 
 ## 1. Outcome
 
@@ -91,8 +122,8 @@ This is intentionally narrower than the source tree. A disabled feature must be 
 
 ## 3. Historical planning-base truth and why launch work was required
 
-The following was the 2026-07-14 planning snapshot. The implementation snapshot above
-is the current source of truth for completed code work.
+The following was the 2026-07-14 planning snapshot. The live execution snapshot and
+merged implementation detail above are the current source of truth for completed work.
 
 - `kinresolve.com` is live and `www` redirects correctly.
 - The beta intake is a prepared `mailto:` link; it does not create an application record or an account.
