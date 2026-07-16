@@ -8,7 +8,9 @@ const canonicalEnvironment = {
 
 describe("public demo monitor", () => {
   it("checks the landing, JSON health, and family body contracts without credentials", async () => {
-    const fetchImplementation = vi.fn(async (input: RequestInfo | URL) => shallowResponse(input));
+    const fetchImplementation = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) =>
+      shallowResponse(input)
+    );
 
     await expect(runPublicDemoMonitor(
       "shallow",
@@ -59,10 +61,14 @@ describe("public demo monitor", () => {
       "/api/demo/cases/case-mercer-march-identity/guide",
       "/api/demo/session/end"
     ]);
+    const start = requests[3]?.init;
     const guide = requests[4]?.init;
     const ended = requests[5]?.init;
+    expect(start?.body).toBe(JSON.stringify({
+      noticeVersion: "public-demo-2026-07-16"
+    }));
     expect(guide?.body).toBe(JSON.stringify({
-      command: "record-signature-comparison",
+      command: "record_outcome",
       outcome: "inconclusive"
     }));
     expect(new Headers(guide?.headers).get("cookie")).toBe(
@@ -98,7 +104,9 @@ describe("public demo monitor", () => {
   });
 
   it("allows a protected generated candidate only with a bypass credential", async () => {
-    const fetchImplementation = vi.fn(async (input: RequestInfo | URL) => shallowResponse(input));
+    const fetchImplementation = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) =>
+      shallowResponse(input)
+    );
     await expect(runPublicDemoMonitor("shallow", {
       PUBLIC_DEMO_ORIGIN: "https://candidate-team.vercel.app"
     }, fetchImplementation)).rejects.toThrow(/approved demo origin/i);
