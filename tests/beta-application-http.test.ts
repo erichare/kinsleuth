@@ -100,7 +100,7 @@ describe("beta application native-form request parser", () => {
     `${encoded()}&unknown=value`,
     encoded(Object.fromEntries(Object.entries(validFields()).filter(([key]) => key !== "workflow"))),
     encoded({ ...validFields(), name: "%ZZ" }).replace("%25ZZ", "%ZZ"),
-    encoded({ ...validFields(), name: "%FF" }).replace("%25FF", "%FF")
+    encoded({ ...validFields(), name: "%FF" }).replace(/%25FF/g, "%FF")
   ])("rejects duplicate, unknown, missing, or malformed fields", async (body) => {
     await expect(readBetaApplicationForm(request(body))).rejects.toMatchObject({ status: 400 });
   });
