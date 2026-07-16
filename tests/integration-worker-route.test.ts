@@ -88,6 +88,16 @@ describe("hosted integration worker invocation", () => {
     expect(workerMocks.runIntegrationWorkerMaintenance).not.toHaveBeenCalled();
   });
 
+  it("treats a whitespace-only cron secret as unconfigured", async () => {
+    process.env.CRON_SECRET = "   ";
+
+    const response = await GET(request("   "));
+
+    expect(response.status).toBe(503);
+    expect(workerMocks.runIntegrationWorkerBatch).not.toHaveBeenCalled();
+    expect(workerMocks.runIntegrationWorkerMaintenance).not.toHaveBeenCalled();
+  });
+
   it("requires the cron bearer secret", async () => {
     const response = await GET(request("wrong-secret"));
 

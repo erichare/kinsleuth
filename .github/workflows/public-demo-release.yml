@@ -233,6 +233,23 @@ jobs:
             "https://api.vercel.com/v9/projects/$MARKETING_VERCEL_PROJECT_ID/domains/demo.kinresolve.com$scope_query")"
           test "$marketing_status" = "404"
 
+      - name: Prove the dedicated AI Gateway key remains inside its hard budget
+        env:
+          EXPECTED_AI_GATEWAY_API_KEY_ID: ${{ vars.AI_GATEWAY_API_KEY_ID }}
+          EXPECTED_AI_GATEWAY_MONTHLY_BUDGET_USD: ${{ vars.AI_GATEWAY_MONTHLY_BUDGET_USD }}
+          EXPECTED_AI_GATEWAY_TEAM_ID: ${{ vars.VERCEL_ORG_ID }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          curl --connect-timeout 10 --max-time 30 --retry 3 --retry-all-errors \
+            --fail --silent --show-error \
+            --header "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v1/api-keys?teamId=$VERCEL_ORG_ID" \
+            --output "$RUNNER_TEMP/public-demo-ai-gateway-keys.json"
+          node --experimental-strip-types scripts/validate-public-demo-ai-gateway-key.mjs \
+            "$RUNNER_TEMP/public-demo-ai-gateway-keys.json"
+
       - name: Pull and validate the exact public demo runtime contract
         env:
           EXPECTED_DATABASE_IDENTITY: ${{ vars.KINRESOLVE_DATABASE_IDENTITY }}
@@ -242,9 +259,25 @@ jobs:
         run: |
           set -euo pipefail
           umask 077
+          scope_query="limit=100"
+          if [[ "$VERCEL_ORG_ID" == team_* ]]; then
+            scope_query="$scope_query&teamId=$VERCEL_ORG_ID"
+          fi
+          curl --connect-timeout 10 --max-time 30 --retry 3 --retry-all-errors \
+            --fail --silent --show-error \
+            --header "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v9/projects/$VERCEL_PROJECT_ID/env?$scope_query" \
+            --output "$RUNNER_TEMP/public-demo-environment.json"
           vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+          EXPECTED_VERCEL_ENVIRONMENT_PROFILE=public-demo \
+            node --experimental-strip-types scripts/validate-vercel-environment.mjs \
+              "$RUNNER_TEMP/public-demo-environment.json" \
+              .vercel/.env.production.local
           node --env-file=.vercel/.env.production.local - <<'NODE'
           const exact = {
+            AI_API_MODE: "responses",
+            AI_BASE_URL: "https://ai-gateway.vercel.sh/v1",
+            AI_CHAT_MODEL: "openai/gpt-5-mini",
             APP_BASE_URL: "https://demo.kinresolve.com",
             DATABASE_AUTO_MIGRATE: "false",
             KINSLEUTH_ARCHIVE_ID: "kinresolve-demo-public",
@@ -265,13 +298,6 @@ jobs:
           };
           for (const [name, expected] of Object.entries(exact)) {
             if (process.env[name] !== expected) process.exit(1);
-          }
-          for (const name of [
-            "AI_API_KEY", "AUTH_SECRET", "CRON_SECRET", "DATABASE_URL",
-            "KINRESOLVE_DEMO_CANARY_SECRET", "KINRESOLVE_DEMO_PRIVACY_HMAC_SECRET",
-            "KINRESOLVE_OBSERVABILITY_PROBE_SECRET"
-          ]) {
-            if (!process.env[name]?.trim()) process.exit(1);
           }
           if (process.env.KINRESOLVE_DATABASE_IDENTITY !== process.env.EXPECTED_DATABASE_IDENTITY) {
             process.exit(1);

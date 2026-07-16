@@ -209,6 +209,7 @@ async function chooseOutcome(page, label) {
 async function runOptionalAiAndAudit(page, axeSource) {
   await activateByKeyboard(page, "Suggest the next three checks");
   await page.getByRole("article", { name: "Curated AI result" }).waitFor();
+  await page.getByText("Curated external AI analysis", { exact: true }).waitFor();
   await auditAccessibility(page, axeSource);
 }
 

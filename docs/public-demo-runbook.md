@@ -50,6 +50,8 @@ Require reviewers and no deployment wait timer. Configure these secrets:
 
 Configure these readable variables:
 
+- `AI_GATEWAY_API_KEY_ID`
+- `AI_GATEWAY_MONTHLY_BUDGET_USD=50`
 - `APP_BASE_URL=https://demo.kinresolve.com`
 - `KINRESOLVE_DATABASE_IDENTITY`
 - `MARKETING_VERCEL_PROJECT_ID`
@@ -192,8 +194,9 @@ On failure:
 - [ ] GitHub protected environments and immutable workflow-ID variables match this runbook.
 - [ ] Legacy staging controller is manually disabled and idle.
 - [ ] Product CI is green and there are zero open high/critical code-scanning alerts.
-- [ ] AI provider account, daily application cap, and monthly $250 alerts at 50%, 80%, and
-      100% are configured; deterministic fallback is visibly labeled.
+- [ ] The dedicated AI Gateway key has a $50 monthly hard budget inside the overall $250
+      demo envelope; the 150-call daily application cap and overall 50%, 80%, and 100%
+      spend alerts are configured; deterministic fallback is visibly labeled.
 - [ ] Full release/rollback/holding/same-SHA rehearsal and 30-minute rebuild exercise passed.
 - [ ] Chromium, WebKit, Firefox core, 390-pixel mobile, keyboard-only, and WCAG 2.2 AA gates
       passed with zero serious/critical automated findings.

@@ -24,6 +24,7 @@ describe("public demo browser and capacity launch gates", () => {
     expect(browser).toContain("Start guided demo");
     expect(browser).toContain("Likely the same writer");
     expect(browser).toContain("Not enough to decide");
+    expect(browser).toContain("Curated external AI analysis");
     expect(browser).toContain("guidedOutcome");
     expect(browser).toContain("/api/demo/session/reset");
     expect(browser).toMatch(/stale[\s\S]*(?:401|403)|(?:401|403)[\s\S]*stale/i);

@@ -132,6 +132,43 @@ describe("public demo operational boundary", () => {
     expect(publicDemoRelease).not.toMatch(/^\s+environment: (?:beta-staging|production)$/m);
   });
 
+  it("validates Sensitive runtime credentials by metadata and readable demo values exactly", () => {
+    const environmentValidation = publicDemoRelease.indexOf(
+      "scripts/validate-vercel-environment.mjs"
+    );
+    const candidateDeployment = publicDemoRelease.indexOf(
+      "Deploy the unaliased public demo candidate"
+    );
+    expect(environmentValidation).toBeGreaterThan(-1);
+    expect(environmentValidation).toBeLessThan(candidateDeployment);
+    expect(publicDemoRelease).toContain("EXPECTED_VERCEL_ENVIRONMENT_PROFILE=public-demo");
+    expect(publicDemoRelease).toContain("/v9/projects/$VERCEL_PROJECT_ID/env?");
+    expect(publicDemoRelease).toContain('AI_API_MODE: "responses"');
+    expect(publicDemoRelease).toContain(
+      'AI_BASE_URL: "https://ai-gateway.vercel.sh/v1"'
+    );
+    expect(publicDemoRelease).toContain('AI_CHAT_MODEL: "openai/gpt-5-mini"');
+    expect(publicDemoRelease).not.toContain('if (!process.env[name]?.trim())');
+  });
+
+  it("fails closed unless the dedicated AI Gateway key retains the approved $50 hard budget", () => {
+    const gatewayValidation = publicDemoRelease.indexOf(
+      "scripts/validate-public-demo-ai-gateway-key.mjs"
+    );
+    const candidateDeployment = publicDemoRelease.indexOf(
+      "Deploy the unaliased public demo candidate"
+    );
+    expect(gatewayValidation).toBeGreaterThan(-1);
+    expect(gatewayValidation).toBeLessThan(candidateDeployment);
+    expect(publicDemoRelease).toContain(
+      "EXPECTED_AI_GATEWAY_API_KEY_ID: ${{ vars.AI_GATEWAY_API_KEY_ID }}"
+    );
+    expect(publicDemoRelease).toContain(
+      "EXPECTED_AI_GATEWAY_MONTHLY_BUDGET_USD: ${{ vars.AI_GATEWAY_MONTHLY_BUDGET_USD }}"
+    );
+    expect(publicDemoRelease).toContain("https://api.vercel.com/v1/api-keys?");
+  });
+
   it("grants and re-attests the demo runtime role after migration and before candidate deployment", () => {
     const migration = publicDemoRelease.indexOf(
       "Migrate and provision only the isolated demo database"

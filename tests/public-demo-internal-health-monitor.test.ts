@@ -16,9 +16,7 @@ const canonicalEnvironment = {
 describe("public demo protected internal-health monitor", () => {
   it("authenticates and validates the fixed operational diagnostics", async () => {
     const runMonitor = await loadMonitor();
-    const fetchImplementation = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) =>
-      healthyResponse()
-    );
+    const fetchImplementation = vi.fn(successfulMonitorFetch);
 
     await expect(runMonitor(canonicalEnvironment, fetchImplementation)).resolves.toEqual({
       active: 2,
@@ -29,14 +27,15 @@ describe("public demo protected internal-health monitor", () => {
     expect(String(input)).toBe("https://demo.kinresolve.com/api/internal/health");
     expect(init).toMatchObject({ cache: "no-store", method: "GET", redirect: "manual" });
     expect(new Headers(init?.headers).get("authorization")).toBe(`Bearer ${"o".repeat(43)}`);
+    expect(fetchImplementation).toHaveBeenCalledTimes(2);
+    const [cronInput, cronInit] = fetchImplementation.mock.calls[1];
+    expect(String(cronInput)).toBe("https://demo.kinresolve.com/api/cron/integration-jobs");
+    expect(new Headers(cronInit?.headers).get("authorization")).toBeNull();
   });
 
   it("requires candidate protection and never sends credentials to another origin", async () => {
     const runMonitor = await loadMonitor();
-    const fetchImplementation = vi.fn(async (
-      _input: RequestInfo | URL,
-      _init?: RequestInit
-    ) => healthyResponse());
+    const fetchImplementation = vi.fn(successfulMonitorFetch);
 
     await expect(runMonitor({
       ...canonicalEnvironment,
@@ -51,6 +50,31 @@ describe("public demo protected internal-health monitor", () => {
     expect(new Headers(fetchImplementation.mock.calls.at(-1)?.[1]?.headers).get(
       "x-vercel-protection-bypass"
     )).toBe("v".repeat(43));
+  });
+
+  it("proves CRON_SECRET is configured by requiring the app's unauthenticated 401 shape", async () => {
+    const runMonitor = await loadMonitor();
+
+    await expect(runMonitor(canonicalEnvironment, vi.fn(async (input) => (
+      new URL(String(input)).pathname === "/api/internal/health"
+        ? healthyResponse()
+        : cronResponse(503, { error: "Scheduled integration work is not configured." })
+    )))).rejects.toThrow(/operational health/i);
+
+    await expect(runMonitor(canonicalEnvironment, vi.fn(async (input) => (
+      new URL(String(input)).pathname === "/api/internal/health"
+        ? healthyResponse()
+        : new Response("Authentication Required", {
+            headers: { "content-type": "text/html" },
+            status: 401
+          })
+    )))).rejects.toThrow(/operational health/i);
+
+    await expect(runMonitor(canonicalEnvironment, vi.fn(async (input) => (
+      new URL(String(input)).pathname === "/api/internal/health"
+        ? healthyResponse()
+        : cronResponse(200, { demoCleanup: {} })
+    )))).rejects.toThrow(/operational health/i);
   });
 
   it("fails closed for missing credentials, stale cleanup, or unsafe budget values", async () => {
@@ -106,5 +130,24 @@ function healthyResponse(overrides: {
       "content-type": "application/json; charset=utf-8"
     },
     status: 200
+  });
+}
+
+async function successfulMonitorFetch(
+  input: RequestInfo | URL,
+  _init?: RequestInit
+): Promise<Response> {
+  const pathname = new URL(String(input)).pathname;
+  if (pathname === "/api/internal/health") return healthyResponse();
+  if (pathname === "/api/cron/integration-jobs") {
+    return cronResponse(401, { error: "Unauthorized" });
+  }
+  throw new Error(`Unexpected monitor URL: ${pathname}`);
+}
+
+function cronResponse(status: number, body: Record<string, unknown>): Response {
+  return new Response(JSON.stringify(body), {
+    headers: { "content-type": "application/json; charset=utf-8" },
+    status
   });
 }

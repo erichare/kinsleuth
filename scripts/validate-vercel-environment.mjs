@@ -32,7 +32,14 @@ try {
   const expectedBetaApplicationsEnabled = process.env.EXPECTED_BETA_APPLICATIONS_ENABLED === undefined
     ? false
     : requiredBoolean("EXPECTED_BETA_APPLICATIONS_ENABLED");
-  const result = validateVercelEnvironmentContract(document, { expectedBetaApplicationsEnabled });
+  const profile = process.env.EXPECTED_VERCEL_ENVIRONMENT_PROFILE ?? "hosted-beta";
+  if (profile !== "hosted-beta" && profile !== "public-demo") {
+    throw new Error("EXPECTED_VERCEL_ENVIRONMENT_PROFILE must be hosted-beta or public-demo.");
+  }
+  const result = validateVercelEnvironmentContract(document, {
+    expectedBetaApplicationsEnabled,
+    profile
+  });
   const pulledResult = validatePulledVercelEnvironmentContract(pulledEnvironment);
   console.log(
     `Vercel production environment verified: ${result.readableSettings} readable settings and `

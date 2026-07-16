@@ -43,11 +43,47 @@ export async function runPublicDemoInternalHealthMonitor(
 
   const document = await boundedJson(response);
   const diagnostics = validateDiagnostics(document);
+  await proveCronSecretConfigured(configuration, fetchImplementation);
   return Object.freeze({
     active: diagnostics.capacity.active,
     occupied: diagnostics.capacity.occupied,
     dailyAiUsed: diagnostics.aiBudget.dailyUsed
   });
+}
+
+async function proveCronSecretConfigured(configuration, fetchImplementation) {
+  const response = await fetchImplementation(
+    new URL("/api/cron/integration-jobs", configuration.origin),
+    {
+      cache: "no-store",
+      headers: {
+        accept: "application/json",
+        "user-agent": "kinresolve-public-demo-internal-health-monitor/1.0",
+        ...(configuration.bypassSecret
+          ? { "x-vercel-protection-bypass": configuration.bypassSecret }
+          : {})
+      },
+      method: "GET",
+      redirect: "manual",
+      signal: AbortSignal.timeout(requestTimeoutMs)
+    }
+  );
+  if (
+    response.status !== 401
+    || response.redirected
+    || response.headers.has("location")
+    || !response.headers.get("content-type")?.toLowerCase().startsWith("application/json")
+  ) {
+    throw healthError();
+  }
+  const document = await boundedJson(response);
+  if (
+    !objectValue(document)
+    || Object.keys(document).length !== 1
+    || document.error !== "Unauthorized"
+  ) {
+    throw healthError();
+  }
 }
 
 function validateDiagnostics(document) {

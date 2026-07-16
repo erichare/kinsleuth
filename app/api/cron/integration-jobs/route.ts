@@ -30,7 +30,7 @@ const hostedWorkerSafetyMarginMs = 30_000;
 
 export async function GET(request: Request) {
   const cronSecret = process.env.CRON_SECRET;
-  if (!cronSecret) {
+  if (!cronSecret?.trim()) {
     return NextResponse.json({ error: "Scheduled integration work is not configured." }, { status: 503 });
   }
   if (request.headers.get("authorization") !== `Bearer ${cronSecret}`) {

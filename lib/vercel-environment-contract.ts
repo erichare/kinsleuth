@@ -52,6 +52,40 @@ export const requiredReadableProductionEnvironmentNames = [
   "KINSLEUTH_ARCHIVE_ID"
 ] as const;
 
+export const publicDemoSensitiveProductionEnvironmentNames = [
+  "AI_API_KEY",
+  "AUTH_SECRET",
+  "CRON_SECRET",
+  "DATABASE_URL",
+  "KINRESOLVE_DEMO_CANARY_SECRET",
+  "KINRESOLVE_DEMO_PRIVACY_HMAC_SECRET",
+  "KINRESOLVE_OBSERVABILITY_PROBE_SECRET"
+] as const;
+
+export const publicDemoReadableProductionEnvironmentNames = [
+  "AI_API_MODE",
+  "AI_BASE_URL",
+  "AI_CHAT_MODEL",
+  "APP_BASE_URL",
+  "DATABASE_AUTO_MIGRATE",
+  "KINSLEUTH_ARCHIVE_ID",
+  "KINSLEUTH_ALLOW_SIGNUPS",
+  "KINRESOLVE_API_V1_ENABLED",
+  "KINRESOLVE_DATABASE_IDENTITY",
+  "KINRESOLVE_DATASET_MODE",
+  "KINRESOLVE_DEPLOYMENT_MODE",
+  "KINRESOLVE_DNA_ENABLED",
+  "KINRESOLVE_EVIDENCE_BINARY_UPLOADS_ENABLED",
+  "KINRESOLVE_EXTERNAL_AI_ENABLED",
+  "KINRESOLVE_PACKAGE_MEDIA_ENABLED",
+  "KINRESOLVE_PLAIN_GEDCOM_ENABLED",
+  "KINRESOLVE_PUBLIC_ARCHIVE_ENABLED",
+  "KINRESOLVE_PUBLIC_DEMO_ENABLED",
+  "KINRESOLVE_PUBLIC_DEMO_ORIGIN",
+  "KINRESOLVE_PUBLIC_PUBLISHING_ENABLED",
+  "KINRESOLVE_SCHEDULED_WRITES_ENABLED"
+] as const;
+
 // These credentials authorize release, recovery, or provider-control operations.
 // They must remain step-scoped GitHub secrets and must never be configured as
 // user-managed Vercel project environment entries. (Vercel may expose its own
@@ -100,6 +134,7 @@ const forbiddenNames = new Set<string>(forbiddenWorkflowOnlyEnvironmentNames);
 
 export type VercelEnvironmentContractOptions = Readonly<{
   expectedBetaApplicationsEnabled?: boolean;
+  profile?: "hosted-beta" | "public-demo";
 }>;
 
 export function validateVercelEnvironmentContract(
@@ -109,20 +144,32 @@ export function validateVercelEnvironmentContract(
   readableSettings: number;
   sensitiveSettings: number;
 } {
+  const profile = options.profile ?? "hosted-beta";
+  if (profile !== "hosted-beta" && profile !== "public-demo") {
+    throw new Error("The Vercel environment profile is invalid.");
+  }
   const expectedBetaApplicationsEnabled = options.expectedBetaApplicationsEnabled ?? false;
   if (typeof expectedBetaApplicationsEnabled !== "boolean") {
     throw new Error("The expected beta-application setting must be boolean.");
   }
-  const requiredSensitiveNames: readonly string[] = expectedBetaApplicationsEnabled
-    ? [...requiredSensitiveProductionEnvironmentNames, betaApplicationSensitiveEnvironmentName]
-    : requiredSensitiveProductionEnvironmentNames;
+  if (profile === "public-demo" && expectedBetaApplicationsEnabled) {
+    throw new Error("The public demo environment cannot enable beta-application intake.");
+  }
+  const requiredSensitiveNames: readonly string[] = profile === "public-demo"
+    ? publicDemoSensitiveProductionEnvironmentNames
+    : expectedBetaApplicationsEnabled
+      ? [...requiredSensitiveProductionEnvironmentNames, betaApplicationSensitiveEnvironmentName]
+      : requiredSensitiveProductionEnvironmentNames;
+  const requiredReadableNames: readonly string[] = profile === "public-demo"
+    ? publicDemoReadableProductionEnvironmentNames
+    : requiredReadableProductionEnvironmentNames;
   const requiredNames = new Set<string>([
     ...requiredSensitiveNames,
-    ...requiredReadableProductionEnvironmentNames
+    ...requiredReadableNames
   ]);
   const inspectedNames = new Set<string>([
     ...requiredNames,
-    betaApplicationSensitiveEnvironmentName
+    ...(profile === "hosted-beta" ? [betaApplicationSensitiveEnvironmentName] : [])
   ]);
   const entries = parseEntries(value);
   const requiredEntries = new Map<string, EnvironmentMetadata>();
@@ -137,6 +184,9 @@ export function validateVercelEnvironmentContract(
     if (forbiddenNames.has(key)) {
       throw new Error(`Vercel environment metadata contains forbidden workflow-only setting ${key}.`);
     }
+    if (profile === "public-demo" && !inspectedNames.has(key)) {
+      throw new Error(`Vercel public demo environment contains unexpected setting ${key}.`);
+    }
     if (!inspectedNames.has(key)) continue;
     if (requiredEntries.has(key)) {
       throw new Error(`Vercel environment metadata contains a duplicate ${key} assignment.`);
@@ -150,8 +200,8 @@ export function validateVercelEnvironmentContract(
   }
 
   for (const name of [
-    ...requiredSensitiveProductionEnvironmentNames,
-    ...(requiredEntries.has(betaApplicationSensitiveEnvironmentName)
+    ...requiredSensitiveNames,
+    ...(profile === "hosted-beta" && requiredEntries.has(betaApplicationSensitiveEnvironmentName)
       ? [betaApplicationSensitiveEnvironmentName]
       : [])
   ]) {
@@ -163,7 +213,7 @@ export function validateVercelEnvironmentContract(
     }
   }
 
-  for (const name of requiredReadableProductionEnvironmentNames) {
+  for (const name of requiredReadableNames) {
     const entry = requiredEntries.get(name)!;
     validateProductionOnly(entry);
     if (entry.type === "sensitive") {
@@ -175,9 +225,13 @@ export function validateVercelEnvironmentContract(
   }
 
   return {
-    readableSettings: requiredReadableProductionEnvironmentNames.length,
-    sensitiveSettings: requiredSensitiveProductionEnvironmentNames.length
-      + Number(requiredEntries.has(betaApplicationSensitiveEnvironmentName))
+    readableSettings: requiredReadableNames.length,
+    sensitiveSettings: requiredSensitiveNames.length
+      + Number(
+        profile === "hosted-beta"
+        && !expectedBetaApplicationsEnabled
+        && requiredEntries.has(betaApplicationSensitiveEnvironmentName)
+      )
   };
 }
 

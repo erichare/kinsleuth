@@ -7,6 +7,8 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   betaApplicationSensitiveEnvironmentName,
   forbiddenWorkflowOnlyEnvironmentNames,
+  publicDemoReadableProductionEnvironmentNames,
+  publicDemoSensitiveProductionEnvironmentNames,
   requiredReadableProductionEnvironmentNames,
   requiredSensitiveProductionEnvironmentNames,
   validatePulledVercelEnvironmentContract,
@@ -17,6 +19,87 @@ const scratchDirectories: string[] = [];
 
 afterEach(async () => {
   await Promise.all(scratchDirectories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })));
+});
+
+describe("Vercel public demo environment metadata contract", () => {
+  it("accepts exactly the production-only public demo runtime contract", () => {
+    expect(validateVercelEnvironmentContract(publicDemoMetadata(), {
+      profile: "public-demo"
+    })).toEqual({
+      readableSettings: publicDemoReadableProductionEnvironmentNames.length,
+      sensitiveSettings: publicDemoSensitiveProductionEnvironmentNames.length
+    });
+  });
+
+  it.each(publicDemoSensitiveProductionEnvironmentNames)(
+    "requires public demo credential %s to be Sensitive",
+    (key) => {
+      expect(() => validateVercelEnvironmentContract(publicDemoMetadata({
+        [key]: { type: "encrypted" }
+      }), { profile: "public-demo" })).toThrow(new RegExp(`${key}.*sensitive`, "i"));
+    }
+  );
+
+  it.each(publicDemoReadableProductionEnvironmentNames)(
+    "keeps public demo setting %s readable for exact-value validation",
+    (key) => {
+      expect(() => validateVercelEnvironmentContract(publicDemoMetadata({
+        [key]: { type: "sensitive" }
+      }), { profile: "public-demo" })).toThrow(new RegExp(`${key}.*readable`, "i"));
+    }
+  );
+
+  it("rejects missing, duplicate, non-production, and unexpected public demo settings", () => {
+    const missing = publicDemoMetadata();
+    missing.envs = missing.envs.filter((entry) => entry.key !== "AI_API_KEY");
+    expect(() => validateVercelEnvironmentContract(missing, { profile: "public-demo" }))
+      .toThrow(/missing.*AI_API_KEY/i);
+
+    const duplicate = publicDemoMetadata();
+    duplicate.envs.push({ ...duplicate.envs[0] });
+    expect(() => validateVercelEnvironmentContract(duplicate, { profile: "public-demo" }))
+      .toThrow(/duplicate/i);
+
+    expect(() => validateVercelEnvironmentContract(publicDemoMetadata({
+      CRON_SECRET: { target: ["production", "preview"] }
+    }), { profile: "public-demo" })).toThrow(/CRON_SECRET.*production only/i);
+
+    const unexpected = publicDemoMetadata() as { envs: Array<Record<string, unknown>> };
+    unexpected.envs.push({ key: "RESEND_API_KEY", type: "sensitive", target: ["production"] });
+    expect(() => validateVercelEnvironmentContract(unexpected, { profile: "public-demo" }))
+      .toThrow(/unexpected setting RESEND_API_KEY/i);
+  });
+
+  it("validates public demo metadata without reading or printing Sensitive values", async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), "kinresolve-public-demo-vercel-env-"));
+    scratchDirectories.push(directory);
+    const metadataPath = path.join(directory, "metadata.json");
+    const pulledEnvironmentPath = path.join(directory, "production.env");
+    const marker = "sensitive-value-that-must-never-print";
+    await writeFile(metadataPath, JSON.stringify(publicDemoMetadata({
+      AI_API_KEY: { value: marker }
+    })), "utf8");
+    await writeFile(
+      pulledEnvironmentPath,
+      publicDemoReadableProductionEnvironmentNames.map((name) => `${name}=readable`).join("\n"),
+      "utf8"
+    );
+
+    const result = spawnSync(process.execPath, [
+      "--experimental-strip-types",
+      path.join(process.cwd(), "scripts", "validate-vercel-environment.mjs"),
+      metadataPath,
+      pulledEnvironmentPath
+    ], {
+      encoding: "utf8",
+      cwd: process.cwd(),
+      env: { ...process.env, EXPECTED_VERCEL_ENVIRONMENT_PROFILE: "public-demo" }
+    });
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toMatch(/verified.*readable.*sensitive/i);
+    expect(`${result.stdout}${result.stderr}`).not.toContain(marker);
+  });
 });
 
 describe("Vercel hosted environment metadata contract", () => {
@@ -227,6 +310,25 @@ function metadata(overrides: Record<string, Override> = {}, includeBetaApplicati
         ...overrides[betaApplicationSensitiveEnvironmentName]
       }] : []),
       ...requiredReadableProductionEnvironmentNames.map((key) => ({
+        key,
+        type: "encrypted",
+        target: ["production"],
+        ...overrides[key]
+      }))
+    ]
+  };
+}
+
+function publicDemoMetadata(overrides: Record<string, Override> = {}) {
+  return {
+    envs: [
+      ...publicDemoSensitiveProductionEnvironmentNames.map((key) => ({
+        key,
+        type: "sensitive",
+        target: ["production"],
+        ...overrides[key]
+      })),
+      ...publicDemoReadableProductionEnvironmentNames.map((key) => ({
         key,
         type: "encrypted",
         target: ["production"],
