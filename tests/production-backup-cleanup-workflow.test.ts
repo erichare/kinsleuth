@@ -23,7 +23,12 @@ describe("independent production backup fence cleanup", () => {
     expect(cleanupWorkflow).toContain("github.event.workflow_run.conclusion == 'cancelled'");
     expect(cleanupWorkflow).toContain("github.event.workflow_run.conclusion == 'timed_out'");
     expect(cleanupWorkflow).toContain('run?.path !== ".github/workflows/production-backup.yml"');
-    expect(cleanupWorkflow).toContain('["schedule", "workflow_dispatch"].includes(run?.event)');
+    expect(cleanupWorkflow).toContain(
+      "EXPECTED_SOURCE_WORKFLOW_ID: ${{ vars.PRODUCTION_BACKUP_WORKFLOW_ID }}"
+    );
+    expect(cleanupWorkflow).toContain("run?.workflow_id");
+    expect(cleanupWorkflow).not.toContain("run?.name");
+    expect(cleanupWorkflow).toContain('run?.event !== "workflow_dispatch"');
     expect(cleanupWorkflow).toContain('run?.head_branch !== "main"');
   });
 

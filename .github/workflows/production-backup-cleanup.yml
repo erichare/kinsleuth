@@ -34,6 +34,7 @@ jobs:
       authorized: ${{ steps.validate_lease.outputs.authorized || steps.absent_lease.outputs.authorized }}
     env:
       BACKUP_CLEANUP_LEASE_ARTIFACT_NAME: production-backup-cleanup-lease-${{ github.event.workflow_run.run_attempt }}
+      EXPECTED_SOURCE_WORKFLOW_ID: ${{ vars.PRODUCTION_BACKUP_WORKFLOW_ID }}
       SOURCE_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
       SOURCE_RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
       SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}
@@ -52,9 +53,10 @@ jobs:
             event.repository?.full_name !== process.env.GITHUB_REPOSITORY ||
             run?.repository?.full_name !== process.env.GITHUB_REPOSITORY ||
             run?.head_repository?.full_name !== process.env.GITHUB_REPOSITORY ||
-            run?.name !== "Production encrypted backup" ||
             run?.path !== ".github/workflows/production-backup.yml" ||
-            !["schedule", "workflow_dispatch"].includes(run?.event) ||
+            !/^[1-9][0-9]{0,19}$/.test(process.env.EXPECTED_SOURCE_WORKFLOW_ID ?? "") ||
+            String(run?.workflow_id ?? "") !== process.env.EXPECTED_SOURCE_WORKFLOW_ID ||
+            run?.event !== "workflow_dispatch" ||
             run?.head_branch !== "main" ||
             !/^[1-9][0-9]{0,19}$/.test(String(run?.id ?? "")) ||
             !/^[1-9][0-9]{0,19}$/.test(String(run?.run_attempt ?? "")) ||

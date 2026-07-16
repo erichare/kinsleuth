@@ -2,8 +2,6 @@ name: Production encrypted backup
 run-name: Kin Resolve production backup ${{ github.run_id }} attempt ${{ github.run_attempt }}
 
 on:
-  schedule:
-    - cron: "17 09 * * *"
   workflow_dispatch:
 
 permissions:

@@ -1,0 +1,564 @@
+name: Release Kin Resolve public demo
+run-name: Public demo ${{ inputs.action }} ${{ inputs.release_commit }} run ${{ github.run_id }} attempt ${{ github.run_attempt }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: Release exact main, roll back to a validated deployment, or contain to holding
+        required: true
+        type: choice
+        options:
+          - release
+          - rollback
+          - contain
+      release_commit:
+        description: Exact 40-character commit SHA currently at main
+        required: true
+        type: string
+      rollback_deployment_id:
+        description: Exact prior deployment ID; required only for rollback
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: kinresolve-public-demo-release
+  cancel-in-progress: false
+
+jobs:
+  authorize:
+    name: Authorize exact current-main demo operation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    outputs:
+      action: ${{ steps.request.outputs.action }}
+      package_version: ${{ steps.request.outputs.package_version }}
+      release_tag: ${{ steps.request.outputs.release_tag }}
+      rollback_deployment_id: ${{ steps.request.outputs.rollback_deployment_id }}
+    steps:
+      - name: Check out the exact requested revision without credentials
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: ${{ inputs.release_commit }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Validate the exact request against current main
+        id: request
+        env:
+          ACTION: ${{ inputs.action }}
+          RELEASE_COMMIT: ${{ inputs.release_commit }}
+          ROLLBACK_DEPLOYMENT_ID: ${{ inputs.rollback_deployment_id }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = "refs/heads/main"
+          [[ "$RELEASE_COMMIT" =~ ^[a-f0-9]{40}$ ]]
+          git fetch origin main:refs/remotes/origin/main --force --no-tags
+          test "$(git rev-parse --verify 'HEAD^{commit}')" = "$RELEASE_COMMIT"
+          test "$(git rev-parse refs/remotes/origin/main)" = "$RELEASE_COMMIT"
+          case "$ACTION" in
+            release|contain)
+              test -z "$ROLLBACK_DEPLOYMENT_ID"
+              ;;
+            rollback)
+              [[ "$ROLLBACK_DEPLOYMENT_ID" =~ ^dpl_[A-Za-z0-9]{8,96}$ ]]
+              ;;
+            *) exit 1 ;;
+          esac
+          package_version="$(node -p 'require("./package.json").version')"
+          [[ "$package_version" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]
+          {
+            printf 'action=%s\n' "$ACTION"
+            printf 'package_version=%s\n' "$package_version"
+            printf 'release_tag=v%s\n' "$package_version"
+            printf 'rollback_deployment_id=%s\n' "$ROLLBACK_DEPLOYMENT_ID"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Refuse unresolved release or containment safety work
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_SAFETY_CURRENT_WORKFLOW: demo
+        run: node --experimental-strip-types scripts/validate-release-safety-queue.mjs
+
+  release:
+    name: Build, prove, and promote the public demo candidate
+    needs: authorize
+    if: needs.authorize.outputs.action == 'release'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    environment: demo-production
+    steps:
+      - name: Check out the exact authorized release revision
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: ${{ inputs.release_commit }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up the pinned Node.js runtime
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install exact application and Vercel dependencies
+        run: |
+          set -euo pipefail
+          npm ci
+          npm install --global --ignore-scripts vercel@56.1.0
+
+      - name: Reverify exact current main before protected configuration
+        env:
+          RELEASE_COMMIT: ${{ inputs.release_commit }}
+        run: |
+          set -euo pipefail
+          git fetch origin main:refs/remotes/origin/main --force --no-tags
+          test "$(git rev-parse --verify 'HEAD^{commit}')" = "$RELEASE_COMMIT"
+          test "$(git rev-parse refs/remotes/origin/main)" = "$RELEASE_COMMIT"
+
+      - name: Bind the isolated hosted-demo release identities
+        env:
+          APP_BASE_URL: ${{ vars.APP_BASE_URL }}
+          EXPECTED_ARCHIVE_ID: kinresolve-demo-public
+          EXPECTED_DATASET_MODE: demo
+          EXPECTED_VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+          KINRESOLVE_DATABASE_IDENTITY: ${{ vars.KINRESOLVE_DATABASE_IDENTITY }}
+          KINRESOLVE_DEPLOYMENT_MODE: hosted
+          KINRESOLVE_PUBLIC_DEMO_ENABLED: "true"
+          KINRESOLVE_RELEASE_ROLE: public-demo
+          PRODUCTION_DATABASE_IDENTITY: ${{ vars.PRODUCTION_DATABASE_IDENTITY }}
+          PRODUCTION_VERCEL_PROJECT_ID: ${{ vars.PRODUCTION_VERCEL_PROJECT_ID }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          set -euo pipefail
+          test "$APP_BASE_URL" = "https://demo.kinresolve.com"
+          test "$EXPECTED_ARCHIVE_ID" = "kinresolve-demo-public"
+          test "$EXPECTED_DATASET_MODE" = "demo"
+          test "$KINRESOLVE_DEPLOYMENT_MODE" = "hosted"
+          test "$KINRESOLVE_PUBLIC_DEMO_ENABLED" = "true"
+          test "$KINRESOLVE_RELEASE_ROLE" = "public-demo"
+          [[ "$VERCEL_ORG_ID" =~ ^[A-Za-z0-9_]{4,128}$ ]]
+          [[ "$VERCEL_PROJECT_ID" =~ ^[A-Za-z0-9_]{4,128}$ ]]
+          test "$VERCEL_PROJECT_ID" = "$EXPECTED_VERCEL_PROJECT_ID"
+          test "$VERCEL_PROJECT_ID" != "$PRODUCTION_VERCEL_PROJECT_ID"
+          [[ "$KINRESOLVE_DATABASE_IDENTITY" =~ ^[a-f0-9]{64}$ ]]
+          [[ "$PRODUCTION_DATABASE_IDENTITY" =~ ^[a-f0-9]{64}$ ]]
+          test "$KINRESOLVE_DATABASE_IDENTITY" != "$PRODUCTION_DATABASE_IDENTITY"
+          install -d -m 700 .vercel
+          node -e '
+            const { writeFileSync } = require("node:fs");
+            writeFileSync(".vercel/project.json", JSON.stringify({
+              orgId: process.env.VERCEL_ORG_ID,
+              projectId: process.env.VERCEL_PROJECT_ID
+            }) + "\n", { mode: 0o600 });
+          '
+
+      - name: Prove automatic custom-domain assignment remains disabled
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          scope_query=""
+          if [[ "$VERCEL_ORG_ID" == team_* ]]; then scope_query="?teamId=$VERCEL_ORG_ID"; fi
+          project_api="https://api.vercel.com/v9/projects/$VERCEL_PROJECT_ID$scope_query"
+          curl --connect-timeout 10 --max-time 30 --retry 3 --retry-all-errors \
+            --fail --silent --show-error --request PATCH \
+            --header "Authorization: Bearer $VERCEL_TOKEN" \
+            --header "Content-Type: application/json" \
+            --data '{"autoAssignCustomDomains":false}' \
+            "$project_api" --output "$RUNNER_TEMP/public-demo-project-patch.json"
+          curl --connect-timeout 10 --max-time 30 --retry 3 --retry-all-errors \
+            --fail --silent --show-error \
+            --header "Authorization: Bearer $VERCEL_TOKEN" \
+            "$project_api" --output "$RUNNER_TEMP/public-demo-project.json"
+          EXPECTED_VERCEL_PROJECT_PAUSED="false" \
+            node --experimental-strip-types scripts/validate-vercel-project-safety.mjs \
+              "$RUNNER_TEMP/public-demo-project.json"
+
+      - name: Pull and validate the exact public demo runtime contract
+        env:
+          EXPECTED_DATABASE_IDENTITY: ${{ vars.KINRESOLVE_DATABASE_IDENTITY }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          umask 077
+          vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+          node --env-file=.vercel/.env.production.local - <<'NODE'
+          const exact = {
+            APP_BASE_URL: "https://demo.kinresolve.com",
+            DATABASE_AUTO_MIGRATE: "false",
+            KINSLEUTH_ARCHIVE_ID: "kinresolve-demo-public",
+            KINSLEUTH_ALLOW_SIGNUPS: "false",
+            KINRESOLVE_API_V1_ENABLED: "false",
+            KINRESOLVE_DATASET_MODE: "demo",
+            KINRESOLVE_DEPLOYMENT_MODE: "hosted",
+            KINRESOLVE_DNA_ENABLED: "true",
+            KINRESOLVE_EVIDENCE_BINARY_UPLOADS_ENABLED: "false",
+            KINRESOLVE_EXTERNAL_AI_ENABLED: "true",
+            KINRESOLVE_PACKAGE_MEDIA_ENABLED: "false",
+            KINRESOLVE_PLAIN_GEDCOM_ENABLED: "false",
+            KINRESOLVE_PUBLIC_ARCHIVE_ENABLED: "true",
+            KINRESOLVE_PUBLIC_DEMO_ENABLED: "true",
+            KINRESOLVE_PUBLIC_DEMO_ORIGIN: "https://demo.kinresolve.com",
+            KINRESOLVE_PUBLIC_PUBLISHING_ENABLED: "false",
+            KINRESOLVE_SCHEDULED_WRITES_ENABLED: "true"
+          };
+          for (const [name, expected] of Object.entries(exact)) {
+            if (process.env[name] !== expected) process.exit(1);
+          }
+          for (const name of [
+            "AI_API_KEY", "AUTH_SECRET", "CRON_SECRET", "DATABASE_URL",
+            "KINRESOLVE_DEMO_PRIVACY_HMAC_SECRET"
+          ]) {
+            if (!process.env[name]?.trim()) process.exit(1);
+          }
+          if (process.env.KINRESOLVE_DATABASE_IDENTITY !== process.env.EXPECTED_DATABASE_IDENTITY) {
+            process.exit(1);
+          }
+          NODE
+
+      - name: Verify migrations and the fictional demo boundary
+        run: |
+          set -euo pipefail
+          npm run migrations:verify
+          npm run demo:verify
+
+      - name: Migrate and provision only the isolated demo database
+        env:
+          DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
+          KINSLEUTH_ARCHIVE_ID: kinresolve-demo-public
+          KINRESOLVE_DATASET_MODE: demo
+          KINRESOLVE_DEPLOYMENT_MODE: hosted
+        run: |
+          set -euo pipefail
+          npm run db:migrate
+          npm run archive:provision -- --mode demo
+
+      - name: Capture the current healthy canonical deployment for rollback
+        id: previous
+        env:
+          APP_BASE_URL: ${{ vars.APP_BASE_URL }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          deployment_host="${APP_BASE_URL#https://}"
+          scope_query=""
+          if [[ "$VERCEL_ORG_ID" == team_* ]]; then scope_query="?teamId=$VERCEL_ORG_ID"; fi
+          curl --connect-timeout 10 --max-time 30 --retry 3 --retry-all-errors \
+            --fail --silent --show-error --header "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v13/deployments/$deployment_host$scope_query" \
+            --output "$RUNNER_TEMP/public-demo-previous.json"
+          node --experimental-strip-types scripts/validate-vercel-deployment.mjs previous \
+            "$RUNNER_TEMP/public-demo-previous.json"
+
+      - name: Fetch and validate the pinned demo holding deployment
+        id: holding
+        env:
+          APPROVED_HOLDING_DEPLOYMENT_ID: ${{ secrets.DEMO_HOLDING_DEPLOYMENT_ID }}
+          DEMO_HOLDING_DEPLOYMENT_ID: ${{ secrets.DEMO_HOLDING_DEPLOYMENT_ID }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          [[ "$DEMO_HOLDING_DEPLOYMENT_ID" =~ ^dpl_[A-Za-z0-9]{8,96}$ ]]
+          scope_query=""
+          if [[ "$VERCEL_ORG_ID" == team_* ]]; then scope_query="?teamId=$VERCEL_ORG_ID"; fi
+          curl --connect-timeout 10 --max-time 30 --retry 3 --retry-all-errors \
+            --fail --silent --show-error --header "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v13/deployments/$DEMO_HOLDING_DEPLOYMENT_ID$scope_query" \
+            --output "$RUNNER_TEMP/public-demo-holding.json"
+          node --experimental-strip-types scripts/validate-vercel-deployment.mjs holding-record \
+            "$RUNNER_TEMP/public-demo-holding.json"
+
+      - name: Build the immutable public demo artifact
+        env:
+          KINRESOLVE_BUILD_COMMIT_SHA: ${{ inputs.release_commit }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: vercel build --prod --token="$VERCEL_TOKEN"
+
+      - name: Deploy the unaliased public demo candidate
+        id: deploy
+        env:
+          RELEASE_COMMIT: ${{ inputs.release_commit }}
+          RELEASE_TAG: ${{ needs.authorize.outputs.release_tag }}
+          RELEASE_VERSION: ${{ needs.authorize.outputs.package_version }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          deployment_url="$(vercel deploy --prebuilt --prod --skip-domain --yes \
+            --meta "githubCommitSha=$RELEASE_COMMIT" \
+            --meta "githubRunId=$GITHUB_RUN_ID" \
+            --meta "githubRunAttempt=$GITHUB_RUN_ATTEMPT" \
+            --meta "releaseTag=$RELEASE_TAG" \
+            --meta "packageVersion=$RELEASE_VERSION" \
+            --meta "releaseRole=public-demo" \
+            --token="$VERCEL_TOKEN")"
+          DEPLOYMENT_URL="$deployment_url" node -e '
+            const url = new URL(process.env.DEPLOYMENT_URL);
+            if (url.protocol !== "https:" || url.origin !== process.env.DEPLOYMENT_URL ||
+                !url.hostname.endsWith(".vercel.app") || url.hostname === "vercel.app") process.exit(1);
+          '
+          printf 'deployment_url=%s\n' "$deployment_url" >> "$GITHUB_OUTPUT"
+
+      - name: Fetch and validate the exact candidate record
+        id: candidate
+        env:
+          APP_BASE_URL: ${{ vars.APP_BASE_URL }}
+          CANDIDATE_DEPLOYMENT_URL: ${{ steps.deploy.outputs.deployment_url }}
+          EXPECTED_GITHUB_COMMIT_SHA: ${{ inputs.release_commit }}
+          EXPECTED_GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
+          EXPECTED_GITHUB_RUN_ID: ${{ github.run_id }}
+          PACKAGE_VERSION: ${{ needs.authorize.outputs.package_version }}
+          PREVIOUS_DEPLOYMENT_ID: ${{ steps.previous.outputs.deployment_id }}
+          RELEASE_TAG: ${{ needs.authorize.outputs.release_tag }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          deployment_host="${CANDIDATE_DEPLOYMENT_URL#https://}"
+          scope_query=""
+          if [[ "$VERCEL_ORG_ID" == team_* ]]; then scope_query="?teamId=$VERCEL_ORG_ID"; fi
+          curl --connect-timeout 10 --max-time 30 --retry 3 --retry-all-errors \
+            --fail --silent --show-error --header "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v13/deployments/$deployment_host$scope_query" \
+            --output "$RUNNER_TEMP/public-demo-candidate.json"
+          node --experimental-strip-types scripts/validate-vercel-deployment.mjs candidate \
+            "$RUNNER_TEMP/public-demo-candidate.json"
+
+      - name: Prove every generated candidate origin remains protected
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: >-
+          node --experimental-strip-types scripts/probe-vercel-candidate-protection.mjs
+          "$RUNNER_TEMP/public-demo-candidate.json"
+
+      - name: Run the protected disposable public demo browser canary
+        env:
+          KINRESOLVE_DEMO_CANARY_SECRET: ${{ secrets.KINRESOLVE_DEMO_CANARY_SECRET }}
+          PUBLIC_DEMO_ORIGIN: ${{ steps.candidate.outputs.deployment_url }}
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+        run: node --experimental-strip-types scripts/public-demo-browser-canary.mjs
+
+      - name: Reverify exact current main immediately before promotion
+        env:
+          RELEASE_COMMIT: ${{ inputs.release_commit }}
+        run: |
+          set -euo pipefail
+          git fetch origin main:refs/remotes/origin/main --force --no-tags
+          test "$(git rev-parse --verify 'HEAD^{commit}')" = "$RELEASE_COMMIT"
+          test "$(git rev-parse refs/remotes/origin/main)" = "$RELEASE_COMMIT"
+
+      - name: Promote the exact proven public demo candidate
+        id: promote
+        timeout-minutes: 10
+        env:
+          CANDIDATE_DEPLOYMENT_URL: ${{ steps.candidate.outputs.deployment_url }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: vercel promote "$CANDIDATE_DEPLOYMENT_URL" --yes --timeout=5m
+
+      - name: Prove canonical promotion and run the full public demo monitor
+        id: canonical-proof
+        env:
+          APP_BASE_URL: ${{ vars.APP_BASE_URL }}
+          CANDIDATE_DEPLOYMENT_ID: ${{ steps.candidate.outputs.deployment_id }}
+          KINRESOLVE_DEMO_CANARY_SECRET: ${{ secrets.KINRESOLVE_DEMO_CANARY_SECRET }}
+          PUBLIC_DEMO_ORIGIN: ${{ vars.APP_BASE_URL }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          deployment_host="${APP_BASE_URL#https://}"
+          scope_query=""
+          if [[ "$VERCEL_ORG_ID" == team_* ]]; then scope_query="?teamId=$VERCEL_ORG_ID"; fi
+          for attempt in $(seq 1 20); do
+            rm -f "$RUNNER_TEMP/public-demo-promoted.json"
+            if curl --connect-timeout 10 --max-time 30 --fail --silent --show-error \
+                --header "Authorization: Bearer $VERCEL_TOKEN" \
+                "https://api.vercel.com/v13/deployments/$deployment_host$scope_query" \
+                --output "$RUNNER_TEMP/public-demo-promoted.json" \
+              && env -u GITHUB_OUTPUT node --experimental-strip-types \
+                scripts/validate-vercel-deployment.mjs promoted \
+                "$RUNNER_TEMP/public-demo-promoted.json" "$deployment_host" >/dev/null 2>&1; then
+              break
+            fi
+            if test "$attempt" = 20; then exit 1; fi
+            sleep 3
+          done
+          node --experimental-strip-types scripts/public-demo-monitor.mjs full
+
+      - name: Roll back a failed promotion to the previously validated deployment
+        id: rollback
+        if: failure() && steps.promote.outcome == 'success'
+        env:
+          PREVIOUS_DEPLOYMENT_ID: ${{ steps.previous.outputs.deployment_id }}
+          PREVIOUS_DEPLOYMENT_URL: ${{ steps.previous.outputs.deployment_url }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          [[ "$PREVIOUS_DEPLOYMENT_ID" =~ ^dpl_[A-Za-z0-9]{8,96}$ ]]
+          vercel promote "$PREVIOUS_DEPLOYMENT_URL" --yes --timeout=5m
+
+      - name: Fail closed to the pinned holding page if rollback cannot be proved
+        if: >-
+          always() &&
+          steps.promote.outcome == 'success' &&
+          steps.canonical-proof.outcome != 'success' &&
+          steps.rollback.outcome != 'success'
+        env:
+          DEMO_HOLDING_DEPLOYMENT_ID: ${{ steps.holding.outputs.deployment_id }}
+          HOLDING_DEPLOYMENT_URL: ${{ steps.holding.outputs.deployment_url }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          [[ "$DEMO_HOLDING_DEPLOYMENT_ID" =~ ^dpl_[A-Za-z0-9]{8,96}$ ]]
+          vercel promote "$HOLDING_DEPLOYMENT_URL" --yes --timeout=5m
+
+  containment:
+    name: Roll back or contain the public demo alias
+    needs: authorize
+    if: needs.authorize.outputs.action == 'rollback' || needs.authorize.outputs.action == 'contain'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: demo-containment
+    steps:
+      - name: Check out the exact authorized containment revision
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: ${{ inputs.release_commit }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up the pinned Node.js runtime
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install exact containment dependencies
+        run: |
+          set -euo pipefail
+          npm ci
+          npm install --global --ignore-scripts vercel@56.1.0
+
+      - name: Reverify exact current main and isolated Vercel identity
+        env:
+          APP_BASE_URL: ${{ vars.APP_BASE_URL }}
+          EXPECTED_VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+          PRODUCTION_VERCEL_PROJECT_ID: ${{ vars.PRODUCTION_VERCEL_PROJECT_ID }}
+          RELEASE_COMMIT: ${{ inputs.release_commit }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          set -euo pipefail
+          git fetch origin main:refs/remotes/origin/main --force --no-tags
+          test "$(git rev-parse --verify 'HEAD^{commit}')" = "$RELEASE_COMMIT"
+          test "$(git rev-parse refs/remotes/origin/main)" = "$RELEASE_COMMIT"
+          test "$APP_BASE_URL" = "https://demo.kinresolve.com"
+          test "$VERCEL_PROJECT_ID" = "$EXPECTED_VERCEL_PROJECT_ID"
+          test "$VERCEL_PROJECT_ID" != "$PRODUCTION_VERCEL_PROJECT_ID"
+
+      - name: Fetch and validate the requested rollback or holding deployment
+        id: target
+        env:
+          ACTION: ${{ needs.authorize.outputs.action }}
+          APPROVED_HOLDING_DEPLOYMENT_ID: ${{ secrets.DEMO_HOLDING_DEPLOYMENT_ID }}
+          DEMO_HOLDING_DEPLOYMENT_ID: ${{ secrets.DEMO_HOLDING_DEPLOYMENT_ID }}
+          ROLLBACK_DEPLOYMENT_ID: ${{ needs.authorize.outputs.rollback_deployment_id }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          if test "$ACTION" = "contain"; then
+            target_id="$DEMO_HOLDING_DEPLOYMENT_ID"
+            mode="holding-record"
+          else
+            target_id="$ROLLBACK_DEPLOYMENT_ID"
+            mode="previous"
+          fi
+          [[ "$target_id" =~ ^dpl_[A-Za-z0-9]{8,96}$ ]]
+          scope_query=""
+          if [[ "$VERCEL_ORG_ID" == team_* ]]; then scope_query="?teamId=$VERCEL_ORG_ID"; fi
+          curl --connect-timeout 10 --max-time 30 --retry 3 --retry-all-errors \
+            --fail --silent --show-error --header "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v13/deployments/$target_id$scope_query" \
+            --output "$RUNNER_TEMP/public-demo-containment-target.json"
+          node --experimental-strip-types scripts/validate-vercel-deployment.mjs "$mode" \
+            "$RUNNER_TEMP/public-demo-containment-target.json"
+
+      - name: Promote the validated rollback deployment
+        if: needs.authorize.outputs.action == 'rollback'
+        env:
+          ROLLBACK_DEPLOYMENT_URL: ${{ steps.target.outputs.deployment_url }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: vercel promote "$ROLLBACK_DEPLOYMENT_URL" --yes --timeout=5m
+
+      - name: Promote the pinned static holding deployment
+        if: needs.authorize.outputs.action == 'contain'
+        env:
+          HOLDING_DEPLOYMENT_URL: ${{ steps.target.outputs.deployment_url }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: vercel promote "$HOLDING_DEPLOYMENT_URL" --yes --timeout=5m
+
+      - name: Prove the requested canonical containment state
+        env:
+          ACTION: ${{ needs.authorize.outputs.action }}
+          APP_BASE_URL: ${{ vars.APP_BASE_URL }}
+          APPROVED_HOLDING_DEPLOYMENT_ID: ${{ secrets.DEMO_HOLDING_DEPLOYMENT_ID }}
+          CANDIDATE_DEPLOYMENT_ID: ${{ steps.target.outputs.deployment_id }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          deployment_host="${APP_BASE_URL#https://}"
+          scope_query=""
+          if [[ "$VERCEL_ORG_ID" == team_* ]]; then scope_query="?teamId=$VERCEL_ORG_ID"; fi
+          for attempt in $(seq 1 20); do
+            curl --connect-timeout 10 --max-time 30 --fail --silent --show-error \
+              --header "Authorization: Bearer $VERCEL_TOKEN" \
+              "https://api.vercel.com/v13/deployments/$deployment_host$scope_query" \
+              --output "$RUNNER_TEMP/public-demo-contained.json"
+            if test "$ACTION" = "contain"; then
+              mode="holding"
+            else
+              mode="promoted"
+            fi
+            if env -u GITHUB_OUTPUT node --experimental-strip-types \
+                scripts/validate-vercel-deployment.mjs "$mode" \
+                "$RUNNER_TEMP/public-demo-contained.json" "$deployment_host" >/dev/null 2>&1; then
+              exit 0
+            fi
+            if test "$attempt" = 20; then exit 1; fi
+            sleep 3
+          done

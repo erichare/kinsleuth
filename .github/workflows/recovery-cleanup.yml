@@ -33,6 +33,7 @@ jobs:
       artifact_id: ${{ steps.discover.outputs.artifact_id }}
       authorized: ${{ steps.validate_lease.outputs.authorized || steps.discover.outputs.authorized }}
     env:
+      EXPECTED_SOURCE_WORKFLOW_ID: ${{ vars.RECOVERY_EVIDENCE_WORKFLOW_ID }}
       RECOVERY_CLEANUP_LEASE_ARTIFACT_NAME: production-recovery-cleanup-lease-${{ github.event.workflow_run.run_attempt }}
       SOURCE_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
       SOURCE_RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
@@ -52,8 +53,9 @@ jobs:
             event.repository?.full_name !== process.env.GITHUB_REPOSITORY ||
             run?.repository?.full_name !== process.env.GITHUB_REPOSITORY ||
             run?.head_repository?.full_name !== process.env.GITHUB_REPOSITORY ||
-            run?.name !== "Production recovery evidence" ||
             run?.path !== ".github/workflows/recovery-evidence.yml" ||
+            !/^[1-9][0-9]{0,19}$/.test(process.env.EXPECTED_SOURCE_WORKFLOW_ID ?? "") ||
+            String(run?.workflow_id ?? "") !== process.env.EXPECTED_SOURCE_WORKFLOW_ID ||
             run?.event !== "workflow_dispatch" ||
             run?.head_branch !== "main" ||
             !/^[1-9][0-9]{0,19}$/.test(String(run?.id ?? "")) ||

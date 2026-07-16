@@ -1,0 +1,99 @@
+name: Monitor Kin Resolve public demo
+run-name: Public demo monitor ${{ github.event.schedule || 'manual' }} run ${{ github.run_id }} attempt ${{ github.run_attempt }}
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kinresolve-public-demo-monitor-${{ github.event.schedule || 'manual' }}
+  cancel-in-progress: false
+
+jobs:
+  shallow:
+    name: Check demo landing, health, and public family bodies
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: demo-monitoring
+    steps:
+      - name: Check out the exact monitored main revision
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Set up the pinned Node.js runtime
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+
+      - name: Run the body-aware shallow monitor
+        env:
+          PUBLIC_DEMO_ORIGIN: ${{ vars.APP_BASE_URL }}
+        run: |
+          set -euo pipefail
+          test "$PUBLIC_DEMO_ORIGIN" = "https://demo.kinresolve.com"
+          node --experimental-strip-types scripts/public-demo-monitor.mjs shallow
+
+      - name: Signal a fixed-schema shallow monitor failure
+        if: failure()
+        env:
+          DEMO_MONITOR_ALERT_URL: ${{ secrets.DEMO_MONITOR_ALERT_URL }}
+        run: |
+          set -euo pipefail
+          if test -z "$DEMO_MONITOR_ALERT_URL"; then exit 0; fi
+          [[ "$DEMO_MONITOR_ALERT_URL" =~ ^https:// ]]
+          curl --fail --silent --show-error --connect-timeout 10 --max-time 30 \
+            --retry 2 --retry-all-errors --request POST \
+            --data-urlencode "monitor=public-demo-shallow" \
+            --data-urlencode "status=failed" \
+            --data-urlencode "run_id=$GITHUB_RUN_ID" \
+            "$DEMO_MONITOR_ALERT_URL" > /dev/null
+
+  full:
+    name: Run the disposable start-task-end demo canary
+    needs: shallow
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '17 */6 * * *'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: demo-monitoring
+    steps:
+      - name: Check out the exact monitored main revision
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Set up the pinned Node.js runtime
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+
+      - name: Start, complete, and end one disposable demo session
+        env:
+          KINRESOLVE_DEMO_CANARY_SECRET: ${{ secrets.KINRESOLVE_DEMO_CANARY_SECRET }}
+          PUBLIC_DEMO_ORIGIN: ${{ vars.APP_BASE_URL }}
+        run: |
+          set -euo pipefail
+          test "$PUBLIC_DEMO_ORIGIN" = "https://demo.kinresolve.com"
+          node --experimental-strip-types scripts/public-demo-monitor.mjs full
+
+      - name: Signal a fixed-schema full monitor failure
+        if: failure()
+        env:
+          DEMO_MONITOR_ALERT_URL: ${{ secrets.DEMO_MONITOR_ALERT_URL }}
+        run: |
+          set -euo pipefail
+          if test -z "$DEMO_MONITOR_ALERT_URL"; then exit 0; fi
+          [[ "$DEMO_MONITOR_ALERT_URL" =~ ^https:// ]]
+          curl --fail --silent --show-error --connect-timeout 10 --max-time 30 \
+            --retry 2 --retry-all-errors --request POST \
+            --data-urlencode "monitor=public-demo-full" \
+            --data-urlencode "status=failed" \
+            --data-urlencode "run_id=$GITHUB_RUN_ID" \
+            "$DEMO_MONITOR_ALERT_URL" > /dev/null

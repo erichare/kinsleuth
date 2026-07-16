@@ -23,6 +23,11 @@ describe("failed recovery target janitor", () => {
     expect(workflow).toContain("cancel-in-progress: false");
     expect(workflow).toContain("actions: read");
     expect(workflow).toContain('run?.path !== ".github/workflows/recovery-evidence.yml"');
+    expect(workflow).toContain(
+      "EXPECTED_SOURCE_WORKFLOW_ID: ${{ vars.RECOVERY_EVIDENCE_WORKFLOW_ID }}"
+    );
+    expect(workflow).toContain("run?.workflow_id");
+    expect(workflow).not.toContain("run?.name");
     expect(workflow).toContain('run?.event !== "workflow_dispatch"');
     expect(workflow).toContain('run?.head_branch !== "main"');
     expect(workflow).toContain("run?.run_attempt");

@@ -12,9 +12,10 @@ const offsite = readFileSync(
 );
 
 describe("protected production backup workflow", () => {
-  it("runs daily or manually through the protected release concurrency boundary", () => {
-    expect(workflow).toContain('cron: "17 09 * * *"');
+  it("runs manually through the protected release concurrency boundary until the pilot cell exists", () => {
     expect(workflow).toContain("workflow_dispatch:");
+    expect(workflow).not.toContain("schedule:");
+    expect(workflow).not.toContain("cron:");
     expect(workflow).toContain("environment: production-backup");
     expect(workflow).toContain("group: kinresolve-beta-release");
     expect(workflow).toContain("queue: max");
