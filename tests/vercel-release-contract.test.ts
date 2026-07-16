@@ -44,12 +44,14 @@ const candidateExpectations: CandidateDeploymentExpectations = {
 const promotedExpectations: PromotedDeploymentExpectations = {
   ...ownership,
   appBaseUrl: "https://app.kinresolve.com",
+  canonicalLookupHostname: "app.kinresolve.com",
   candidateDeploymentId: "dpl_candidate1234567890abcdef"
 };
 
 const holdingExpectations = {
   ...ownership,
   appBaseUrl: "https://app.kinresolve.com",
+  canonicalLookupHostname: "app.kinresolve.com",
   approvedHoldingDeploymentId: "dpl_holding1234567890abcdef"
 };
 
@@ -126,22 +128,37 @@ describe("Vercel release deployment contract", () => {
     });
   });
 
-  it("accepts only the explicitly approved holding deployment on the canonical alias", () => {
+  it("accepts only the explicitly approved holding deployment returned by the canonical hostname lookup", () => {
     const holding = deployment({
       id: holdingExpectations.approvedHoldingDeploymentId,
-      aliases: ["app.kinresolve.com"],
       meta: staticHoldingMetadata
     });
     expect(validateHoldingDeployment(holding, holdingExpectations)).toMatchObject({
       id: holdingExpectations.approvedHoldingDeploymentId,
       status: "READY"
     });
-    expect(() => validateHoldingDeployment(deployment({ aliases: ["app.kinresolve.com"] }), holdingExpectations))
+    expect(() => validateHoldingDeployment(deployment(), holdingExpectations))
       .toThrow(/approved holding deployment/i);
     expect(() => validateHoldingDeployment(holding, {
       ...holdingExpectations,
       appBaseUrl: "https://other.example.com"
-    })).toThrow(/canonical.*alias/i);
+    })).toThrow(/lookup hostname/i);
+  });
+
+  it.each([
+    "other.example.com",
+    "https://app.kinresolve.com",
+    "app.kinresolve.com/path",
+    "app.kinresolve.com?query=true",
+    "APP.KINRESOLVE.COM"
+  ])("rejects an unbound canonical lookup hostname %s", (canonicalLookupHostname) => {
+    expect(() => validateHoldingDeployment(deployment({
+      id: holdingExpectations.approvedHoldingDeploymentId,
+      meta: staticHoldingMetadata
+    }), {
+      ...holdingExpectations,
+      canonicalLookupHostname
+    })).toThrow(/lookup hostname/i);
   });
 
   it.each([
@@ -152,7 +169,6 @@ describe("Vercel release deployment contract", () => {
   ])("rejects a holding deployment without the static %s contract", (name, value) => {
     expect(() => validateHoldingDeployment(deployment({
       id: holdingExpectations.approvedHoldingDeploymentId,
-      aliases: ["app.kinresolve.com"],
       meta: { ...staticHoldingMetadata, [name]: value }
     }), holdingExpectations)).toThrow(new RegExp(name, "i"));
   });
@@ -187,8 +203,8 @@ describe("Vercel release deployment contract", () => {
     }), candidateExpectations)).toThrow(/different from the previous deployment/i);
   });
 
-  it("requires the promoted canonical alias to resolve to the exact candidate", () => {
-    const promoted = deployment({ aliases: ["app.kinresolve.com"] });
+  it("requires the canonical hostname lookup to resolve to the exact promoted candidate", () => {
+    const promoted = deployment();
     expect(validatePromotedDeployment(promoted, promotedExpectations)).toEqual({
       id: "dpl_candidate1234567890abcdef",
       url: "https://kinresolve-candidate-a1b2c3-team.vercel.app",
@@ -196,39 +212,42 @@ describe("Vercel release deployment contract", () => {
     });
 
     expect(() => validatePromotedDeployment(deployment({
-      id: "dpl_unexpected1234567890abcdef",
-      aliases: ["app.kinresolve.com"]
+      id: "dpl_unexpected1234567890abcdef"
     }), promotedExpectations)).toThrow(/exact candidate/i);
-    expect(() => validatePromotedDeployment(deployment({ aliases: [] }), promotedExpectations)).toThrow(
-      /canonical.*alias/i
-    );
+    expect(() => validatePromotedDeployment(promoted, {
+      ...promotedExpectations,
+      canonicalLookupHostname: "demo.kinresolve.com"
+    })).toThrow(/lookup hostname/i);
   });
 
   it("contains only when the canonical deployment belongs to the exact failed run attempt", () => {
     const expectations = {
       ...ownership,
       appBaseUrl: candidateExpectations.appBaseUrl,
+      canonicalLookupHostname: "app.kinresolve.com",
       approvedHoldingDeploymentId: holdingExpectations.approvedHoldingDeploymentId,
       expectedGithubCommitSha: candidateExpectations.expectedGithubCommitSha,
       expectedGithubRunAttempt: candidateExpectations.expectedGithubRunAttempt,
       expectedGithubRunId: candidateExpectations.expectedGithubRunId
     };
     expect(validateContainmentCanonicalDeployment(
-      deployment({ aliases: ["app.kinresolve.com"] }),
+      deployment(),
       expectations
     )).toMatchObject({ containmentRequired: true, state: "source-release" });
 
     const original = deployment().meta as Record<string, unknown>;
     expect(validateContainmentCanonicalDeployment(deployment({
-      aliases: ["app.kinresolve.com"],
       meta: { ...original, githubRunAttempt: "3" }
     }), expectations)).toMatchObject({ containmentRequired: false, state: "other-release" });
 
     expect(validateContainmentCanonicalDeployment(deployment({
       id: holdingExpectations.approvedHoldingDeploymentId,
-      aliases: ["app.kinresolve.com"],
       meta: staticHoldingMetadata
     }), expectations)).toMatchObject({ containmentRequired: false, state: "holding" });
+    expect(() => validateContainmentCanonicalDeployment(deployment(), {
+      ...expectations,
+      canonicalLookupHostname: "demo.kinresolve.com"
+    })).toThrow(/lookup hostname/i);
   });
 
   it("fails closed for CLI-only inspect JSON that omits REST ownership and metadata", () => {
@@ -259,12 +278,9 @@ describe("Vercel release deployment contract", () => {
       const root = await mkdtemp(path.join(tmpdir(), "kinresolve-vercel-contract-"));
       scratchDirectories.push(root);
       const fixturePath = path.join(root, "deployment.json");
-      const fixture = mode === "promoted"
-        ? deployment({ aliases: ["app.kinresolve.com"] })
-        : mode === "holding"
+      const fixture = mode === "holding"
           ? deployment({
               id: holdingExpectations.approvedHoldingDeploymentId,
-              aliases: ["app.kinresolve.com"],
               meta: staticHoldingMetadata
             })
           : deployment();
@@ -321,12 +337,39 @@ describe("Vercel release deployment contract", () => {
     expect(result.stderr).toMatch(/githubCommitSha/i);
     expect(`${result.stdout}${result.stderr}`).not.toContain(marker);
   });
+
+  it.each(["holding", "containment", "promoted"] as const)(
+    "requires %s mode to receive the exact canonical lookup hostname",
+    async (mode) => {
+      const root = await mkdtemp(path.join(tmpdir(), "kinresolve-vercel-contract-"));
+      scratchDirectories.push(root);
+      const fixturePath = path.join(root, "deployment.json");
+      const fixture = mode === "holding"
+        ? deployment({
+            id: holdingExpectations.approvedHoldingDeploymentId,
+            meta: staticHoldingMetadata
+          })
+        : deployment();
+      await writeFile(fixturePath, JSON.stringify(fixture), "utf8");
+
+      const missing = runCli(mode, fixturePath, {}, null);
+      const wrong = runCli(mode, fixturePath, {}, "demo.kinresolve.com");
+
+      expect(missing.status).toBe(1);
+      expect(missing.stderr).toMatch(/usage|lookup hostname/i);
+      expect(wrong.status).toBe(1);
+      expect(wrong.stderr).toMatch(/lookup hostname/i);
+    }
+  );
 });
 
 function runCli(
   mode: "previous" | "holding" | "candidate" | "containment" | "promoted",
   fixturePath: string,
-  environment: Record<string, string> = {}
+  environment: Record<string, string> = {},
+  canonicalLookupHostname: string | null = ["holding", "containment", "promoted"].includes(mode)
+    ? "app.kinresolve.com"
+    : null
 ) {
   return spawnSync(
     process.execPath,
@@ -335,7 +378,8 @@ function runCli(
       "--experimental-strip-types",
       "scripts/validate-vercel-deployment.mjs",
       mode,
-      fixturePath
+      fixturePath,
+      ...(canonicalLookupHostname === null ? [] : [canonicalLookupHostname])
     ],
     {
       cwd: process.cwd(),

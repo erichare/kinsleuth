@@ -17,16 +17,19 @@ export type CandidateDeploymentExpectations = DeploymentOwnershipExpectations & 
 
 export type HoldingDeploymentExpectations = DeploymentOwnershipExpectations & {
   appBaseUrl: string;
+  canonicalLookupHostname: string;
   approvedHoldingDeploymentId: string;
 };
 
 export type PromotedDeploymentExpectations = DeploymentOwnershipExpectations & {
   appBaseUrl: string;
+  canonicalLookupHostname: string;
   candidateDeploymentId: string;
 };
 
 export type ContainmentCanonicalExpectations = DeploymentOwnershipExpectations & {
   appBaseUrl: string;
+  canonicalLookupHostname: string;
   approvedHoldingDeploymentId: string;
   expectedGithubCommitSha: string;
   expectedGithubRunAttempt: string;
@@ -81,6 +84,10 @@ export function validateHoldingDeployment(
   document: unknown,
   expectations: HoldingDeploymentExpectations
 ): ValidatedVercelDeployment {
+  validateCanonicalLookupHostname(
+    expectations.canonicalLookupHostname,
+    expectations.appBaseUrl
+  );
   const deployment = normalizeReadyProductionDeployment(document, expectations);
   const approvedId = validateDeploymentId(
     expectations.approvedHoldingDeploymentId,
@@ -88,10 +95,6 @@ export function validateHoldingDeployment(
   );
   if (deployment.id !== approvedId) {
     throw new Error("The canonical application must resolve to the approved holding deployment.");
-  }
-  const canonicalHostname = validateCanonicalAppOrigin(expectations.appBaseUrl).hostname;
-  if (!deployment.aliases.includes(canonicalHostname)) {
-    throw new Error("The approved holding deployment must own the canonical application alias.");
   }
   if (!deployment.metadata) {
     throw new Error("The approved holding deployment metadata is missing.");
@@ -140,11 +143,11 @@ export function validateContainmentCanonicalDeployment(
   document: unknown,
   expectations: ContainmentCanonicalExpectations
 ): ValidatedContainmentCanonical {
+  validateCanonicalLookupHostname(
+    expectations.canonicalLookupHostname,
+    expectations.appBaseUrl
+  );
   const deployment = normalizeReadyProductionDeployment(document, expectations);
-  const canonicalHostname = validateCanonicalAppOrigin(expectations.appBaseUrl).hostname;
-  if (!deployment.aliases.includes(canonicalHostname)) {
-    throw new Error("The containment deployment must own the canonical application alias.");
-  }
   const approvedHoldingDeploymentId = validateDeploymentId(
     expectations.approvedHoldingDeploymentId,
     "The approved holding deployment ID"
@@ -198,6 +201,10 @@ export function validatePromotedDeployment(
   document: unknown,
   expectations: PromotedDeploymentExpectations
 ): ValidatedVercelDeployment {
+  validateCanonicalLookupHostname(
+    expectations.canonicalLookupHostname,
+    expectations.appBaseUrl
+  );
   const deployment = normalizeReadyProductionDeployment(document, expectations);
   const candidateDeploymentId = validateDeploymentId(
     expectations.candidateDeploymentId,
@@ -205,11 +212,6 @@ export function validatePromotedDeployment(
   );
   if (deployment.id !== candidateDeploymentId) {
     throw new Error("The promoted application alias must resolve to the exact candidate deployment.");
-  }
-
-  const canonicalHostname = validateCanonicalAppOrigin(expectations.appBaseUrl).hostname;
-  if (!deployment.aliases.includes(canonicalHostname)) {
-    throw new Error("The promoted deployment must own the canonical application alias.");
   }
 
   return publicResult(deployment);
@@ -310,6 +312,15 @@ function validateGeneratedDeploymentOrigin(value: string): URL {
 
 function validateCanonicalAppOrigin(value: string): URL {
   return parseOrigin(value, "APP_BASE_URL");
+}
+
+function validateCanonicalLookupHostname(value: string, appBaseUrl: string): void {
+  const expectedHostname = validateCanonicalAppOrigin(appBaseUrl).hostname;
+  if (typeof value !== "string" || value !== expectedHostname) {
+    throw new Error(
+      "The canonical lookup hostname must exactly match the APP_BASE_URL hostname."
+    );
+  }
 }
 
 function parseOrigin(value: string, label: string): URL {

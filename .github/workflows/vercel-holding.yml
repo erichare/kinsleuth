@@ -368,7 +368,8 @@ jobs:
                 --output "$RUNNER_TEMP/static-holding-promoted.json" \
               && env -u GITHUB_OUTPUT node --experimental-strip-types \
                 scripts/validate-vercel-deployment.mjs holding \
-                "$RUNNER_TEMP/static-holding-promoted.json"; then
+                "$RUNNER_TEMP/static-holding-promoted.json" \
+                "${APP_BASE_URL#https://}"; then
               exit 0
             fi
             if [[ "$attempt" -eq 30 ]]; then exit 1; fi
@@ -383,7 +384,7 @@ jobs:
           APPROVED_HOLDING_DEPLOYMENT_ID: ${{ steps.holding-candidate.outputs.deployment_id }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-        run: node --experimental-strip-types scripts/validate-vercel-deployment.mjs holding "$RUNNER_TEMP/static-holding-promoted.json"
+        run: node --experimental-strip-types scripts/validate-vercel-deployment.mjs holding "$RUNNER_TEMP/static-holding-promoted.json" "${APP_BASE_URL#https://}"
 
       - name: Record the holding deployment ID
         if: always() && steps.holding-candidate.outcome == 'success'
