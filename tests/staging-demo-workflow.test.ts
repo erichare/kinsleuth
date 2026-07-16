@@ -84,7 +84,31 @@ describe("staging demo session workflow", () => {
   it("closes idempotently to the pinned holding and fail-closes Vercel project safety", async () => {
     const contents = await workflow();
     expect(contents).toContain("scripts/validate-vercel-deployment.mjs holding-record");
-    expect(contents).toContain('vercel promote "$HOLDING_DEPLOYMENT_URL" --yes --timeout=5m');
+    const closeAttempt = contents.indexOf("Attempt to promote the pinned staging holding deployment for close");
+    const holdingBeforeResume = contents.indexOf("Prove the canonical staging holding before resume");
+    const projectSafety = contents.indexOf("Resume and independently attest staging domain safety");
+    const holdingAfterResume = contents.indexOf("Validate the canonical staging holding after close");
+    expect(closeAttempt).toBeGreaterThan(0);
+    expect(holdingBeforeResume).toBeGreaterThan(closeAttempt);
+    expect(projectSafety).toBeGreaterThan(holdingBeforeResume);
+    expect(holdingAfterResume).toBeGreaterThan(projectSafety);
+    expect(contents.slice(closeAttempt, holdingBeforeResume)).toContain("continue-on-error: true");
+    expect(contents.slice(closeAttempt, holdingBeforeResume)).toContain(
+      'vercel promote "$HOLDING_DEPLOYMENT_URL" --yes --timeout=5m'
+    );
+    expect(contents.slice(holdingBeforeResume, projectSafety)).toContain(
+      "scripts/validate-vercel-deployment.mjs holding"
+    );
+    expect(contents.slice(holdingBeforeResume, projectSafety)).toContain("id: close-holding-proof");
+    expect(contents.slice(projectSafety, holdingAfterResume)).toContain(
+      "steps.close-holding-proof.outcome == 'success'"
+    );
+    expect(contents.slice(projectSafety, holdingAfterResume)).toContain(
+      "https://api.vercel.com/v1/projects/$VERCEL_PROJECT_ID/unpause"
+    );
+    expect(contents.slice(projectSafety, holdingAfterResume)).toContain(
+      'grep -qx "project_paused=true"'
+    );
     expect(contents).toContain("Validate the canonical staging holding after close");
     expect(contents).toContain("scripts/validate-vercel-deployment.mjs holding");
     expect(contents).toContain("scripts/validate-vercel-project-safety.mjs");

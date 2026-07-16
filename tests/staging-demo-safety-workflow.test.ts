@@ -34,6 +34,25 @@ describe("staging demo automatic safety workflow", () => {
     );
     expect(holdingRecord).toContain("continue-on-error: true");
     expect(contents).toContain('vercel promote "$HOLDING_DEPLOYMENT_URL" --yes --timeout=5m');
+    const restoreAttempt = contents.indexOf("Restore the pinned staging holding deployment");
+    const projectSafety = contents.indexOf("Repair and independently attest staging domain auto-assignment");
+    const holdingAfterRestore = contents.indexOf("Prove the canonical staging holding restoration");
+    const pauseFallback = contents.indexOf("Fail closed by pausing staging when holding restoration cannot be proved");
+    expect(restoreAttempt).toBeGreaterThan(0);
+    expect(projectSafety).toBeGreaterThan(restoreAttempt);
+    expect(holdingAfterRestore).toBeGreaterThan(projectSafety);
+    expect(pauseFallback).toBeGreaterThan(holdingAfterRestore);
+    const restore = contents.slice(restoreAttempt, projectSafety);
+    expect(restore.indexOf("scripts/validate-vercel-deployment.mjs holding")).toBeLessThan(
+      restore.indexOf('vercel promote "$HOLDING_DEPLOYMENT_URL" --yes --timeout=5m')
+    );
+    expect(restore).toContain("exit 0");
+    expect(contents).not.toContain("https://api.vercel.com/v1/projects/$VERCEL_PROJECT_ID/unpause");
+    const fallback = contents.slice(pauseFallback, contents.indexOf("Require verified holding restoration or fail-closed pause"));
+    expect(fallback).toContain('grep -qx "project_paused=false"');
+    expect(fallback.indexOf('grep -qx "project_paused=false"')).toBeLessThan(
+      fallback.indexOf('"$pause_api" --output')
+    );
     expect(contents).toContain("scripts/validate-vercel-deployment.mjs holding");
     expect(contents).toContain("scripts/validate-vercel-project-safety.mjs");
     expect(contents).toContain('test "$APP_BASE_URL" = "https://demo.kinresolve.com"');

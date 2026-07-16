@@ -464,25 +464,78 @@ jobs:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: vercel promote "$CANDIDATE_DEPLOYMENT_URL" --yes --timeout=5m
 
-      - name: Promote the pinned staging holding deployment for close
+      - name: Attempt to promote the pinned staging holding deployment for close
         if: inputs.action == 'close'
         id: close
+        continue-on-error: true
         timeout-minutes: 10
         env:
+          APP_BASE_URL: ${{ vars.APP_BASE_URL }}
+          APPROVED_HOLDING_DEPLOYMENT_ID: ${{ secrets.STAGING_HOLDING_DEPLOYMENT_ID }}
           HOLDING_DEPLOYMENT_URL: ${{ steps.close-holding.outputs.deployment_url }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-        run: vercel promote "$HOLDING_DEPLOYMENT_URL" --yes --timeout=5m
+        run: |
+          set -euo pipefail
+          deployment_host="${APP_BASE_URL#https://}"
+          scope_query=""
+          if [[ "$VERCEL_ORG_ID" == team_* ]]; then scope_query="?teamId=$VERCEL_ORG_ID"; fi
+          if curl --connect-timeout 10 --max-time 30 --fail --silent --show-error \
+              --header "Authorization: Bearer $VERCEL_TOKEN" \
+              "https://api.vercel.com/v13/deployments/$deployment_host$scope_query" \
+              --output "$RUNNER_TEMP/staging-demo-close-current.json" \
+            && env -u GITHUB_OUTPUT node --experimental-strip-types \
+              scripts/validate-vercel-deployment.mjs holding \
+              "$RUNNER_TEMP/staging-demo-close-current.json" \
+              "$deployment_host" >/dev/null 2>&1; then
+            exit 0
+          fi
+          vercel promote "$HOLDING_DEPLOYMENT_URL" --yes --timeout=5m
 
-      - name: Disable and independently attest staging domain auto-assignment
+      - name: Prove the canonical staging holding before resume
+        id: close-holding-proof
+        if: >-
+          always() &&
+          inputs.action == 'close' &&
+          steps.close-holding.outcome == 'success'
+        continue-on-error: true
+        timeout-minutes: 10
+        env:
+          APP_BASE_URL: ${{ vars.APP_BASE_URL }}
+          APPROVED_HOLDING_DEPLOYMENT_ID: ${{ secrets.STAGING_HOLDING_DEPLOYMENT_ID }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          deployment_host="${APP_BASE_URL#https://}"
+          scope_query=""
+          if [[ "$VERCEL_ORG_ID" == team_* ]]; then scope_query="?teamId=$VERCEL_ORG_ID"; fi
+          for attempt in $(seq 1 20); do
+            rm -f "$RUNNER_TEMP/staging-demo-close-before-resume.json"
+            if curl --connect-timeout 10 --max-time 30 --fail --silent --show-error \
+                --header "Authorization: Bearer $VERCEL_TOKEN" \
+                "https://api.vercel.com/v13/deployments/$deployment_host$scope_query" \
+                --output "$RUNNER_TEMP/staging-demo-close-before-resume.json" \
+              && env -u GITHUB_OUTPUT node --experimental-strip-types \
+                scripts/validate-vercel-deployment.mjs holding \
+                "$RUNNER_TEMP/staging-demo-close-before-resume.json" \
+                "$deployment_host" >/dev/null 2>&1; then
+              exit 0
+            fi
+            if [[ "$attempt" = 20 ]]; then exit 1; fi
+            sleep 3
+          done
+
+      - name: Resume and independently attest staging domain safety
         id: project-safety
         if: >-
           always() &&
-          (steps.open.outcome == 'success' || steps.close.outcome == 'success')
+          ((inputs.action == 'open' && steps.open.outcome == 'success') ||
+           (inputs.action == 'close' && steps.close-holding-proof.outcome == 'success'))
         continue-on-error: true
         env:
-          EXPECTED_VERCEL_PROJECT_PAUSED: "false"
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
@@ -491,6 +544,27 @@ jobs:
           scope_query=""
           if [[ "$VERCEL_ORG_ID" == team_* ]]; then scope_query="?teamId=$VERCEL_ORG_ID"; fi
           project_api="https://api.vercel.com/v9/projects/$VERCEL_PROJECT_ID$scope_query"
+          unpause_api="https://api.vercel.com/v1/projects/$VERCEL_PROJECT_ID/unpause$scope_query"
+          curl --connect-timeout 10 --max-time 30 --retry 3 --retry-all-errors \
+            --fail --silent --show-error --request PATCH \
+            --header "Authorization: Bearer $VERCEL_TOKEN" \
+            --header "Content-Type: application/json" \
+            --data '{"autoAssignCustomDomains":false}' \
+            "$project_api" --output "$RUNNER_TEMP/staging-demo-project-before-resume-patch.json"
+          curl --connect-timeout 10 --max-time 30 --retry 3 --retry-all-errors \
+            --fail --silent --show-error \
+            --header "Authorization: Bearer $VERCEL_TOKEN" \
+            "$project_api" --output "$RUNNER_TEMP/staging-demo-project-before-resume.json"
+          project_state="$(EXPECTED_VERCEL_PROJECT_PAUSED="" \
+            node --experimental-strip-types scripts/validate-vercel-project-safety.mjs \
+            "$RUNNER_TEMP/staging-demo-project-before-resume.json")"
+          if grep -qx "project_paused=true" <<<"$project_state"; then
+            curl --connect-timeout 10 --max-time 30 --retry 3 --retry-all-errors \
+              --fail --silent --show-error --request POST \
+              --header "Authorization: Bearer $VERCEL_TOKEN" \
+              --header "Content-Type: application/json" \
+              "$unpause_api" --output "$RUNNER_TEMP/staging-demo-project-unpause.json"
+          fi
           curl --connect-timeout 10 --max-time 30 --retry 3 --retry-all-errors \
             --fail --silent --show-error --request PATCH \
             --header "Authorization: Bearer $VERCEL_TOKEN" \
@@ -501,17 +575,18 @@ jobs:
             --fail --silent --show-error \
             --header "Authorization: Bearer $VERCEL_TOKEN" \
             "$project_api" --output "$RUNNER_TEMP/staging-demo-project.json"
-          node --experimental-strip-types scripts/validate-vercel-project-safety.mjs \
+          EXPECTED_VERCEL_PROJECT_PAUSED="false" \
+            node --experimental-strip-types scripts/validate-vercel-project-safety.mjs \
             "$RUNNER_TEMP/staging-demo-project.json"
 
       - name: Fail closed by pausing staging when session safety cannot be proved
         id: pause-fallback
         if: >-
           always() &&
-          (steps.open.outcome == 'success' || steps.close.outcome == 'success') &&
-          steps.project-safety.outcome == 'failure'
+          ((inputs.action == 'open' && steps.open.outcome == 'success') ||
+           inputs.action == 'close') &&
+          steps.project-safety.outcome != 'success'
         env:
-          EXPECTED_VERCEL_PROJECT_PAUSED: "true"
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
@@ -519,21 +594,41 @@ jobs:
           set -euo pipefail
           scope_query=""
           if [[ "$VERCEL_ORG_ID" == team_* ]]; then scope_query="?teamId=$VERCEL_ORG_ID"; fi
+          project_api="https://api.vercel.com/v9/projects/$VERCEL_PROJECT_ID$scope_query"
+          pause_api="https://api.vercel.com/v1/projects/$VERCEL_PROJECT_ID/pause$scope_query"
           curl --connect-timeout 10 --max-time 30 --retry 3 --retry-all-errors \
-            --fail --silent --show-error --request POST \
+            --fail --silent --show-error --request PATCH \
             --header "Authorization: Bearer $VERCEL_TOKEN" \
-            "https://api.vercel.com/v1/projects/$VERCEL_PROJECT_ID/pause$scope_query" \
-            --output "$RUNNER_TEMP/staging-demo-pause.json"
+            --header "Content-Type: application/json" \
+            --data '{"autoAssignCustomDomains":false}' \
+            "$project_api" --output "$RUNNER_TEMP/staging-demo-pause-patch.json"
           curl --connect-timeout 10 --max-time 30 --retry 3 --retry-all-errors \
             --fail --silent --show-error \
             --header "Authorization: Bearer $VERCEL_TOKEN" \
-            "https://api.vercel.com/v9/projects/$VERCEL_PROJECT_ID$scope_query" \
+            "$project_api" --output "$RUNNER_TEMP/staging-demo-project-before-pause.json"
+          project_state="$(EXPECTED_VERCEL_PROJECT_PAUSED="" \
+            node --experimental-strip-types scripts/validate-vercel-project-safety.mjs \
+            "$RUNNER_TEMP/staging-demo-project-before-pause.json")"
+          if grep -qx "project_paused=false" <<<"$project_state"; then
+            curl --connect-timeout 10 --max-time 30 --retry 3 --retry-all-errors \
+              --fail --silent --show-error --request POST \
+              --header "Authorization: Bearer $VERCEL_TOKEN" \
+              "$pause_api" --output "$RUNNER_TEMP/staging-demo-pause.json"
+          fi
+          curl --connect-timeout 10 --max-time 30 --retry 3 --retry-all-errors \
+            --fail --silent --show-error \
+            --header "Authorization: Bearer $VERCEL_TOKEN" \
+            "$project_api" \
             --output "$RUNNER_TEMP/staging-demo-project-paused.json"
-          node --experimental-strip-types scripts/validate-vercel-project-safety.mjs \
+          EXPECTED_VERCEL_PROJECT_PAUSED="true" \
+            node --experimental-strip-types scripts/validate-vercel-project-safety.mjs \
             "$RUNNER_TEMP/staging-demo-project-paused.json"
 
       - name: Require safe staging project state before canonical proof
-        if: always() && (steps.open.outcome == 'success' || steps.close.outcome == 'success')
+        if: >-
+          always() &&
+          ((inputs.action == 'open' && steps.open.outcome == 'success') ||
+           inputs.action == 'close')
         env:
           PAUSE_OUTCOME: ${{ steps.pause-fallback.outcome }}
           PROJECT_SAFETY_OUTCOME: ${{ steps.project-safety.outcome }}

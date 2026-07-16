@@ -82,4 +82,27 @@ describe("Vercel project release safety", () => {
     expect(result.status).toBe(0);
     expect(result.stdout).toBe("auto_assignment_disabled=true\nproject_paused=false\n");
   });
+
+  it("reports a validated paused project for idempotent fail-closed handling", async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), "kinresolve-vercel-project-paused-"));
+    scratch.push(directory);
+    const filePath = path.join(directory, "project.json");
+    await writeFile(filePath, JSON.stringify(project({ paused: true })), "utf8");
+    const result = spawnSync(process.execPath, [
+      "--experimental-strip-types",
+      "scripts/validate-vercel-project-safety.mjs",
+      filePath
+    ], {
+      cwd: process.cwd(),
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        VERCEL_PROJECT_ID: expectations.expectedProjectId,
+        VERCEL_ORG_ID: expectations.expectedOrgId,
+        EXPECTED_VERCEL_PROJECT_PAUSED: ""
+      }
+    });
+    expect(result.status).toBe(0);
+    expect(result.stdout).toBe("auto_assignment_disabled=true\nproject_paused=true\n");
+  });
 });
