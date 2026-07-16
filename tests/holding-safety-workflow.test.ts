@@ -35,6 +35,9 @@ describe("failed holding auto-assignment safety workflow", () => {
       'test "$SOURCE_WORKFLOW_NAME" = "Deploy Kin Resolve static holding page"'
     );
     expect(authorize).toContain(
+      'test "$SOURCE_WORKFLOW_NAME" = "$SOURCE_DISPLAY_TITLE"'
+    );
+    expect(authorize).toContain(
       'test "$SOURCE_WORKFLOW_PATH" = ".github/workflows/vercel-holding.yml"'
     );
     expect(authorize).toContain('test "$SOURCE_EVENT" = "workflow_dispatch"');
