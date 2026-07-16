@@ -9,7 +9,7 @@ type Readiness = (
 ) => Promise<Readonly<{ runId: number; runAttempt: number; gate: "success" }>>;
 
 const sha = "a".repeat(40);
-const token = "g".repeat(40);
+const token = "ghs_opaque.token-with-punctuation_xxxxxxxxx";
 const environment = {
   GH_TOKEN: token,
   GITHUB_API_URL: "https://api.github.com",
@@ -68,6 +68,17 @@ describe("public demo GitHub release readiness", () => {
       .rejects.toThrow(/readiness/i);
     await expect(validate(environment, responses({ alerts: [{ number: 9 }] })))
       .rejects.toThrow(/security alert/i);
+  });
+
+  it("rejects whitespace-bearing tokens before making a request", async () => {
+    const validate = await loadValidator();
+    const fetchImplementation = vi.fn<typeof fetch>();
+
+    await expect(validate({
+      ...environment,
+      GH_TOKEN: "ghs_invalid token_with_enough_length"
+    }, fetchImplementation)).rejects.toThrow(/readiness/i);
+    expect(fetchImplementation).not.toHaveBeenCalled();
   });
 });
 

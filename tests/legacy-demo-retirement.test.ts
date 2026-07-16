@@ -8,8 +8,10 @@ type Check = (
   fetchImplementation?: typeof fetch
 ) => Promise<Readonly<{ workflowId: string; state: "disabled_manually" }>>;
 
+const opaqueToken = "ghs_opaque.token-with-punctuation_xxxxxxxxx";
+
 const environment = {
-  GH_TOKEN: "g".repeat(40),
+  GH_TOKEN: opaqueToken,
   GITHUB_API_URL: "https://api.github.com",
   GITHUB_REPOSITORY: "kinresolve/kinresolve",
   KINRESOLVE_STAGING_DEMO_WORKFLOW_ID: "12345678"
@@ -37,8 +39,19 @@ describe("legacy staging demo retirement preflight", () => {
     });
     expect(fetchImplementation).toHaveBeenCalledTimes(6);
     for (const [, init] of fetchImplementation.mock.calls) {
-      expect(new Headers(init?.headers).get("authorization")).toBe(`Bearer ${"g".repeat(40)}`);
+      expect(new Headers(init?.headers).get("authorization")).toBe(`Bearer ${opaqueToken}`);
     }
+  });
+
+  it("rejects whitespace-bearing tokens before making a request", async () => {
+    const check = await loadCheck();
+    const fetchImplementation = vi.fn<typeof fetch>();
+
+    await expect(check({
+      ...environment,
+      GH_TOKEN: "ghs_invalid token_with_enough_length"
+    }, fetchImplementation)).rejects.toThrow(/retirement/i);
+    expect(fetchImplementation).not.toHaveBeenCalled();
   });
 
   it("fails closed for the wrong workflow, enabled state, or any active run", async () => {

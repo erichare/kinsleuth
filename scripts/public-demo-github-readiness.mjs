@@ -137,7 +137,7 @@ function configurationFrom(environment) {
     || !/^[a-f0-9]{40}$/.test(releaseCommit)
     || typeof token !== "string"
     || token.trim() !== token
-    || !/^[A-Za-z0-9_]+$/.test(token)
+    || /[\s\u0000-\u001f\u007f]/u.test(token)
     || token.length < 20
     || token.length > 256
   ) {
