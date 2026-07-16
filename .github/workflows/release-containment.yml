@@ -306,7 +306,8 @@ jobs:
             "https://api.vercel.com/v13/deployments/$canonical_host$scope_query" \
             --output "$RUNNER_TEMP/containment-rerun-canonical-ownership.json"
           node --experimental-strip-types scripts/validate-vercel-deployment.mjs containment \
-            "$RUNNER_TEMP/containment-rerun-canonical-ownership.json"
+            "$RUNNER_TEMP/containment-rerun-canonical-ownership.json" \
+            "${APP_BASE_URL#https://}"
 
       - name: Recontain the exact release fence before relying on the deployment control plane
         id: contain-fence
@@ -422,7 +423,8 @@ jobs:
             "https://api.vercel.com/v13/deployments/$canonical_host$scope_query" \
             --output "$RUNNER_TEMP/containment-canonical-ownership.json"
           node --experimental-strip-types scripts/validate-vercel-deployment.mjs containment \
-            "$RUNNER_TEMP/containment-canonical-ownership.json"
+            "$RUNNER_TEMP/containment-canonical-ownership.json" \
+            "${APP_BASE_URL#https://}"
 
       - name: Require a matching fence whenever the failed source release is still canonical
         if: steps.privileged-classification.outputs.should_contain == 'true'
@@ -510,7 +512,8 @@ jobs:
           : > "$ownership_output"
           GITHUB_OUTPUT="$ownership_output" node --experimental-strip-types \
             scripts/validate-vercel-deployment.mjs containment \
-            "$RUNNER_TEMP/containment-canonical.json"
+            "$RUNNER_TEMP/containment-canonical.json" \
+            "${APP_BASE_URL#https://}"
           canonical_state="$(awk -F= '$1 == "canonical_state" { print substr($0, index($0, "=") + 1) }' "$ownership_output")"
           containment_required="$(awk -F= '$1 == "containment_required" { print substr($0, index($0, "=") + 1) }' "$ownership_output")"
           if [[ "$canonical_state" == "holding" && "$containment_required" == "false" ]]; then
@@ -578,7 +581,8 @@ jobs:
                 --output "$RUNNER_TEMP/containment-rollback.json" \
               && env -u GITHUB_OUTPUT node --experimental-strip-types \
                 scripts/validate-vercel-deployment.mjs holding \
-                "$RUNNER_TEMP/containment-rollback.json"; then
+                "$RUNNER_TEMP/containment-rollback.json" \
+                "${APP_BASE_URL#https://}"; then
               exit 0
             fi
             if [[ "$attempt" = 20 ]]; then exit 1; fi

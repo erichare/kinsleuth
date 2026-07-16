@@ -254,7 +254,8 @@ jobs:
             "https://api.vercel.com/v13/deployments/${deployment_host}${scope_query}" \
             --output "${RECOVERY_WORK}/canonical-before-recovery.json"
           node --experimental-strip-types scripts/validate-vercel-deployment.mjs holding \
-            "${RECOVERY_WORK}/canonical-before-recovery.json"
+            "${RECOVERY_WORK}/canonical-before-recovery.json" \
+            "${APP_BASE_URL#https://}"
 
       - name: Acquire or resume the exact-SHA production write fence before deployment
         shell: bash

@@ -484,7 +484,8 @@ jobs:
             "https://api.vercel.com/v13/deployments/$deployment_host$scope_query" \
             --output "$RUNNER_TEMP/staging-holding.json"
           node --experimental-strip-types scripts/validate-vercel-deployment.mjs holding \
-            "$RUNNER_TEMP/staging-holding.json"
+            "$RUNNER_TEMP/staging-holding.json" \
+            "${APP_BASE_URL#https://}"
 
       - name: Verify immutable staging migrations
         run: npm run migrations:verify
@@ -629,7 +630,8 @@ jobs:
             --output "$RUNNER_TEMP/staging-holding-pre-migration.json"
           env -u GITHUB_OUTPUT node --experimental-strip-types \
             scripts/validate-vercel-deployment.mjs holding \
-            "$RUNNER_TEMP/staging-holding-pre-migration.json"
+            "$RUNNER_TEMP/staging-holding-pre-migration.json" \
+            "${APP_BASE_URL#https://}"
 
       - name: Smoke the staging holding application immediately before migration
         env:
@@ -877,7 +879,8 @@ jobs:
                 --output "$RUNNER_TEMP/staging-browser-candidate.json" \
               && GITHUB_OUTPUT="$RUNNER_TEMP/staging-browser-candidate-poll-output" \
                 node --experimental-strip-types scripts/validate-vercel-deployment.mjs promoted \
-                  "$RUNNER_TEMP/staging-browser-candidate.json" >/dev/null 2>&1; then
+                  "$RUNNER_TEMP/staging-browser-candidate.json" \
+                  "${APP_BASE_URL#https://}" >/dev/null 2>&1; then
               exit 0
             fi
             if [[ "$attempt" = 20 ]]; then
@@ -897,6 +900,7 @@ jobs:
         run: >-
           node --experimental-strip-types scripts/validate-vercel-deployment.mjs promoted
           "$RUNNER_TEMP/staging-browser-candidate.json"
+          "${APP_BASE_URL#https://}"
 
       - name: Run the authenticated synthetic journey at the custom origin
         id: staging-browser-journey
@@ -956,7 +960,8 @@ jobs:
                 --output "$RUNNER_TEMP/staging-browser-restored-holding.json" \
               && GITHUB_OUTPUT="$RUNNER_TEMP/staging-browser-holding-poll-output" \
                 node --experimental-strip-types scripts/validate-vercel-deployment.mjs holding \
-                  "$RUNNER_TEMP/staging-browser-restored-holding.json" >/dev/null 2>&1; then
+                  "$RUNNER_TEMP/staging-browser-restored-holding.json" \
+                  "${APP_BASE_URL#https://}" >/dev/null 2>&1; then
               exit 0
             fi
             if [[ "$attempt" = 20 ]]; then
@@ -967,7 +972,8 @@ jobs:
           done
           env -u GITHUB_OUTPUT node --experimental-strip-types \
             scripts/validate-vercel-deployment.mjs holding \
-            "$RUNNER_TEMP/staging-browser-restored-holding.json"
+            "$RUNNER_TEMP/staging-browser-restored-holding.json" \
+            "${APP_BASE_URL#https://}"
 
       - name: Smoke the restored staging holding application
         if: ${{ always() && steps.validate-restored-staging-holding.outcome == 'success' }}
@@ -1077,7 +1083,8 @@ jobs:
               --output "$RUNNER_TEMP/staging-finalizer-current.json" \
             && env -u GITHUB_OUTPUT node --experimental-strip-types \
               scripts/validate-vercel-deployment.mjs holding \
-              "$RUNNER_TEMP/staging-finalizer-current.json" >/dev/null 2>&1; then
+              "$RUNNER_TEMP/staging-finalizer-current.json" \
+              "${APP_BASE_URL#https://}" >/dev/null 2>&1; then
             exit 0
           fi
           vercel promote "$HOLDING_DEPLOYMENT_URL" --yes --timeout=5m
@@ -1105,7 +1112,8 @@ jobs:
                 --output "$RUNNER_TEMP/staging-finalizer-holding.json" \
               && GITHUB_OUTPUT="$RUNNER_TEMP/staging-finalizer-holding-poll-output" \
                 node --experimental-strip-types scripts/validate-vercel-deployment.mjs holding \
-                  "$RUNNER_TEMP/staging-finalizer-holding.json" >/dev/null 2>&1; then
+                  "$RUNNER_TEMP/staging-finalizer-holding.json" \
+                  "${APP_BASE_URL#https://}" >/dev/null 2>&1; then
               break
             fi
             if [[ "$attempt" = 20 ]]; then
@@ -1116,7 +1124,8 @@ jobs:
           done
           env -u GITHUB_OUTPUT node --experimental-strip-types \
             scripts/validate-vercel-deployment.mjs holding \
-            "$RUNNER_TEMP/staging-finalizer-holding.json"
+            "$RUNNER_TEMP/staging-finalizer-holding.json" \
+            "${APP_BASE_URL#https://}"
 
       - name: Smoke the final staging holding application
         if: ${{ always() && steps.finalizer-validate-staging-holding.outcome == 'success' }}
@@ -1509,7 +1518,8 @@ jobs:
             "https://api.vercel.com/v13/deployments/$deployment_host$scope_query" \
             --output "$RUNNER_TEMP/production-holding.json"
           node --experimental-strip-types scripts/validate-vercel-deployment.mjs holding \
-            "$RUNNER_TEMP/production-holding.json"
+            "$RUNNER_TEMP/production-holding.json" \
+            "${APP_BASE_URL#https://}"
 
       - name: Smoke the holding application before migration
         env:
@@ -1683,7 +1693,8 @@ jobs:
             --output "$RUNNER_TEMP/production-holding-pre-migration.json"
           env -u GITHUB_OUTPUT node --experimental-strip-types \
             scripts/validate-vercel-deployment.mjs holding \
-            "$RUNNER_TEMP/production-holding-pre-migration.json"
+            "$RUNNER_TEMP/production-holding-pre-migration.json" \
+            "${APP_BASE_URL#https://}"
 
       - name: Smoke the production holding application immediately before migration
         id: production-holding-pre-migration-smoke
@@ -1948,7 +1959,8 @@ jobs:
             "https://api.vercel.com/v13/deployments/$deployment_host$scope_query" \
             --output "$RUNNER_TEMP/production-holding-pre-promotion.json"
           node --experimental-strip-types scripts/validate-vercel-deployment.mjs holding \
-            "$RUNNER_TEMP/production-holding-pre-promotion.json"
+            "$RUNNER_TEMP/production-holding-pre-promotion.json" \
+            "${APP_BASE_URL#https://}"
 
       - name: Mark promotion attempt
         id: promotion-marker
@@ -2044,7 +2056,8 @@ jobs:
                 --output "$RUNNER_TEMP/production-promoted.json" \
               && GITHUB_OUTPUT="$RUNNER_TEMP/promotion-poll-output" \
                 node --experimental-strip-types scripts/validate-vercel-deployment.mjs promoted \
-                  "$RUNNER_TEMP/production-promoted.json" >/dev/null 2>&1; then
+                  "$RUNNER_TEMP/production-promoted.json" \
+                  "${APP_BASE_URL#https://}" >/dev/null 2>&1; then
               exit 0
             fi
             if [[ "$attempt" = 20 ]]; then
@@ -2061,7 +2074,7 @@ jobs:
           CANDIDATE_DEPLOYMENT_ID: ${{ steps.production-candidate.outputs.deployment_id }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-        run: node --experimental-strip-types scripts/validate-vercel-deployment.mjs promoted "$RUNNER_TEMP/production-promoted.json"
+        run: node --experimental-strip-types scripts/validate-vercel-deployment.mjs promoted "$RUNNER_TEMP/production-promoted.json" "${APP_BASE_URL#https://}"
 
       - name: Smoke the canonical production application
         id: canonical-smoke
@@ -2275,7 +2288,8 @@ jobs:
             "https://api.vercel.com/v13/deployments/$deployment_host$scope_query" \
             --output "$RUNNER_TEMP/production-final-canonical.json"
           node --experimental-strip-types scripts/validate-vercel-deployment.mjs promoted \
-            "$RUNNER_TEMP/production-final-canonical.json"
+            "$RUNNER_TEMP/production-final-canonical.json" \
+            "${APP_BASE_URL#https://}"
 
       - name: Smoke the fully enabled canonical production application
         timeout-minutes: 15
@@ -2419,7 +2433,8 @@ jobs:
             --output "$RUNNER_TEMP/production-post-reconcile.json"
           env -u GITHUB_OUTPUT node --experimental-strip-types \
             scripts/validate-vercel-deployment.mjs promoted \
-            "$RUNNER_TEMP/production-post-reconcile.json"
+            "$RUNNER_TEMP/production-post-reconcile.json" \
+            "${APP_BASE_URL#https://}"
 
       - name: Recheck the release namespace after cutover
         id: final-release-namespace
@@ -2582,7 +2597,8 @@ jobs:
                 --output "$RUNNER_TEMP/production-rollback.json" \
               && GITHUB_OUTPUT="$RUNNER_TEMP/rollback-poll-output" \
                 node --experimental-strip-types scripts/validate-vercel-deployment.mjs holding \
-                  "$RUNNER_TEMP/production-rollback.json" >/dev/null 2>&1; then
+                  "$RUNNER_TEMP/production-rollback.json" \
+                  "${APP_BASE_URL#https://}" >/dev/null 2>&1; then
               exit 0
             fi
             if [[ "$attempt" = 20 ]]; then
@@ -2600,7 +2616,7 @@ jobs:
           APPROVED_HOLDING_DEPLOYMENT_ID: ${{ steps.production-holding.outputs.deployment_id }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-        run: node --experimental-strip-types scripts/validate-vercel-deployment.mjs holding "$RUNNER_TEMP/production-rollback.json"
+        run: node --experimental-strip-types scripts/validate-vercel-deployment.mjs holding "$RUNNER_TEMP/production-rollback.json" "${APP_BASE_URL#https://}"
 
       - name: Prove rollback left production domain auto-assignment disabled
         if: always() && steps.verify-rollback.outcome == 'success'
@@ -2881,7 +2897,8 @@ jobs:
                 --output "$RUNNER_TEMP/production-publication.json" \
               && GITHUB_OUTPUT="$RUNNER_TEMP/publication-poll-output" \
                 node --experimental-strip-types scripts/validate-vercel-deployment.mjs promoted \
-                  "$RUNNER_TEMP/production-publication.json" >/dev/null 2>&1; then
+                  "$RUNNER_TEMP/production-publication.json" \
+                  "${APP_BASE_URL#https://}" >/dev/null 2>&1; then
               exit 0
             fi
             if [[ "$attempt" = 10 ]]; then

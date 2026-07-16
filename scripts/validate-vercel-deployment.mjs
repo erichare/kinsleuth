@@ -11,6 +11,7 @@ import {
 } from "../lib/vercel-release-contract.ts";
 
 const modes = new Set(["previous", "holding", "candidate", "containment", "promoted"]);
+const canonicalLookupModes = new Set(["holding", "containment", "promoted"]);
 
 function requiredEnvironment(name) {
   const value = process.env[name];
@@ -38,10 +39,18 @@ function ownershipExpectations() {
 }
 
 try {
-  const [mode, filePath, ...unexpectedArguments] = process.argv.slice(2);
-  if (!mode || !modes.has(mode) || !filePath || unexpectedArguments.length > 0) {
+  const [mode, filePath, canonicalLookupHostname, ...unexpectedArguments] = process.argv.slice(2);
+  const requiresCanonicalLookup = canonicalLookupModes.has(mode);
+  if (
+    !mode
+    || !modes.has(mode)
+    || !filePath
+    || unexpectedArguments.length > 0
+    || (requiresCanonicalLookup && !canonicalLookupHostname)
+    || (!requiresCanonicalLookup && canonicalLookupHostname !== undefined)
+  ) {
     throw new Error(
-      "Usage: validate-vercel-deployment.mjs <previous|holding|candidate|containment|promoted> <json-file>."
+      "Usage: validate-vercel-deployment.mjs <previous|holding|candidate|containment|promoted> <json-file> [canonical-lookup-hostname]. The canonical lookup hostname is required only for holding, containment, and promoted modes."
     );
   }
 
@@ -54,6 +63,7 @@ try {
     result = validateHoldingDeployment(document, {
       ...ownership,
       appBaseUrl: requiredEnvironment("APP_BASE_URL"),
+      canonicalLookupHostname,
       approvedHoldingDeploymentId: requiredEnvironment("APPROVED_HOLDING_DEPLOYMENT_ID")
     });
   } else if (mode === "candidate") {
@@ -71,6 +81,7 @@ try {
     result = validateContainmentCanonicalDeployment(document, {
       ...ownership,
       appBaseUrl: requiredEnvironment("APP_BASE_URL"),
+      canonicalLookupHostname,
       approvedHoldingDeploymentId: requiredEnvironment("APPROVED_HOLDING_DEPLOYMENT_ID"),
       expectedGithubCommitSha: requiredEnvironment("EXPECTED_GITHUB_COMMIT_SHA"),
       expectedGithubRunAttempt: requiredEnvironment("EXPECTED_GITHUB_RUN_ATTEMPT"),
@@ -80,6 +91,7 @@ try {
     result = validatePromotedDeployment(document, {
       ...ownership,
       appBaseUrl: requiredEnvironment("APP_BASE_URL"),
+      canonicalLookupHostname,
       candidateDeploymentId: requiredEnvironment("CANDIDATE_DEPLOYMENT_ID")
     });
   }
