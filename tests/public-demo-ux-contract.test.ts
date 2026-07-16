@@ -7,6 +7,8 @@ import { isPublicArchivePath } from "@/lib/public-surface";
 const publicDemoEnvironment = {
   KINRESOLVE_DEPLOYMENT_MODE: "hosted",
   KINRESOLVE_DATASET_MODE: "demo",
+  KINRESOLVE_PUBLIC_DEMO_ENABLED: "true",
+  KINRESOLVE_PUBLIC_DEMO_ORIGIN: "https://demo.kinresolve.com",
   KINRESOLVE_DNA_ENABLED: "true",
   KINRESOLVE_EXTERNAL_AI_ENABLED: "true",
   KINRESOLVE_PUBLIC_ARCHIVE_ENABLED: "true",

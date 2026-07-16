@@ -1,16 +1,22 @@
 import Link from "next/link";
+import { publicDemoEnabled } from "@/lib/public-demo-config";
 import { publicArchiveEnabled } from "@/lib/public-surface";
 import { Icons } from "./icons";
 
-const links = [
-  { href: "/", label: "Public Archive" },
-  { href: "/people", label: "People" },
-  { href: "/places", label: "Places" },
-  { href: "/stories", label: "Stories" },
-  { href: "/kinsleuth", label: "Product" }
-];
-
-function PublicLinks({ active, className, label }: { active?: string; className: string; label: string }) {
+function PublicLinks({ active, className, demoMode, label }: { active?: string; className: string; demoMode: boolean; label: string }) {
+  const links = demoMode ? [
+    { href: "/", label: "Demo home" },
+    { href: "/family", label: "Family archive" },
+    { href: "/people", label: "People" },
+    { href: "/places", label: "Places" },
+    { href: "/stories", label: "Stories" }
+  ] : [
+    { href: "/", label: "Public Archive" },
+    { href: "/people", label: "People" },
+    { href: "/places", label: "Places" },
+    { href: "/stories", label: "Stories" },
+    { href: "/kinsleuth", label: "Product" }
+  ];
   return (
     <nav className={className} aria-label={label}>
       {links.map((link) => (
@@ -24,6 +30,7 @@ function PublicLinks({ active, className, label }: { active?: string; className:
 
 export function PublicShell({ children, active, tagline }: { children: React.ReactNode; active?: string; tagline?: string }) {
   const archiveAvailable = publicArchiveEnabled();
+  const demoMode = publicDemoEnabled();
   const homeHref = archiveAvailable ? "/" : "/login";
 
   return (
@@ -39,10 +46,10 @@ export function PublicShell({ children, active, tagline }: { children: React.Rea
               <small>{archiveAvailable ? tagline || "Family history. Openly shared." : "Private family research workspace."}</small>
             </span>
           </Link>
-          {archiveAvailable ? <PublicLinks active={active} className="nav-links" label="Public navigation" /> : null}
-          <Link className="button-secondary public-workspace-link" href="/login">
-            <Icons.Lock size={16} aria-hidden />
-            Private workspace
+          {archiveAvailable ? <PublicLinks active={active} className="nav-links" demoMode={demoMode} label="Public navigation" /> : null}
+          <Link className="button-secondary public-workspace-link" href={demoMode ? "/" : "/login"}>
+            {demoMode ? <Icons.Home size={16} aria-hidden /> : <Icons.Lock size={16} aria-hidden />}
+            {demoMode ? "Start demo" : "Private workspace"}
           </Link>
           {archiveAvailable ? <details className="mobile-menu public-mobile-menu">
             <summary>
@@ -50,10 +57,10 @@ export function PublicShell({ children, active, tagline }: { children: React.Rea
               Menu
             </summary>
             <div className="mobile-menu-panel">
-              <PublicLinks active={active} className="mobile-menu-links" label="Mobile public navigation" />
-              <Link className="button-secondary" href="/login">
-                <Icons.Lock size={16} aria-hidden />
-                Private workspace
+              <PublicLinks active={active} className="mobile-menu-links" demoMode={demoMode} label="Mobile public navigation" />
+              <Link className="button-secondary" href={demoMode ? "/" : "/login"}>
+                {demoMode ? <Icons.Home size={16} aria-hidden /> : <Icons.Lock size={16} aria-hidden />}
+                {demoMode ? "Start demo" : "Private workspace"}
               </Link>
             </div>
           </details> : null}
@@ -70,7 +77,9 @@ export function PublicShell({ children, active, tagline }: { children: React.Rea
           </Link>
           <span>
             {archiveAvailable
-              ? "AGPL-3.0-only self-hosted genealogy investigation software."
+              ? demoMode
+                ? "Fictional public demo · workspaces expire after 24 hours · AGPL-3.0-only source."
+                : "AGPL-3.0-only self-hosted genealogy investigation software."
               : "Invitation-only hosted beta · AGPL-3.0-only source available."}
           </span>
         </div>

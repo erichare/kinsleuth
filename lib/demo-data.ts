@@ -4,7 +4,7 @@ import { createDnaConnectionHypothesis, scoreDnaMatch } from "./dna";
 export const demoFictionNotice =
   "Fictional demo archive: every name, date, place, record, photograph, story, and DNA match in this workspace was invented for Kin Resolve. No detail represents a real person or family.";
 
-export const demoPeople: PersonSummary[] = [
+const demoPersonDrafts: PersonSummary[] = [
   {
     id: "p-nora-hartwell",
     slug: "nora-elise-hartwell",
@@ -403,6 +403,17 @@ export const demoPeople: PersonSummary[] = [
     ]
   }
 ];
+
+// Every profile and fact in the fictional fixture is safe for the curated
+// public-family surface. Private research material lives in cases, source
+// detail, DNA, and analysis records rather than on these profiles.
+export const demoPeople: PersonSummary[] = demoPersonDrafts.map((person) => ({
+  ...person,
+  livingStatus: "deceased",
+  privacy: "public",
+  published: true,
+  facts: person.facts.map((fact) => ({ ...fact, privacy: "public" }))
+}));
 
 export const demoDnaMatches: DnaMatch[] = [
   {

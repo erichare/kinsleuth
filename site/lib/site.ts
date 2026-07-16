@@ -12,6 +12,7 @@ export const site = {
   name: "Kin Resolve",
   compactName: "KinResolve",
   url: "https://kinresolve.com",
+  demoUrl: "https://demo.kinresolve.com",
   description: betaStatus.metadataDescription,
   github,
   sourceCommit,

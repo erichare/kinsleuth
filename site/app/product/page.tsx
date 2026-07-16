@@ -4,6 +4,7 @@ import { LaunchMedia } from "@/components/launch-media";
 import { PageHero } from "@/components/page-hero";
 import { betaStatus } from "@/lib/beta-status";
 import { pageMetadata } from "@/lib/metadata";
+import { site } from "@/lib/site";
 
 export const metadata = pageMetadata({
   title: "Product",
@@ -120,13 +121,13 @@ export default function ProductPage() {
 
       <div className="shell section">
         <CtaStrip
-          body="Investigate thirty synthetic record images and transcripts across five immersive cases before bringing private records."
-          eyebrow="Fictional interactive demo"
-          primaryHref="/challenge"
-          primaryLabel="Start the challenge"
+          body="Start in a temporary fictional workspace, then investigate thirty synthetic record images and transcripts across five immersive cases."
+          eyebrow="Try the working product"
+          primaryHref={site.demoUrl}
+          primaryLabel="Try Kin Resolve"
           secondaryHref="/beta"
           secondaryLabel="Apply for the private beta"
-          title="Start with the fictional Hartwell–Mercer mystery."
+          title="Work the fictional Hartwell–Mercer mystery in Kin Resolve."
         />
       </div>
     </>

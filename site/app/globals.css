@@ -4287,3 +4287,17 @@ a {
     transform: none;
   }
 }
+
+.challenge-dossier-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+@media (max-width: 720px) {
+  .challenge-dossier-actions > * {
+    width: 100%;
+    min-height: 44px;
+  }
+}

@@ -2,8 +2,8 @@ import { resolveHostedCapabilities } from "./hosted-capabilities";
 
 type Environment = Record<string, string | undefined>;
 
-const publicArchiveRoots = new Set(["/", "/people", "/places", "/stories", "/kinsleuth"]);
-const publicArchivePrefixes = ["/people/", "/places/", "/stories/", "/kinsleuth/"];
+const publicArchiveRoots = new Set(["/", "/family", "/people", "/places", "/stories", "/kinsleuth"]);
+const publicArchivePrefixes = ["/family/", "/people/", "/places/", "/stories/", "/kinsleuth/"];
 
 export const privateWorkspaceLoginPath = "/login?next=/app";
 

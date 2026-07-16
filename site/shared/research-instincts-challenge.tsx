@@ -673,6 +673,10 @@ export function createResearchInstinctsChallenge(runtime: ReactHookRuntime) {
                 <h3 id="challenge-dossier-title">{dossierAssessment(dossierScore.total)}</h3>
                 <p className="challenge-dossier-score">{dossierScore.total} / 500 points</p>
                 <p>You followed evidence across identity, provenance, photographs, sibling groups, and DNA without treating uncertainty as proof.</p>
+                <div className="challenge-dossier-actions">
+                  <a className="button" href="https://demo.kinresolve.com/">Try Kin Resolve</a>
+                  <a className="button-secondary" href="https://kinresolve.com/beta">Apply for the private beta</a>
+                </div>
               </section>
             ) : null}
 

@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { LoginForm } from "@/components/login-form";
 import { PublicShell } from "@/components/public-shell";
@@ -5,6 +6,11 @@ import { isHostedDeployment } from "@/lib/hosted-config";
 import { safeInternalPath } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = {
+  title: "Sign in · Kin Resolve",
+  robots: { index: false, follow: false, noarchive: true }
+};
 
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ next?: string }> }) {
   const params = await searchParams;

@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { resolveHostedCapabilities } from "@/lib/hosted-capabilities";
+import { publicDemoEnabled } from "@/lib/public-demo-config";
+import { DemoSessionBar } from "./demo-session-bar";
 import { Icons } from "./icons";
 import { LogoutControl } from "./logout-control";
 
@@ -37,22 +39,28 @@ const navGroups = [
 function PrivateNavigation({
   active,
   className,
+  demoMode,
   dnaEnabled,
   label,
   publicPublishingEnabled
 }: {
   active: string;
   className: string;
+  demoMode: boolean;
   dnaEnabled: boolean;
   label: string;
   publicPublishingEnabled: boolean;
 }) {
   return (
     <nav className={className} aria-label={label}>
-      {navGroups.map((group) => (
-        <div className="sidebar-nav-group" key={group.label}>
+      {navGroups.map((group) => {
+        const items = group.items
+          .filter((item) => dnaEnabled || item.href !== "/app/dna")
+          .filter((item) => !demoMode || !["/app/publishing", "/app/settings"].includes(item.href));
+        if (items.length === 0) return null;
+        return <div className="sidebar-nav-group" key={group.label}>
           <span className="sidebar-nav-label">{group.label}</span>
-          {group.items.filter((item) => dnaEnabled || item.href !== "/app/dna").map((item) => {
+          {items.map((item) => {
             const Icon = item.icon;
             const itemLabel = item.href === "/app/publishing" && !publicPublishingEnabled
               ? "Readiness"
@@ -65,7 +73,7 @@ function PrivateNavigation({
             );
           })}
         </div>
-      ))}
+      })}
     </nav>
   );
 }
@@ -110,6 +118,7 @@ export function AppShell({
   actions?: React.ReactNode;
   archiveName?: string;
 }) {
+  const demoMode = publicDemoEnabled();
   const {
     datasetMode,
     dna: dnaEnabled,
@@ -131,12 +140,13 @@ export function AppShell({
         <PrivateNavigation
           active={active}
           className="sidebar-nav"
+          demoMode={demoMode}
           dnaEnabled={dnaEnabled}
           label="Private navigation"
           publicPublishingEnabled={publicPublishingEnabled}
         />
         <ArchiveCard archiveName={archiveName} datasetMode={datasetMode} />
-        <LogoutControl />
+        {demoMode ? <Link className="sidebar-demo-family-link" href="/family">Explore public family</Link> : <LogoutControl />}
       </aside>
       <header className="app-mobile-header">
         <Link className="brand" href="/app">
@@ -149,16 +159,18 @@ export function AppShell({
             <PrivateNavigation
               active={active}
               className="mobile-menu-links private-mobile-links"
+              demoMode={demoMode}
               dnaEnabled={dnaEnabled}
               label="Mobile private navigation"
               publicPublishingEnabled={publicPublishingEnabled}
             />
             <ArchiveCard archiveName={archiveName} datasetMode={datasetMode} />
-            <LogoutControl />
+            {demoMode ? <Link className="button-secondary" href="/family">Explore public family</Link> : <LogoutControl />}
           </div>
         </details>
       </header>
-      <main className="app-main" id="main-content" tabIndex={-1}>
+      <main className={demoMode ? "app-main app-main-public-demo" : "app-main"} id="main-content" tabIndex={-1}>
+        {demoMode ? <DemoSessionBar /> : null}
         <div className="app-topbar">
           <div>
             <h1>{title}</h1>

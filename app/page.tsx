@@ -1,10 +1,13 @@
 import Link from "next/link";
 import Image from "next/image";
 import { redirect } from "next/navigation";
+import { DemoStartForm } from "@/components/demo-start-form";
 import { Icons } from "@/components/icons";
 import { PublicShell } from "@/components/public-shell";
 import { Status, TableScroll } from "@/components/ui";
 import { canPublishPerson, publicFactFilter } from "@/lib/privacy";
+import { publicDemoGuidedCaseTitle } from "@/lib/public-demo-contract";
+import { publicDemoEnabled } from "@/lib/public-demo-config";
 import { privateWorkspaceLoginPath, publicArchiveEnabled } from "@/lib/public-surface";
 import { readWorkspace } from "@/lib/workspace-store";
 
@@ -13,6 +16,9 @@ export const dynamic = "force-dynamic";
 export default async function HomePage() {
   if (!publicArchiveEnabled()) {
     redirect(privateWorkspaceLoginPath);
+  }
+  if (publicDemoEnabled()) {
+    return <PublicDemoLanding />;
   }
   const workspace = await readWorkspace();
   const publishedPeople = workspace.people
@@ -130,6 +136,69 @@ export default async function HomePage() {
               </div>
             </div>
           </aside>
+        </section>
+      </div>
+    </PublicShell>
+  );
+}
+
+function PublicDemoLanding() {
+  return (
+    <PublicShell active="/" tagline="A fictional family. A real research workflow.">
+      <div className="page-wrap public-demo-landing" data-public-demo-landing>
+        <section className="public-demo-hero">
+          <div className="public-demo-hero-copy">
+            <span className="eyebrow">Public interactive demo</span>
+            <h1>Try Kin Resolve with a fictional family.</h1>
+            <p>
+              Follow a real evidence-led research workflow through the invented Hartwell–Mercer archive. No account,
+              email address, or family records are required.
+            </p>
+          </div>
+
+          <div className="public-demo-notice" id="public-demo-notice" role="note">
+            <Icons.Shield aria-hidden size={22} />
+            <div>
+              <strong>Safe, synthetic, and temporary.</strong>
+              <p>
+                Every person and record is fictional. Your private demo workspace expires after 24 hours. Do not enter real family data.
+                Only curated synthetic context may be sent to the configured AI provider. Coarse usage events are retained for 30 days.
+              </p>
+            </div>
+          </div>
+
+          <div aria-label="Choose a demo path" className="public-demo-paths">
+            <article className="public-demo-path public-demo-path-primary">
+              <Icons.FileSearch aria-hidden size={24} />
+              <span className="card-kicker">About two minutes</span>
+              <h2>Work the passenger mystery</h2>
+              <p>
+                Compare two signatures, record a bounded outcome, and reveal the next assignment in
+                {` ${publicDemoGuidedCaseTitle}`}.
+              </p>
+              <DemoStartForm />
+            </article>
+
+            <article className="public-demo-path">
+              <Icons.Users aria-hidden size={24} />
+              <span className="card-kicker">Read-only archive</span>
+              <h2>Meet the family first</h2>
+              <p>Browse eight curated deceased profiles and seven safe source citations without starting a session.</p>
+              <Link className="button-secondary" href="/family">
+                Explore the fictional family
+              </Link>
+            </article>
+
+            <article className="public-demo-path">
+              <Icons.BookOpen aria-hidden size={24} />
+              <span className="card-kicker">Browser-local challenge</span>
+              <h2>Test your research instincts</h2>
+              <p>Investigate five cases and thirty synthetic records. Progress stays only in this browser.</p>
+              <Link className="button-secondary" href="/challenge">
+                Try the research challenge
+              </Link>
+            </article>
+          </div>
         </section>
       </div>
     </PublicShell>

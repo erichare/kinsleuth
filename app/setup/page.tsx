@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Icons } from "@/components/icons";
@@ -7,6 +8,11 @@ import { countUsers } from "@/lib/auth-session";
 import { isHostedDeployment } from "@/lib/hosted-config";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = {
+  title: "Set up Kin Resolve",
+  robots: { index: false, follow: false, noarchive: true }
+};
 
 const steps = [
   {

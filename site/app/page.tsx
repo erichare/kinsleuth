@@ -48,8 +48,8 @@ export default function HomePage() {
             A family tree captures conclusions. Kin Resolve keeps the evidence trail—records, sources, research cases, DNA clues, and careful analysis—in one private workspace.
           </p>
           <div className="hero-actions">
-            <Link className="button" href="/beta">Apply for the private beta</Link>
-            <a className="button button-secondary" href={site.github}>View on GitHub <span aria-hidden="true">↗</span></a>
+            <a className="button" href={site.demoUrl}>Try Kin Resolve <span aria-hidden="true">↗</span></a>
+            <Link className="button button-secondary" href="/beta">Apply for the private beta</Link>
           </div>
           <p className="cta-note">{betaStatus.rollout} Source available under AGPL-3.0-only.</p>
         </div>
