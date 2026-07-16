@@ -21,6 +21,8 @@ export type AIProviderConfig = {
   chatModel: string;
   embeddingModel: string;
   mode?: AIProviderMode;
+  maximumOutputTokens?: number;
+  timeoutMs?: number;
   fetcher?: typeof fetch;
 };
 
@@ -392,6 +394,14 @@ export function buildPromptPack(
 async function callAIProvider(provider: AIProviderConfig, prompt: string): Promise<string> {
   const mode = provider.mode ?? "responses";
   const fetcher = provider.fetcher ?? fetch;
+  const timeoutMs = boundedProviderInteger(provider.timeoutMs, 30_000, 1_000, 120_000, "timeout");
+  const maximumOutputTokens = boundedProviderInteger(
+    provider.maximumOutputTokens,
+    1_200,
+    64,
+    8_192,
+    "output token limit"
+  );
   const endpoint = `${provider.baseUrl.replace(/\/+$/, "")}${mode === "chat" ? "/chat/completions" : "/responses"}`;
   const headers = {
     "authorization": `Bearer ${provider.apiKey}`,
@@ -402,6 +412,7 @@ async function callAIProvider(provider: AIProviderConfig, prompt: string): Promi
     mode === "chat"
       ? {
           model: provider.chatModel,
+          max_completion_tokens: maximumOutputTokens,
           messages: [
             { role: "developer", content: developerInstructions },
             { role: "user", content: prompt }
@@ -409,6 +420,7 @@ async function callAIProvider(provider: AIProviderConfig, prompt: string): Promi
         }
       : {
           model: provider.chatModel,
+          max_output_tokens: maximumOutputTokens,
           input: [
             { role: "developer", content: developerInstructions },
             { role: "user", content: prompt }
@@ -418,7 +430,8 @@ async function callAIProvider(provider: AIProviderConfig, prompt: string): Promi
   const response = await fetcher(endpoint, {
     method: "POST",
     headers,
-    body: JSON.stringify(body)
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(timeoutMs)
   });
 
   const raw = await response.text();
@@ -428,6 +441,20 @@ async function callAIProvider(provider: AIProviderConfig, prompt: string): Promi
 
   const json = tryParseJson(raw);
   return extractProviderText(json) || raw;
+}
+
+function boundedProviderInteger(
+  value: number | undefined,
+  fallback: number,
+  minimum: number,
+  maximum: number,
+  label: string
+): number {
+  const candidate = value ?? fallback;
+  if (!Number.isSafeInteger(candidate) || candidate < minimum || candidate > maximum) {
+    throw new Error(`AI provider ${label} is invalid.`);
+  }
+  return candidate;
 }
 
 function parseProviderPayload(providerText: string): ProviderPayload {
