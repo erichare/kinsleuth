@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   completePublicDemoAiAttempt: vi.fn(),
   readWorkspace: vi.fn(),
+  recordPublicDemoEvent: vi.fn(),
   reservePublicDemoAiAttempt: vi.fn(),
   runAIAnalysis: vi.fn(),
   saveAIAnalysisRun: vi.fn()
@@ -30,6 +31,7 @@ vi.mock("@/lib/hosted-capabilities", () => ({
 }));
 vi.mock("@/lib/public-demo-session-store", () => ({
   completePublicDemoAiAttempt: mocks.completePublicDemoAiAttempt,
+  recordPublicDemoEvent: mocks.recordPublicDemoEvent,
   reservePublicDemoAiAttempt: mocks.reservePublicDemoAiAttempt
 }));
 vi.mock("@/lib/workspace-store", () => ({
@@ -49,6 +51,7 @@ beforeEach(() => {
     remaining: 2
   });
   mocks.completePublicDemoAiAttempt.mockResolvedValue(undefined);
+  mocks.recordPublicDemoEvent.mockResolvedValue(undefined);
   mocks.runAIAnalysis.mockResolvedValue(providerResult());
   mocks.saveAIAnalysisRun.mockImplementation(async (input) => ({
     id: "ai-demo-1",
