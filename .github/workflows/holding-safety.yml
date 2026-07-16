@@ -49,7 +49,8 @@ jobs:
           set -euo pipefail
           test "$EVENT_ACTION" = "completed"
           test "$EVENT_REPOSITORY" = "$CURRENT_REPOSITORY"
-          test "$SOURCE_WORKFLOW_NAME" = "Deploy Kin Resolve static holding page"
+          test "$SOURCE_WORKFLOW_NAME" = "Deploy Kin Resolve static holding page" || \
+            test "$SOURCE_WORKFLOW_NAME" = "$SOURCE_DISPLAY_TITLE"
           test "$SOURCE_WORKFLOW_PATH" = ".github/workflows/vercel-holding.yml"
           test "$SOURCE_EVENT" = "workflow_dispatch"
           test "$SOURCE_HEAD_BRANCH" = "main"

@@ -257,6 +257,21 @@ describe("release safety queue", () => {
     }))).toThrow(/not bound/i);
   });
 
+  it("accepts GitHub's custom run-name as the current workflow name", () => {
+    const current = currentSourceBinding("holding", 840, 1);
+    const currentApiRun = {
+      ...current.run,
+      name: current.run.display_title
+    };
+
+    expect(assessReleaseSafetyQueue(input({
+      currentSourceRun: {
+        ...current,
+        run: currentApiRun
+      }
+    }))).toEqual({ safe: true, issues: [] });
+  });
+
   it("blocks pending and hard-failed safety automation", () => {
     const pending = run({ id: 901, status: "in_progress", conclusion: null, event: "workflow_run" });
     expect(assessReleaseSafetyQueue(input({ containmentRuns: list(pending) })).safe).toBe(false);

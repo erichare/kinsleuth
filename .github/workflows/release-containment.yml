@@ -36,6 +36,7 @@ jobs:
           EVENT_ACTION: ${{ github.event.action }}
           EVENT_REPOSITORY: ${{ github.event.repository.full_name }}
           SOURCE_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          SOURCE_DISPLAY_TITLE: ${{ github.event.workflow_run.display_title }}
           SOURCE_EVENT: ${{ github.event.workflow_run.event }}
           SOURCE_HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
           SOURCE_HEAD_REPOSITORY: ${{ github.event.workflow_run.head_repository.full_name }}
@@ -49,7 +50,9 @@ jobs:
           set -euo pipefail
           test "$EVENT_ACTION" = "completed"
           test "$EVENT_REPOSITORY" = "$CURRENT_REPOSITORY"
-          test "$SOURCE_WORKFLOW_NAME" = "Release Kin Resolve beta candidate"
+          test "$SOURCE_WORKFLOW_NAME" = "Release Kin Resolve beta candidate" || \
+            test "$SOURCE_WORKFLOW_NAME" = "$SOURCE_DISPLAY_TITLE"
+          test "$SOURCE_DISPLAY_TITLE" = "Kin Resolve beta release run $SOURCE_RUN_ID attempt $SOURCE_RUN_ATTEMPT"
           test "$SOURCE_WORKFLOW_PATH" = ".github/workflows/vercel-release.yml"
           test "$SOURCE_EVENT" = "workflow_dispatch"
           test "$SOURCE_HEAD_BRANCH" = "main"
@@ -149,6 +152,7 @@ jobs:
           EVENT_ACTION: ${{ github.event.action }}
           EVENT_REPOSITORY: ${{ github.event.repository.full_name }}
           SOURCE_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          SOURCE_DISPLAY_TITLE: ${{ github.event.workflow_run.display_title }}
           SOURCE_EVENT: ${{ github.event.workflow_run.event }}
           SOURCE_HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
           SOURCE_HEAD_REPOSITORY: ${{ github.event.workflow_run.head_repository.full_name }}
@@ -162,7 +166,9 @@ jobs:
           set -euo pipefail
           test "$EVENT_ACTION" = "completed"
           test "$EVENT_REPOSITORY" = "$CURRENT_REPOSITORY"
-          test "$SOURCE_WORKFLOW_NAME" = "Release Kin Resolve beta candidate"
+          test "$SOURCE_WORKFLOW_NAME" = "Release Kin Resolve beta candidate" || \
+            test "$SOURCE_WORKFLOW_NAME" = "$SOURCE_DISPLAY_TITLE"
+          test "$SOURCE_DISPLAY_TITLE" = "Kin Resolve beta release run $SOURCE_RUN_ID attempt $SOURCE_RUN_ATTEMPT"
           test "$SOURCE_WORKFLOW_PATH" = ".github/workflows/vercel-release.yml"
           test "$SOURCE_EVENT" = "workflow_dispatch"
           test "$SOURCE_HEAD_BRANCH" = "main"

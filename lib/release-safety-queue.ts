@@ -185,10 +185,12 @@ function authenticatePriorAttempts(
     10
   );
   const workflow = sourceWorkflowContract[binding.source];
+  const workflowNameMatches = current.workflowName === workflow.name
+    || current.workflowName === current.displayTitle;
   if (current.id !== expectedRunId || current.attempt !== expectedRunAttempt) {
     throw new Error("The current source run does not match the executing workflow attempt.");
   }
-  if (current.workflowName !== workflow.name || current.workflowPath !== workflow.path
+  if (!workflowNameMatches || current.workflowPath !== workflow.path
       || current.event !== "workflow_dispatch" || current.headBranch !== "main"
       || current.repository !== expectedRepository || current.headRepository !== expectedRepository
       || !isMarkedSourceRun(binding.source, current)) {
