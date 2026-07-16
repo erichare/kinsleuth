@@ -51,6 +51,9 @@ describe("failed release containment workflow", () => {
     expect(classify).toContain('test "$SOURCE_RUN_REPOSITORY" = "$CURRENT_REPOSITORY"');
     expect(classify).toContain("SOURCE_DISPLAY_TITLE: ${{ github.event.workflow_run.display_title }}");
     expect(classify).toContain('test "$SOURCE_WORKFLOW_NAME" = "$SOURCE_DISPLAY_TITLE"');
+    expect(classify).toContain(
+      'test "$SOURCE_DISPLAY_TITLE" = "Kin Resolve beta release run $SOURCE_RUN_ID attempt $SOURCE_RUN_ATTEMPT"'
+    );
     expect(classify).toContain('test "$SOURCE_WORKFLOW_PATH" = ".github/workflows/vercel-release.yml"');
     expect(classify).toContain("/attempts/$SOURCE_RUN_ATTEMPT/jobs?per_page=100");
     expect(classify).toContain("scripts/classify-release-containment.mjs");
@@ -77,6 +80,9 @@ describe("failed release containment workflow", () => {
     expect(contain).toContain("git merge-base --is-ancestor");
     expect(contain).toContain("SOURCE_DISPLAY_TITLE: ${{ github.event.workflow_run.display_title }}");
     expect(contain).toContain('test "$SOURCE_WORKFLOW_NAME" = "$SOURCE_DISPLAY_TITLE"');
+    expect(contain).toContain(
+      'test "$SOURCE_DISPLAY_TITLE" = "Kin Resolve beta release run $SOURCE_RUN_ID attempt $SOURCE_RUN_ATTEMPT"'
+    );
   });
 
   it("binds every Vercel control operation to independent protected org and project identities", async () => {
