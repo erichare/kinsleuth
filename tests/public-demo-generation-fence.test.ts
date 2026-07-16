@@ -2,7 +2,34 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
+import { workspaceOptionsForSession } from "@/lib/auth-session";
+
 describe("public demo generation fencing", () => {
+  it("projects a generation fence for guests without changing member archive options", () => {
+    expect(workspaceOptionsForSession({
+      kind: "member",
+      userId: "user-1",
+      email: "member@example.test",
+      name: "Member",
+      role: "owner",
+      archiveId: "archive-member"
+    })).toEqual({ archiveId: "archive-member" });
+
+    expect(workspaceOptionsForSession({
+      kind: "demo-guest",
+      sessionId: "11111111-1111-4111-8111-111111111111",
+      archiveId: "archive-demo-a",
+      generation: 4,
+      expiresAt: "2026-07-17T12:00:00.000Z"
+    })).toEqual({
+      archiveId: "archive-demo-a",
+      demoGuestFence: {
+        sessionId: "11111111-1111-4111-8111-111111111111",
+        generation: 4
+      }
+    });
+  });
+
   it("checks session, archive, and generation under the workspace transaction lock", async () => {
     const workspace = await source("lib/workspace-store.ts");
 
@@ -21,6 +48,38 @@ describe("public demo generation fencing", () => {
       expect(route).toContain("demoGuestFence");
       expect(route).toContain("generation:");
       expect(route).toContain("sessionId:");
+    }
+  });
+
+  it("passes the authenticated fence through every guest-readable workspace route", async () => {
+    const routes = await Promise.all([
+      source("app/api/cases/route.ts"),
+      source("app/api/dna/matches/route.ts"),
+      source("app/api/people/route.ts"),
+      source("app/api/publishing/readiness/route.ts"),
+      source("app/api/reports/quality/route.ts"),
+      source("app/api/sources/route.ts")
+    ]);
+
+    for (const route of routes) {
+      expect(route).toContain("workspaceOptionsForSession(authorization)");
+    }
+  });
+
+  it("passes the authenticated fence through every guest-visible workspace page", async () => {
+    const pages = await Promise.all([
+      source("app/app/page.tsx"),
+      source("app/app/cases/page.tsx"),
+      source("app/app/cases/[id]/page.tsx"),
+      source("app/app/dna/page.tsx"),
+      source("app/app/people/page.tsx"),
+      source("app/app/people/[id]/page.tsx"),
+      source("app/app/reports/page.tsx"),
+      source("app/app/sources/page.tsx")
+    ]);
+
+    for (const page of pages) {
+      expect(page).toContain("workspaceOptionsForSession(session)");
     }
   });
 

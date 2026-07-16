@@ -83,6 +83,23 @@ describe("public demo workspace chrome", () => {
     expect(feedback).not.toMatch(/<input\b[^>]*type=["']text["']/i);
     expect(feedback).not.toMatch(/contentEditable|name=["'](?:feedbackText|comments|message)["']/i);
   });
+
+  it("shows only guest-supported workspace areas and rejects unsupported pages", async () => {
+    const shell = await source("components/app-shell.tsx");
+    expect(shell).toMatch(
+      /!demoMode\s*\|\|\s*!\[\s*["']\/app\/imports["'],\s*["']\/app\/ai["'],\s*["']\/app\/publishing["'],\s*["']\/app\/settings["']\s*\]\.includes\(item\.href\)/
+    );
+
+    const unsupportedPages = await Promise.all([
+      source("app/app/ai/page.tsx"),
+      source("app/app/imports/page.tsx"),
+      source("app/app/publishing/page.tsx"),
+      source("app/app/settings/page.tsx")
+    ]);
+    for (const page of unsupportedPages) {
+      expect(page).toMatch(/session\.kind\s*===\s*["']demo-guest["'][\s\S]{0,80}notFound\(\)/);
+    }
+  });
 });
 
 describe("public demo indexing boundary", () => {
