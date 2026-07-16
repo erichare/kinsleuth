@@ -3,6 +3,7 @@ import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { hashPassword } from "better-auth/crypto";
 import type { Pool } from "pg";
 
+import { demoFixtureVersion } from "../lib/archive-provisioning.ts";
 import {
   currentBetaLegalAcceptance,
   loadApprovedBetaLegalManifest,
@@ -121,7 +122,7 @@ export async function assertDisposableDatabasePreflight(
     || row.database_name !== configuration.databaseName
     || row.archive_id !== configuration.archiveId
     || row.dataset_mode !== "demo"
-    || row.demo_fixture_version !== 1
+    || row.demo_fixture_version !== demoFixtureVersion
     || !row.unpublished_person_id
   ) {
     throw new Error("The disposable identity database binding is invalid.");

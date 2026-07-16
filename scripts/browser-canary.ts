@@ -6,6 +6,7 @@ import path from "node:path";
 import axeCore from "axe-core";
 import { chromium, type APIResponse, type BrowserContext, type Page } from "playwright";
 
+import { demoFixtureVersion } from "../lib/archive-provisioning.ts";
 import { processIntegrationSyncRun } from "../lib/integrations/run-processor.ts";
 import { createConfiguredArchiveObjectStorage } from "../lib/storage/object-storage.ts";
 import { validateApiLaunchState } from "../lib/release-smoke.ts";
@@ -121,7 +122,7 @@ async function validateReleaseBinding(
   }
   if (config.mutable && (
     config.datasetMode !== "demo"
-    || body.database.demoFixtureVersion !== 1
+    || body.database.demoFixtureVersion !== demoFixtureVersion
     || body.capabilities.dna !== false
     || body.capabilities.externalAi !== false
     || body.capabilities.publicArchive !== false

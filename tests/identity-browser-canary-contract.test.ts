@@ -134,6 +134,13 @@ describe("disposable identity browser canary state contract", () => {
 });
 
 describe("identity canary artifact boundary", () => {
+  it("binds the disposable database to the canonical demo fixture version", () => {
+    const state = readFileSync(path.join(process.cwd(), "scripts/identity-browser-canary-state.ts"), "utf8");
+    expect(state).toContain('import { demoFixtureVersion } from "../lib/archive-provisioning.ts"');
+    expect(state).toContain("row.demo_fixture_version !== demoFixtureVersion");
+    expect(state).not.toMatch(/row\.demo_fixture_version\s*!==\s*\d+/);
+  });
+
   it("keeps browser credentials out of environment configuration and forbids provider access", () => {
     const contract = readFileSync(path.join(process.cwd(), "scripts/identity-browser-canary-contract.ts"), "utf8");
     expect(contract).not.toMatch(/CANARY_(?:EMAIL|PASSWORD|TOKEN)/);

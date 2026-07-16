@@ -218,6 +218,12 @@ describe("browser canary source and artifact boundary", () => {
     expect(source).not.toContain("@playwright/test");
   });
 
+  it("binds mutable cells to the canonical demo fixture version", () => {
+    expect(source).toContain('import { demoFixtureVersion } from "../lib/archive-provisioning.ts"');
+    expect(source).toContain("body.database.demoFixtureVersion !== demoFixtureVersion");
+    expect(source).not.toMatch(/body\.database\.demoFixtureVersion\s*!==\s*\d+/);
+  });
+
   it("keeps production anonymous and gates every failure screenshot on a synthetic mutable page", () => {
     expect(source).toContain('if (configuration.mode === "production")');
     expect(source).toContain("without credentials, writes, screenshots, or traces");
