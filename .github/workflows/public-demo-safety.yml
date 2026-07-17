@@ -188,13 +188,40 @@ jobs:
         continue-on-error: true
         timeout-minutes: 10
         env:
+          APP_BASE_URL: ${{ vars.APP_BASE_URL }}
+          APPROVED_HOLDING_DEPLOYMENT_ID: ${{ secrets.DEMO_HOLDING_DEPLOYMENT_ID }}
           HOLDING_DEPLOYMENT_URL: ${{ steps.holding-record.outputs.deployment_url }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
           set -euo pipefail
-          vercel promote "$HOLDING_DEPLOYMENT_URL" --yes --timeout=5m
+          deployment_host="${APP_BASE_URL#https://}"
+          scope_query=""
+          if [[ "$VERCEL_ORG_ID" == team_* ]]; then scope_query="?teamId=$VERCEL_ORG_ID"; fi
+          holding_is_current() {
+            local output_path="$1"
+            rm -f "$output_path"
+            curl --connect-timeout 10 --max-time 30 --retry 3 --retry-all-errors \
+              --fail --silent --show-error --header "Authorization: Bearer $VERCEL_TOKEN" \
+              "https://api.vercel.com/v13/deployments/$deployment_host$scope_query" \
+              --output "$output_path" \
+            && env -u GITHUB_OUTPUT node --experimental-strip-types \
+              scripts/validate-vercel-deployment.mjs holding \
+              "$output_path" "$deployment_host" >/dev/null 2>&1
+          }
+          if holding_is_current "$RUNNER_TEMP/public-demo-safety-current-before.json"; then
+            echo "The exact pinned holding deployment is already current."
+            exit 0
+          fi
+          if vercel promote "$HOLDING_DEPLOYMENT_URL" --yes --timeout=5m; then
+            exit 0
+          fi
+          if holding_is_current "$RUNNER_TEMP/public-demo-safety-current-after.json"; then
+            echo "The exact pinned holding deployment became current during restoration."
+            exit 0
+          fi
+          exit 1
 
       - name: Repair and independently attest demo domain auto-assignment
         id: project-safety

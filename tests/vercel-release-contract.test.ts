@@ -84,6 +84,16 @@ function deployment(overrides: Record<string, unknown> = {}): Record<string, unk
   };
 }
 
+function stagedDeployment(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return deployment({
+    readyState: "INITIALIZING",
+    readySubstate: "STAGED",
+    errorCode: null,
+    errorMessage: null,
+    ...overrides
+  });
+}
+
 describe("Vercel release deployment contract", () => {
   it("enumerates every generated candidate origin and rejects custom aliases", () => {
     expect(candidateProtectionOrigins(deployment(), ownership)).toEqual([
@@ -138,6 +148,19 @@ describe("Vercel release deployment contract", () => {
       url: "https://kinresolve-candidate-a1b2c3-team.vercel.app",
       status: "READY"
     });
+  });
+
+  it("does not mistake a staged traffic assignment for runtime readiness", () => {
+    expect(() => validateCandidateDeployment(
+      stagedDeployment(),
+      candidateExpectations
+    )).toThrow(/READY/i);
+    expect(() => candidateProtectionOrigins(stagedDeployment(), ownership)).toThrow(/READY/i);
+    expect(() => validatePreviousDeployment(stagedDeployment(), ownership)).toThrow(/READY/i);
+    expect(() => validatePromotedDeployment(
+      stagedDeployment(),
+      promotedExpectations
+    )).toThrow(/READY/i);
   });
 
   it("accepts only the explicitly approved holding deployment returned by the canonical hostname lookup", () => {

@@ -119,9 +119,11 @@ and hostname identities match, and the demo database differs from production. It
 2. attests the migration database identity, migrates with the migration role, provisions
    and verifies `kinresolve-demo-public`, and grants/re-attests only the runtime operations;
 3. validates the current canonical rollback target and pinned holding deployment;
-4. deploys an unaliased protected candidate carrying exact SHA/run/version plus
-   `releaseRole=public-demo`, `datasetMode=demo`, and
-   `canonicalArchiveId=kinresolve-demo-public` metadata;
+4. deploys an unaliased protected candidate without waiting inside the Vercel CLI, then
+   bounded-polls the exact REST record until it is both `READY` and `STAGED`; an
+   `INITIALIZING/STAGED` record remains retryable and can never reach canaries or promotion.
+   The candidate carries exact SHA/run/version plus `releaseRole=public-demo`,
+   `datasetMode=demo`, and `canonicalArchiveId=kinresolve-demo-public` metadata;
 5. runs protected health, Chromium/WebKit/Firefox journeys, archive-isolation/reset checks,
    and the 25-session capacity/p95 gate; and
 6. rechecks current `main`, promotes the exact candidate, proves the canonical deployment,
@@ -147,6 +149,12 @@ If that proof fails, it promotes and proves the pinned holding deployment. A fai
 cancelled, or timed-out release also triggers `.github/workflows/public-demo-safety.yml`,
 which restores domain ownership and the pinned holding page or pauses `kinresolve-demo`
 fail-closed. Do not rerun release until the exact safety receipt exists.
+
+The safety workflow first proves whether the pinned holding deployment is already current;
+that idempotent state is a successful restore and must not be converted into a project pause
+because Vercel returned an “already current” promotion conflict. If an operator manually
+unpauses `kinresolve-demo`, immediately restore and re-attest
+`autoAssignCustomDomains=false` before creating any deployment.
 
 ## Rehearsal sequence
 

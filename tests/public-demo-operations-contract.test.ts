@@ -93,6 +93,13 @@ describe("public demo operational boundary", () => {
 
     expect(publicDemoRelease).toContain("environment: demo-production");
     expect(publicDemoRelease).toContain("environment: demo-containment");
+    expect(publicDemoRelease).toContain("vercel deploy --prebuilt --prod --skip-domain --no-wait");
+    expect(publicDemoRelease).toContain('candidate_validated="false"');
+    expect(publicDemoRelease).toMatch(/for attempt in \$\(seq 1 [1-9][0-9]*\)/);
+    expect(publicDemoRelease).toContain('.readyState == "READY"');
+    expect(publicDemoRelease).toContain('.readySubstate == "STAGED"');
+    expect(publicDemoRelease).toContain('test "$candidate_validated" = "true"');
+    expect(publicDemoRelease).not.toContain('--token="$VERCEL_TOKEN"');
     expect(publicDemoRelease).toContain("scripts/probe-vercel-candidate-protection.mjs");
     expect(publicDemoRelease).toContain("VERCEL_AUTOMATION_BYPASS_SECRET");
     expect(publicDemoRelease).toMatch(/browser-canary\.(?:ts|mjs)/);

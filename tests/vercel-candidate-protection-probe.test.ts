@@ -29,6 +29,23 @@ describe("generated candidate protection probe", () => {
     ]);
   });
 
+  it("refuses to probe a candidate until Vercel reports runtime readiness", async () => {
+    const fetchImplementation = vi.fn(async () => new Response("denied", { status: 401 }));
+
+    await expect(probeVercelCandidateProtection({
+      ...deployment,
+      readyState: "INITIALIZING",
+      readySubstate: "STAGED",
+      errorCode: null,
+      errorMessage: null
+    }, {
+      expectedProjectId: "prj_kinresolve",
+      expectedOrgId: "team_kinresolve",
+      fetch: fetchImplementation
+    })).rejects.toThrow(/READY/i);
+    expect(fetchImplementation).not.toHaveBeenCalled();
+  });
+
   it("fails closed when any alias is public or a custom alias is attached", async () => {
     const fetchImplementation = vi.fn(async (url: RequestInfo | URL) => new Response(
       String(url).includes("git-main") ? JSON.stringify({ database: "reachable" }) : "denied",

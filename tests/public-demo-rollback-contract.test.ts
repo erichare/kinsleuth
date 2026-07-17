@@ -13,6 +13,20 @@ const ownership = {
 };
 
 describe("public demo rollback deployment contract", () => {
+  it("rejects a staged public-demo deployment as a rollback target", () => {
+    const staged = runtimeDeployment({
+      readyState: "INITIALIZING",
+      readySubstate: "STAGED",
+      errorCode: null,
+      errorMessage: null
+    });
+
+    expect(() => validatePublicDemoRollbackDeployment(staged, {
+      ...ownership,
+      allowHolding: false
+    })).toThrow(/READY/i);
+  });
+
   it("accepts only a provenance-bound prior public demo release", () => {
     expect(validatePublicDemoRollbackDeployment(runtimeDeployment(), {
       ...ownership,

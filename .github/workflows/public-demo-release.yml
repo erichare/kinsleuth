@@ -268,7 +268,7 @@ jobs:
             --header "Authorization: Bearer $VERCEL_TOKEN" \
             "https://api.vercel.com/v9/projects/$VERCEL_PROJECT_ID/env?$scope_query" \
             --output "$RUNNER_TEMP/public-demo-environment.json"
-          vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+          vercel pull --yes --environment=production
           EXPECTED_VERCEL_ENVIRONMENT_PROFILE=public-demo \
             node --experimental-strip-types scripts/validate-vercel-environment.mjs \
               "$RUNNER_TEMP/public-demo-environment.json" \
@@ -472,7 +472,7 @@ jobs:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-        run: vercel build --prod --token="$VERCEL_TOKEN"
+        run: vercel build --prod
 
       - name: Deploy the unaliased public demo candidate
         id: deploy
@@ -485,7 +485,7 @@ jobs:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
           set -euo pipefail
-          deployment_url="$(vercel deploy --prebuilt --prod --skip-domain --yes \
+          deployment_url="$(vercel deploy --prebuilt --prod --skip-domain --no-wait --yes \
             --meta "githubCommitSha=$RELEASE_COMMIT" \
             --meta "githubRunId=$GITHUB_RUN_ID" \
             --meta "githubRunAttempt=$GITHUB_RUN_ATTEMPT" \
@@ -493,8 +493,7 @@ jobs:
              --meta "packageVersion=$RELEASE_VERSION" \
              --meta "releaseRole=public-demo" \
              --meta "datasetMode=demo" \
-             --meta "canonicalArchiveId=kinresolve-demo-public" \
-             --token="$VERCEL_TOKEN")"
+             --meta "canonicalArchiveId=kinresolve-demo-public")"
           DEPLOYMENT_URL="$deployment_url" node -e '
             const url = new URL(process.env.DEPLOYMENT_URL);
             if (url.protocol !== "https:" || url.origin !== process.env.DEPLOYMENT_URL ||
@@ -504,6 +503,7 @@ jobs:
 
       - name: Fetch and validate the exact candidate record
         id: candidate
+        timeout-minutes: 10
         env:
           APP_BASE_URL: ${{ vars.APP_BASE_URL }}
           CANDIDATE_DEPLOYMENT_URL: ${{ steps.deploy.outputs.deployment_url }}
@@ -521,10 +521,42 @@ jobs:
           deployment_host="${CANDIDATE_DEPLOYMENT_URL#https://}"
           scope_query=""
           if [[ "$VERCEL_ORG_ID" == team_* ]]; then scope_query="?teamId=$VERCEL_ORG_ID"; fi
-          curl --connect-timeout 10 --max-time 30 --retry 3 --retry-all-errors \
-            --fail --silent --show-error --header "Authorization: Bearer $VERCEL_TOKEN" \
-            "https://api.vercel.com/v13/deployments/$deployment_host$scope_query" \
-            --output "$RUNNER_TEMP/public-demo-candidate.json"
+          candidate_validated="false"
+          for attempt in $(seq 1 30); do
+            rm -f "$RUNNER_TEMP/public-demo-candidate.json"
+            if curl --connect-timeout 5 --max-time 10 \
+                --fail --silent --show-error --header "Authorization: Bearer $VERCEL_TOKEN" \
+                "https://api.vercel.com/v13/deployments/$deployment_host$scope_query" \
+                --output "$RUNNER_TEMP/public-demo-candidate.json"; then
+              if jq -e '
+                  ((.readyState // .state) == "ERROR") or
+                  ((.readyState // .state) == "CANCELED") or
+                  (.errorCode != null) or
+                  (.errorMessage != null)
+                ' "$RUNNER_TEMP/public-demo-candidate.json" >/dev/null; then
+                echo "The Vercel candidate entered a terminal failure state." >&2
+                exit 1
+              fi
+              if jq -e '
+                  .readyState == "READY" and
+                  .readySubstate == "STAGED" and
+                  .errorCode == null and
+                  .errorMessage == null
+                ' "$RUNNER_TEMP/public-demo-candidate.json" >/dev/null \
+                && env -u GITHUB_OUTPUT node --experimental-strip-types \
+                  scripts/validate-vercel-deployment.mjs candidate \
+                  "$RUNNER_TEMP/public-demo-candidate.json" >/dev/null 2>&1 \
+                && env -u GITHUB_OUTPUT node --experimental-strip-types \
+                  scripts/validate-vercel-deployment.mjs demo-rollback \
+                  "$RUNNER_TEMP/public-demo-candidate.json" >/dev/null 2>&1; then
+                candidate_validated="true"
+                break
+              fi
+            fi
+            echo "Waiting for the exact Vercel candidate to become READY and STAGED ($attempt/30)."
+            sleep 5
+          done
+          test "$candidate_validated" = "true"
           node --experimental-strip-types scripts/validate-vercel-deployment.mjs candidate \
             "$RUNNER_TEMP/public-demo-candidate.json"
           env -u GITHUB_OUTPUT node --experimental-strip-types \

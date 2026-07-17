@@ -108,6 +108,24 @@ describe("failed public demo release safety workflow", () => {
       "APPROVED_HOLDING_DEPLOYMENT_ID: ${{ secrets.DEMO_HOLDING_DEPLOYMENT_ID }}"
     );
     expect(contain).toContain("scripts/validate-vercel-deployment.mjs holding-record");
+    const restoreBlock = contain.slice(restore, projectSafety);
+    expect(restoreBlock).toContain(
+      '"https://api.vercel.com/v13/deployments/$deployment_host$scope_query"'
+    );
+    expect(restoreBlock).toContain("scripts/validate-vercel-deployment.mjs holding");
+    expect(restoreBlock).toContain('holding_is_current()');
+    expect(restoreBlock).toContain("public-demo-safety-current-before.json");
+    expect(restoreBlock).toContain("public-demo-safety-current-after.json");
+    expect(restoreBlock).toContain("The exact pinned holding deployment is already current.");
+    expect(restoreBlock).toContain(
+      "The exact pinned holding deployment became current during restoration."
+    );
+    expect(restoreBlock.indexOf("scripts/validate-vercel-deployment.mjs holding")).toBeLessThan(
+      restoreBlock.indexOf('vercel promote "$HOLDING_DEPLOYMENT_URL"')
+    );
+    expect(restoreBlock.indexOf("public-demo-safety-current-after.json")).toBeGreaterThan(
+      restoreBlock.indexOf('vercel promote "$HOLDING_DEPLOYMENT_URL"')
+    );
     expect(contain).toContain('vercel promote "$HOLDING_DEPLOYMENT_URL" --yes --timeout=5m');
     expect(contain).toContain(`--data '{"autoAssignCustomDomains":false}'`);
     expect(contain).toContain("scripts/validate-vercel-project-safety.mjs");
