@@ -103,6 +103,8 @@ export async function runPublicDemoBrowserCanary(
     let desktopContext;
     let mobileContext;
     let staleContext;
+    let primaryFailure;
+    let hasPrimaryFailure = false;
     try {
       await runCanaryStage("capacity-fallback", () => (
         auditCapacityFallback(browserInstance, configuration, dependencies.axeSource)
@@ -240,6 +242,9 @@ export async function runPublicDemoBrowserCanary(
           assertGuidedOutcome(mobileContext, configuration, "inconclusive")
         ), "mobile");
       }
+    } catch (error) {
+      primaryFailure = error;
+      hasPrimaryFailure = true;
     } finally {
       const sessionContexts = [desktopContext, mobileContext].filter(Boolean);
       const cleanup = await Promise.allSettled(sessionContexts.map((context) => (
@@ -248,9 +253,12 @@ export async function runPublicDemoBrowserCanary(
       await closeContextAfterRoutes(staleContext);
       await Promise.allSettled(sessionContexts.map(closeContextAfterRoutes));
       await browserInstance.close().catch(() => undefined);
-      if (cleanup.some(({ status }) => status === "rejected")) {
-        throw browserCanaryFailure("cleanup");
-      }
+      const selected = selectBrowserCanaryFailure(
+        hasPrimaryFailure,
+        primaryFailure,
+        cleanup
+      );
+      if (selected.hasFailure) throw selected.failure;
     }
   } catch (error) {
     throw attachBrowserCanaryContext(error, configuration.browserName);
@@ -262,6 +270,13 @@ async function allSettledOrThrow(work) {
   const rejected = settled.find(({ status }) => status === "rejected");
   if (rejected) throw rejected.reason;
   return settled.map((result) => result.value);
+}
+
+export function selectBrowserCanaryFailure(hasPrimaryFailure, primaryFailure, cleanup) {
+  if (hasPrimaryFailure) return { failure: primaryFailure, hasFailure: true };
+  return cleanup.some(({ status }) => status === "rejected")
+    ? { failure: browserCanaryFailure("cleanup"), hasFailure: true }
+    : { hasFailure: false };
 }
 
 async function closeContextAfterRoutes(context) {

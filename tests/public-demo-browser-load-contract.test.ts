@@ -71,6 +71,26 @@ describe("public demo browser and capacity launch gates", () => {
     expect(browser.match(/closeContextAfterRoutes\(/g)?.length ?? 0).toBeGreaterThan(2);
   });
 
+  it("preserves a primary journey failure when session cleanup also fails", () => {
+    const runStart = browser.indexOf("export async function runPublicDemoBrowserCanary");
+    const runEnd = browser.indexOf("async function allSettledOrThrow", runStart);
+    const run = browser.slice(runStart, runEnd);
+
+    expect(run).toMatch(/let\s+primaryFailure\s*;/);
+    expect(run).toMatch(/let\s+hasPrimaryFailure\s*=\s*false/);
+    expect(run).toMatch(
+      /catch\s*\(error\)\s*\{[\s\S]{0,120}primaryFailure\s*=\s*error[\s\S]{0,120}hasPrimaryFailure\s*=\s*true[\s\S]{0,120}\}\s*finally/
+    );
+    expect(run).toMatch(
+      /const\s+selected\s*=\s*selectBrowserCanaryFailure\(\s*hasPrimaryFailure,\s*primaryFailure,\s*cleanup\s*\)/
+    );
+    expect(run).toMatch(/if\s*\(selected\.hasFailure\)\s*throw\s+selected\.failure/);
+    expect(run).not.toMatch(/if\s*\(primaryFailure\)|if\s*\(selected\.failure\)/);
+    expect(run).not.toMatch(
+      /if\s*\(cleanup\.some\([\s\S]{0,120}status[\s\S]{0,120}rejected[\s\S]{0,120}\)\)\s*\{?\s*throw\s+browserCanaryFailure\(["']cleanup["']/
+    );
+  });
+
   it("observes every Playwright response and navigation waiter without replacing it", () => {
     const helperStart = browser.indexOf("export function observePlaywrightWaiter");
     const helperEnd = browser.indexOf("\n}", helperStart);
