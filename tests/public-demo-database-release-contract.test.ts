@@ -7,6 +7,14 @@ const workflow = readFileSync(
   path.join(process.cwd(), ".github", "workflows", "public-demo-release.yml"),
   "utf8"
 );
+const sessionStartRoute = readFileSync(
+  path.join(process.cwd(), "app", "api", "demo", "sessions", "route.ts"),
+  "utf8"
+);
+const sessionResetRoute = readFileSync(
+  path.join(process.cwd(), "app", "api", "demo", "session", "reset", "route.ts"),
+  "utf8"
+);
 
 function workflowStep(name: string): { contents: string; start: number } {
   const marker = `- name: ${name}`;
@@ -17,6 +25,10 @@ function workflowStep(name: string): { contents: string; start: number } {
     contents: workflow.slice(start, end === -1 ? workflow.length : end),
     start
   };
+}
+
+function workflowStepNames(): string[] {
+  return [...workflow.matchAll(/^      - name: (.+)$/gm)].map((match) => match[1]);
 }
 
 describe("public demo database release contract", () => {
@@ -93,13 +105,98 @@ describe("public demo database release contract", () => {
     );
   });
 
-  it("bootstraps lifecycle cleanup on the staged candidate before requiring fresh health", () => {
+  it("requires verified holding immediately after capture and before release work", () => {
+    const capture = workflowStep("Capture the current healthy canonical deployment for rollback");
+    const holdingOnly = workflowStep("Require verified holding before public demo release");
+    const cleanup = workflowStep("Bootstrap lifecycle cleanup before staged candidate health");
+    const migration = workflowStep("Migrate and provision only the isolated demo database");
+    const runtimeGrant = workflowStep("Grant and re-attest public demo runtime access");
+    const build = workflowStep("Build the immutable public demo artifact");
+    const candidate = workflowStep("Deploy the unaliased public demo candidate");
+    const health = workflowStep("Prove protected public demo operational health on the candidate");
+    const canaries = workflowStep("Run the protected cross-browser public demo canaries");
+    const load = workflowStep(
+      "Prove 25-session capacity and five-second p95 on the held demo cell"
+    );
+    const names = workflowStepNames();
+
+    expect(names.indexOf("Require verified holding before public demo release")).toBe(
+      names.indexOf("Capture the current healthy canonical deployment for rollback") + 1
+    );
+    expect(holdingOnly.start).toBeGreaterThan(capture.start);
+    for (const subsequent of [migration, runtimeGrant, cleanup, build, candidate, health, canaries, load]) {
+      expect(holdingOnly.start).toBeLessThan(subsequent.start);
+    }
+    expect(holdingOnly.contents).toContain(
+      "ROLLBACK_KIND: ${{ steps.previous.outputs.rollback_kind }}"
+    );
+    expect(holdingOnly.contents).toContain('test "$ROLLBACK_KIND" = "holding"');
+    expect(capture.contents).toContain(
+      "APPROVED_HOLDING_DEPLOYMENT_ID: ${{ secrets.DEMO_HOLDING_DEPLOYMENT_ID }}"
+    );
+    expect(capture.contents).toContain("validate-vercel-deployment.mjs holding-record");
+    expect(capture.contents).toContain("rollback_kind=holding");
+    expect(capture.contents).not.toContain("demo-rollback-or-holding");
+  });
+
+  it("enforces endpoint quiescence and revalidates exact holding before each drain", () => {
+    const preflight = workflowStep(
+      "Prove the captured rollback target is healthy before candidate deployment"
+    );
+    const protection = workflowStep("Prove every generated candidate origin remains protected");
+    const reproof = workflowStep("Reprove canonical holding after request quiescence");
+    const bootstrap = workflowStep("Bootstrap lifecycle cleanup before staged candidate health");
+    const canaries = workflowStep("Run the protected cross-browser public demo canaries");
+    const finalReproof = workflowStep(
+      "Reprove canonical holding immediately before final lifecycle drain"
+    );
+    const finalDrain = workflowStep("Final zero-capacity lifecycle drain before load");
+    const load = workflowStep(
+      "Prove 25-session capacity and five-second p95 on the held demo cell"
+    );
+    const names = workflowStepNames();
+
+    expect(sessionStartRoute).toContain("export const maxDuration = 60;");
+    expect(sessionResetRoute).toContain("export const maxDuration = 60;");
+    expect(preflight.contents).toContain("verified_at_epoch=");
+    expect(reproof.start).toBeGreaterThan(protection.start);
+    expect(reproof.start).toBeLessThan(bootstrap.start);
+    expect(names.indexOf("Bootstrap lifecycle cleanup before staged candidate health")).toBe(
+      names.indexOf("Reprove canonical holding after request quiescence") + 1
+    );
+    expect(reproof.contents).toContain("minimum_quiescence_seconds=65");
+    expect(reproof.contents).toContain("steps.holding_preflight.outputs.verified_at_epoch");
+    expect(reproof.contents).toContain("steps.previous.outputs.deployment_id");
+    expect(reproof.contents).toContain(
+      "APPROVED_HOLDING_DEPLOYMENT_ID: ${{ secrets.DEMO_HOLDING_DEPLOYMENT_ID }}"
+    );
+    expect(reproof.contents).toContain("validate-vercel-deployment.mjs holding-record");
+    expect(reproof.contents).toContain("cmp \"$RUNNER_TEMP/public-demo-held-before-drain.html\" holding/login.html");
+    expect(reproof.contents).toContain('test "$health_status" = "404"');
+    expect(finalReproof.start).toBeGreaterThan(canaries.start);
+    expect(finalReproof.start).toBeLessThan(finalDrain.start);
+    expect(finalReproof.contents).toContain(
+      "APPROVED_HOLDING_DEPLOYMENT_ID: ${{ secrets.DEMO_HOLDING_DEPLOYMENT_ID }}"
+    );
+    expect(finalReproof.contents).toContain("validate-vercel-deployment.mjs holding-record");
+    expect(finalDrain.start).toBeLessThan(load.start);
+    expect(names.indexOf("Final zero-capacity lifecycle drain before load")).toBe(
+      names.indexOf("Reprove canonical holding immediately before final lifecycle drain") + 1
+    );
+    expect(names.indexOf("Prove 25-session capacity and five-second p95 on the held demo cell")).toBe(
+      names.indexOf("Final zero-capacity lifecycle drain before load") + 1
+    );
+  });
+
+  it("bootstraps lifecycle cleanup on the staged candidate after the holding precondition", () => {
     const runtimeGrant = workflowStep("Grant and re-attest public demo runtime access");
     const candidate = workflowStep("Fetch and validate the exact candidate record");
     const protection = workflowStep("Prove every generated candidate origin remains protected");
+    const holdingOnly = workflowStep("Require verified holding before public demo release");
     const bootstrap = workflowStep("Bootstrap lifecycle cleanup before staged candidate health");
     const health = workflowStep("Prove protected public demo operational health on the candidate");
 
+    expect(bootstrap.start).toBeGreaterThan(holdingOnly.start);
     expect(bootstrap.start).toBeGreaterThan(candidate.start);
     expect(bootstrap.start).toBeGreaterThan(protection.start);
     expect(bootstrap.start).toBeGreaterThan(runtimeGrant.start);

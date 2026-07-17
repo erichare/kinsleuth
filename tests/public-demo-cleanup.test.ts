@@ -108,6 +108,67 @@ describe("public demo provisioning recovery", () => {
     expect(result).toMatchObject({ archivesCleaned: 1, staleProvisioningRecovered: 1 });
   });
 
+  it("retries a cleaned generation when its demo archive appears after the first pass", async () => {
+    const selectionSql: string[] = [];
+    let cleanupPass = 0;
+    let archiveExists = false;
+    let deleteAttempts = 0;
+    dbMocks.withTransaction.mockImplementation(async (_options, callback) => callback({
+      query: vi.fn(async (sql: string) => {
+        if (sql.includes("AS available")) {
+          return { rows: [{ available: true }], rowCount: 1 };
+        }
+        if (sql.includes("status IN ('active', 'provisioning') AND expires_at <= $1")) {
+          return { rows: [], rowCount: 0 };
+        }
+        if (
+          sql.includes("FROM public.public_demo_generations AS generation")
+          && sql.includes("FOR UPDATE SKIP LOCKED")
+        ) {
+          cleanupPass += 1;
+          selectionSql.push(sql);
+          return {
+            rows: [{ archive_id: staleArchiveId, session_id: staleSessionId, generation: 1 }],
+            rowCount: 1
+          };
+        }
+        if (
+          sql.includes("FROM public.public_demo_generations AS generation")
+          && sql.includes("generation.state = 'cleaned'")
+        ) {
+          return { rows: [{ archive_id: staleArchiveId }], rowCount: 1 };
+        }
+        if (sql.includes("DELETE FROM public.archives")) {
+          deleteAttempts += 1;
+          return archiveExists
+            ? { rows: [{ id: staleArchiveId }], rowCount: 1 }
+            : { rows: [], rowCount: 0 };
+        }
+        if (sql.includes("SELECT id FROM public.archives")) {
+          return { rows: [], rowCount: 0 };
+        }
+        return { rows: [], rowCount: 0 };
+      })
+    }));
+    dbMocks.query.mockResolvedValue({ rows: [], rowCount: 1 });
+
+    await cleanupPublicDemoSessions({
+      now,
+      leaseOwner: "22222222-2222-4222-8222-222222222222"
+    });
+    archiveExists = true;
+    await cleanupPublicDemoSessions({
+      now: new Date(now.getTime() + 1_000),
+      leaseOwner: "33333333-3333-4333-8333-333333333333"
+    });
+
+    expect(cleanupPass).toBe(2);
+    expect(selectionSql[1]).toMatch(
+      /generation\.state = 'cleaned'[\s\S]*EXISTS[\s\S]*archive\.id = generation\.archive_id[\s\S]*archive\.dataset_mode = 'demo'/
+    );
+    expect(deleteAttempts).toBe(2);
+  });
+
   it("marks the reserved generation failed when initial archive provisioning fails", async () => {
     const transactionSql: string[] = [];
     dbMocks.withTransaction.mockImplementation(async (_options, callback) => callback({

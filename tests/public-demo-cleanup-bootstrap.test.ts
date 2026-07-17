@@ -4,6 +4,12 @@ import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 
 type Diagnostics = {
+  capacity: {
+    maximum: 25;
+    active: number;
+    provisioning: number;
+    available: number;
+  };
   cleanup: {
     leaseHeld: boolean;
     lastStartedAt: string | null;
@@ -14,6 +20,7 @@ type Diagnostics = {
 
 type Operations = {
   cleanup: ReturnType<typeof vi.fn>;
+  drain: ReturnType<typeof vi.fn>;
   readDiagnostics: ReturnType<typeof vi.fn>;
   readRuntimeRoleIdentity: ReturnType<typeof vi.fn>;
   sleep: ReturnType<typeof vi.fn>;
@@ -39,7 +46,7 @@ const now = new Date("2026-07-17T01:00:00.000Z");
 const clock = () => now;
 
 describe("protected public demo cleanup bootstrap", () => {
-  it("runs the leased cleanup from holding and proves its fresh idle postcondition", async () => {
+  it("requires a zero holding cleanup proof after a short batch", async () => {
     const runBootstrap = await loadBootstrap();
     const operations = stubOperations([
       diagnostics({
@@ -47,17 +54,67 @@ describe("protected public demo cleanup bootstrap", () => {
         lastCompletedAt: "2026-07-17T01:00:01.000Z"
       })
     ]);
+    operations.cleanup
+      .mockResolvedValueOnce(cleanupResult(99))
+      .mockResolvedValueOnce(cleanupResult(0));
 
     await expect(runBootstrap(environment, operations, clock)).resolves.toEqual({
       bootstrapped: true
     });
     const databaseOptions = { databaseUrl: runtimeDatabaseUrl };
     expect(operations.readRuntimeRoleIdentity).toHaveBeenCalledExactlyOnceWith(databaseOptions);
+    expect(operations.drain).toHaveBeenCalledExactlyOnceWith({ now }, databaseOptions);
     expect(operations.readDiagnostics).toHaveBeenNthCalledWith(1, { now }, databaseOptions);
-    expect(operations.cleanup).toHaveBeenCalledExactlyOnceWith(
+    expect(operations.cleanup).toHaveBeenNthCalledWith(
+      1,
       { limit: 100, now },
       databaseOptions
     );
+    expect(operations.cleanup).toHaveBeenNthCalledWith(
+      2,
+      { limit: 100, now },
+      databaseOptions
+    );
+    expect(operations.cleanup).toHaveBeenCalledTimes(2);
+    expect(operations.readDiagnostics).toHaveBeenCalledTimes(1);
+    expect(operations.readRuntimeRoleIdentity.mock.invocationCallOrder[0])
+      .toBeLessThan(operations.drain.mock.invocationCallOrder[0]!);
+    expect(operations.drain.mock.invocationCallOrder[0])
+      .toBeLessThan(operations.cleanup.mock.invocationCallOrder[0]!);
+    expect(operations.cleanup.mock.invocationCallOrder[0])
+      .toBeLessThan(operations.readDiagnostics.mock.invocationCallOrder[0]!);
+  });
+
+  it("continues after a full holding cleanup batch before reading diagnostics", async () => {
+    const runBootstrap = await loadBootstrap();
+    const operations = stubOperations([
+      diagnostics({
+        lastStartedAt: "2026-07-17T01:00:00.000Z",
+        lastCompletedAt: "2026-07-17T01:00:01.000Z"
+      })
+    ]);
+    operations.cleanup
+      .mockResolvedValueOnce(cleanupResult(100))
+      .mockResolvedValueOnce(cleanupResult(12))
+      .mockResolvedValueOnce(cleanupResult(0));
+
+    await expect(runBootstrap(environment, operations, clock)).resolves.toEqual({
+      bootstrapped: true
+    });
+    const databaseOptions = { databaseUrl: runtimeDatabaseUrl };
+    expect(operations.cleanup).toHaveBeenNthCalledWith(
+      1,
+      { limit: 100, now },
+      databaseOptions
+    );
+    expect(operations.cleanup).toHaveBeenNthCalledWith(
+      3,
+      { limit: 100, now },
+      databaseOptions
+    );
+    expect(operations.cleanup).toHaveBeenCalledTimes(3);
+    expect(operations.cleanup.mock.invocationCallOrder[2])
+      .toBeLessThan(operations.readDiagnostics.mock.invocationCallOrder[0]!);
     expect(operations.readDiagnostics).toHaveBeenCalledTimes(1);
   });
 
@@ -74,6 +131,7 @@ describe("protected public demo cleanup bootstrap", () => {
     }, operations, clock)).resolves.toEqual({
       bootstrapped: false
     });
+    expect(operations.drain).not.toHaveBeenCalled();
     expect(operations.cleanup).not.toHaveBeenCalled();
     expect(operations.readDiagnostics).toHaveBeenCalledTimes(1);
   });
@@ -160,6 +218,7 @@ describe("protected public demo cleanup bootstrap", () => {
 
     await expect(runBootstrap(environment, operations, clock)).rejects.toThrow(/cleanup bootstrap/i);
     expect(operations.readDiagnostics).not.toHaveBeenCalled();
+    expect(operations.drain).not.toHaveBeenCalled();
     expect(operations.cleanup).not.toHaveBeenCalled();
 
     await expect(runBootstrap({
@@ -207,9 +266,77 @@ describe("protected public demo cleanup bootstrap", () => {
     await expect(runBootstrap(environment, malformedResult, clock)).rejects.toThrow(
       /cleanup bootstrap/i
     );
+    expect(malformedResult.readDiagnostics).not.toHaveBeenCalled();
+
+    const malformedFollowup = stubOperations([diagnostics({})]);
+    malformedFollowup.cleanup
+      .mockResolvedValueOnce(cleanupResult(100))
+      .mockResolvedValueOnce({ expired: 0 });
+    await expect(runBootstrap(environment, malformedFollowup, clock)).rejects.toThrow(
+      /cleanup bootstrap/i
+    );
+    expect(malformedFollowup.cleanup).toHaveBeenCalledTimes(2);
+    expect(malformedFollowup.readDiagnostics).not.toHaveBeenCalled();
+
+    const overLimit = stubOperations([diagnostics({})]);
+    overLimit.cleanup.mockResolvedValue(cleanupResult(101));
+    await expect(runBootstrap(environment, overLimit, clock)).rejects.toThrow(
+      /cleanup bootstrap/i
+    );
+    expect(overLimit.readDiagnostics).not.toHaveBeenCalled();
 
     const missingPostcondition = stubOperations([diagnostics({})]);
     await expect(runBootstrap(environment, missingPostcondition, clock)).rejects.toThrow(
+      /cleanup bootstrap/i
+    );
+  });
+
+  it("fails closed when every bounded holding cleanup batch is full", async () => {
+    const runBootstrap = await loadBootstrap();
+    const operations = stubOperations([diagnostics({})]);
+    operations.cleanup.mockResolvedValue(cleanupResult(100));
+
+    await expect(runBootstrap(environment, operations, clock)).rejects.toThrow(
+      /cleanup bootstrap/i
+    );
+    expect(operations.cleanup).toHaveBeenCalledTimes(101);
+    expect(operations.readDiagnostics).not.toHaveBeenCalled();
+  });
+
+  it("requires the holding drain result to contain only nonnegative integer counts", async () => {
+    const runBootstrap = await loadBootstrap();
+    const malformedResults = [
+      { sessionsDrained: 0 },
+      { sessionsDrained: 0, aiAttemptsClosed: 0, detail: "not-public" },
+      { sessionsDrained: -1, aiAttemptsClosed: 0 },
+      { sessionsDrained: 0, aiAttemptsClosed: 0.5 }
+    ];
+
+    for (const result of malformedResults) {
+      const operations = stubOperations([diagnostics({})]);
+      operations.drain.mockResolvedValue(result);
+
+      await expect(runBootstrap(environment, operations, clock)).rejects.toThrow(
+        /cleanup bootstrap/i
+      );
+      expect(operations.cleanup).not.toHaveBeenCalled();
+      expect(operations.readDiagnostics).not.toHaveBeenCalled();
+    }
+  });
+
+  it.each([
+    { active: 1, provisioning: 0, available: 24 },
+    { active: 0, provisioning: 1, available: 24 },
+    { active: 0, provisioning: 0, available: 24 }
+  ])("rejects an incomplete holding capacity postcondition: %o", async (capacity) => {
+    const runBootstrap = await loadBootstrap();
+    const operations = stubOperations([diagnostics({
+      capacity,
+      lastStartedAt: "2026-07-17T01:00:00.000Z",
+      lastCompletedAt: "2026-07-17T01:00:01.000Z"
+    })]);
+
+    await expect(runBootstrap(environment, operations, clock)).rejects.toThrow(
       /cleanup bootstrap/i
     );
   });
@@ -228,12 +355,23 @@ async function loadBootstrap(): Promise<Bootstrap> {
 }
 
 function diagnostics(input: {
+  capacity?: {
+    active: number;
+    provisioning: number;
+    available: number;
+  };
   leaseHeld?: boolean;
   lastStartedAt?: string | null;
   lastCompletedAt?: string | null;
   lastFailedAt?: string | null;
 }): Diagnostics {
   return {
+    capacity: {
+      maximum: 25,
+      active: input.capacity?.active ?? 0,
+      provisioning: input.capacity?.provisioning ?? 0,
+      available: input.capacity?.available ?? 25
+    },
     cleanup: {
       leaseHeld: input.leaseHeld ?? false,
       lastStartedAt: input.lastStartedAt ?? null,
@@ -243,13 +381,21 @@ function diagnostics(input: {
   };
 }
 
+function cleanupResult(archivesCleaned: number) {
+  return {
+    expired: 0,
+    staleProvisioningRecovered: 0,
+    archivesCleaned,
+    eventsDeleted: 0
+  };
+}
+
 function stubOperations(states: Diagnostics[]): Operations {
   return {
-    cleanup: vi.fn(async () => ({
-      expired: 0,
-      staleProvisioningRecovered: 0,
-      archivesCleaned: 0,
-      eventsDeleted: 0
+    cleanup: vi.fn(async () => cleanupResult(0)),
+    drain: vi.fn(async () => ({
+      sessionsDrained: 0,
+      aiAttemptsClosed: 0
     })),
     readDiagnostics: vi.fn()
       .mockImplementation(async () => states.shift() ?? diagnostics({})),

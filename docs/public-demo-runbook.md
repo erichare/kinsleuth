@@ -108,29 +108,40 @@ and the server-only AI, cookie, privacy-HMAC, cron, canary, and health-probe sec
 
 ## Release procedure
 
-Run **Release Kin Resolve public demo** with action `release` and the exact 40-character SHA
-currently at `main`.
+Public-demo releases are holding-only. Before dispatching a release, use action `contain` to
+move `demo.kinresolve.com` to the pinned holding deployment, then verify the canonical body
+matches `holding/login.html` and `/api/health` returns `404`. A release fails closed if the
+captured canonical deployment is not verified holding.
+
+After that containment proof, run **Release Kin Resolve public demo** with action `release`
+and the exact 40-character SHA currently at `main`. Every release resets temporary visitor
+progress; operators must treat all guest sandbox state as disposable before containment.
 
 The workflow refuses release unless the legacy controller is disabled/idle, the exact-SHA
 Product CI gate passed, code scanning has no open high/critical alert, the dedicated project
-and hostname identities match, and the demo database differs from production. It then:
+and hostname identities match, the demo database differs from production, and the current
+canonical deployment is verified holding. It then:
 
-1. validates the pulled hosted-demo configuration and fictional fixture boundary;
-2. attests the migration database identity, migrates with the migration role, provisions
+1. captures the canonical deployment, requires the pinned holding identity, byte-compares
+   `holding/login.html`, proves `/api/health` is `404`, and records the holding-proof time
+   before any database or runtime-grant mutation;
+2. validates the pulled hosted-demo configuration and fictional fixture boundary;
+3. attests the migration database identity, migrates with the migration role, provisions
    and verifies `kinresolve-demo-public`, and grants/re-attests only the runtime operations;
-3. validates the current canonical rollback target and pinned holding deployment;
 4. deploys an unaliased protected candidate without waiting inside the Vercel CLI, then
    bounded-polls the exact REST record until it is both `READY` and `STAGED`; an
    `INITIALIZING/STAGED` record remains retryable and can never reach canaries or promotion.
    The candidate carries exact SHA/run/version plus `releaseRole=public-demo`,
    `datasetMode=demo`, and `canonicalArchiveId=kinresolve-demo-public` metadata;
-5. uses the already attested runtime credential to prepare lifecycle health. When the
-   canonical target is holding, it runs the existing leased, retry-safe cleanup and proves
-   the fresh idle postcondition. When the canonical target is a live demo, it never mutates
-   cleanup state and requires the scheduler heartbeat to already be healthy; stale, failed,
-   or interrupted state blocks release. The workflow then runs protected health,
-   Chromium/WebKit/Firefox journeys, archive-isolation/reset checks, and the 25-session
-   capacity/p95 gate; and
+5. waits until at least 65 seconds have elapsed since the holding proof (covering the
+   session start/reset endpoints' 60-second execution ceiling), revalidates the exact same
+   canonical holding deployment and bytes, then uses the attested runtime credential to revoke every
+   disposable guest sandbox and AI lease, clean their synthetic archives, durably retry
+   tracked late-created archives, require an explicit zero-archive batch, and prove zero
+   occupied capacity. After protected health and Chromium/WebKit/Firefox
+   archive-isolation/reset journeys, it
+   revalidates holding and repeats the zero-capacity drain immediately before the unchanged
+   25-session capacity and five-second p95 gate; and
 6. rechecks current `main`, promotes the exact candidate, proves the canonical deployment,
    then runs the full public monitor.
 

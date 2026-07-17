@@ -222,18 +222,13 @@ export async function startPublicDemoSession(
     const resumedToken = input.rawToken;
     if (!resumedToken) throw new Error("The resumable public demo token is unavailable.");
     if (reserved.session.status === "provisioning") {
-      await activateProvisionedSession(reserved.session, options);
+      await activateProvisionedSessionOrCleanup(reserved.session, now, options);
     }
     const session = activeSessionView({ ...reserved.session, status: "active" });
     return { kind: "resumed", rawToken: resumedToken, session };
   }
 
-  try {
-    await activateProvisionedSession(reserved.session, options);
-  } catch (error) {
-    await failProvisioningSession(reserved.session.sessionId, now, options);
-    throw error;
-  }
+  await activateProvisionedSessionOrCleanup(reserved.session, now, options);
 
   const session = activeSessionView({ ...reserved.session, status: "active" });
   await recordPublicDemoEvent({ sessionId: session.sessionId, eventName: "session_started", now }, options)
@@ -398,6 +393,84 @@ export async function endPublicDemoSession(
       [session.sessionId, now]
     );
     return { ended: true, retiredArchiveId: session.archiveId };
+  });
+}
+
+export async function drainPublicDemoSessionsForRelease(
+  input: { now?: Date } = {},
+  options: DatabaseOptions = {}
+): Promise<{ sessionsDrained: number; aiAttemptsClosed: number }> {
+  const now = validDate(input.now ?? new Date(), "release drain time");
+  return withTransaction(options, async (client) => {
+    await lockCapacity(client);
+    const provisioning = await client.query<{ in_flight: boolean }>(
+      `SELECT EXISTS (
+         SELECT 1
+         FROM public.public_demo_sessions AS session
+         WHERE session.status = 'provisioning'
+           AND session.updated_at > $1::timestamptz - interval '2 minutes'
+         UNION ALL
+         SELECT 1
+         FROM public.public_demo_generations AS generation
+         WHERE generation.state = 'provisioning'
+           AND generation.created_at > $1::timestamptz - interval '2 minutes'
+       ) AS in_flight`,
+      [now]
+    );
+    if (provisioning.rows[0]?.in_flight !== false) {
+      throw new Error("The public demo release drain found an in-flight provisioning request.");
+    }
+    const result = await client.query<{
+      sessions_drained: number;
+      ai_attempts_closed: number;
+    }>(
+      `WITH drained_sessions AS (
+         UPDATE public.public_demo_sessions AS session
+         SET status = 'ended',
+             token_digest = NULL,
+             ended_at = GREATEST(
+               session.created_at,
+               COALESCE(session.ended_at, $1::timestamptz),
+               $1::timestamptz
+             ),
+             updated_at = GREATEST(
+               session.created_at,
+               session.updated_at,
+               $1::timestamptz
+             )
+         WHERE session.status IN ('active', 'provisioning')
+         RETURNING 1
+       ), retired_generations AS (
+         UPDATE public.public_demo_generations AS generation
+         SET state = 'retired',
+             retired_at = GREATEST(
+               generation.created_at,
+               COALESCE(generation.retired_at, $1::timestamptz),
+               $1::timestamptz
+             )
+         WHERE generation.state IN ('active', 'provisioning')
+         RETURNING 1
+       ), closed_ai_attempts AS (
+         UPDATE public.public_demo_ai_attempts AS attempt
+         SET state = 'failed',
+             completed_at = GREATEST(attempt.started_at, $1::timestamptz)
+         WHERE attempt.state = 'running'
+         RETURNING 1
+       ), retirement_summary AS (
+         SELECT count(*)::int AS generations_retired FROM retired_generations
+       )
+       SELECT
+         (SELECT count(*)::int FROM drained_sessions) AS sessions_drained,
+         (SELECT count(*)::int FROM closed_ai_attempts) AS ai_attempts_closed
+       FROM retirement_summary`,
+      [now]
+    );
+    const row = result.rows[0];
+    if (!row) throw new Error("The public demo release drain result is unavailable.");
+    return {
+      sessionsDrained: row.sessions_drained,
+      aiAttemptsClosed: row.ai_attempts_closed
+    };
   });
 }
 
@@ -715,9 +788,19 @@ export async function cleanupPublicDemoSessions(
     );
     const archives = await client.query<{ archive_id: string; session_id: string; generation: number }>(
       `SELECT archive_id, session_id::text, generation
-       FROM public.public_demo_generations
-       WHERE state IN ('retired', 'failed')
-       ORDER BY COALESCE(retired_at, created_at), session_id, generation
+       FROM public.public_demo_generations AS generation
+       WHERE generation.state IN ('retired', 'failed')
+          OR (
+            generation.state = 'cleaned'
+            AND EXISTS (
+              SELECT 1
+              FROM public.archives AS archive
+              WHERE archive.id = generation.archive_id
+                AND archive.dataset_mode = 'demo'
+            )
+          )
+       ORDER BY COALESCE(generation.retired_at, generation.created_at),
+         generation.session_id, generation.generation
        FOR UPDATE SKIP LOCKED
        LIMIT $1`,
       [limit]
@@ -811,6 +894,7 @@ async function activateProvisionedSession(
 ): Promise<void> {
   await provisionArchive("demo", { ...options, archiveId: session.archiveId });
   await withTransaction(options, async (client) => {
+    await lockCapacity(client);
     await client.query(
       `UPDATE public.public_demo_generations
        SET state = 'active'
@@ -827,8 +911,23 @@ async function activateProvisionedSession(
   });
 }
 
+async function activateProvisionedSessionOrCleanup(
+  session: PublicDemoSessionState,
+  now: Date,
+  options: DatabaseOptions
+): Promise<void> {
+  try {
+    await activateProvisionedSession(session, options);
+  } catch (error) {
+    await failProvisioningSession(session.sessionId, now, options).catch(() => undefined);
+    await deletePublicDemoArchive(session.archiveId, options).catch(() => undefined);
+    throw error;
+  }
+}
+
 async function failProvisioningSession(sessionId: string, now: Date, options: DatabaseOptions): Promise<void> {
   await withTransaction(options, async (client) => {
+    await lockCapacity(client);
     const failed = await client.query<{ id: string }>(
       `UPDATE public.public_demo_sessions
        SET status = 'failed', token_digest = NULL, ended_at = $2, updated_at = $2
@@ -1010,7 +1109,10 @@ async function deletePublicDemoArchive(archiveId: string, options: DatabaseOptio
       `SELECT generation.archive_id
        FROM public.public_demo_generations AS generation
        WHERE generation.archive_id = $1
-         AND generation.state IN ('retired', 'failed')
+         AND (
+           generation.state IN ('retired', 'failed')
+           OR generation.state = 'cleaned'
+         )
          AND NOT EXISTS (
            SELECT 1 FROM public.public_demo_sessions AS session
            WHERE session.archive_id = generation.archive_id

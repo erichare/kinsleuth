@@ -184,6 +184,50 @@ jobs:
             }) + "\n", { mode: 0o600 });
           '
 
+      - name: Capture the current healthy canonical deployment for rollback
+        id: previous
+        env:
+          APPROVED_HOLDING_DEPLOYMENT_ID: ${{ secrets.DEMO_HOLDING_DEPLOYMENT_ID }}
+          APP_BASE_URL: ${{ vars.APP_BASE_URL }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          deployment_host="${APP_BASE_URL#https://}"
+          scope_query=""
+          if [[ "$VERCEL_ORG_ID" == team_* ]]; then scope_query="?teamId=$VERCEL_ORG_ID"; fi
+          curl --connect-timeout 10 --max-time 30 --retry 3 --retry-all-errors \
+            --fail --silent --show-error --header "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v13/deployments/$deployment_host$scope_query" \
+            --output "$RUNNER_TEMP/public-demo-previous.json"
+          node --experimental-strip-types scripts/validate-vercel-deployment.mjs holding-record \
+            "$RUNNER_TEMP/public-demo-previous.json"
+          printf 'rollback_kind=holding\n' >> "$GITHUB_OUTPUT"
+
+      - name: Require verified holding before public demo release
+        env:
+          ROLLBACK_KIND: ${{ steps.previous.outputs.rollback_kind }}
+        run: |
+          set -euo pipefail
+          test "$ROLLBACK_KIND" = "holding"
+
+      - name: Prove the captured rollback target is healthy before candidate deployment
+        id: holding_preflight
+        env:
+          APP_BASE_URL: ${{ vars.APP_BASE_URL }}
+        run: |
+          set -euo pipefail
+          status="$(curl --connect-timeout 10 --max-time 30 --silent --show-error \
+            --max-filesize 1048576 --output "$RUNNER_TEMP/public-demo-previous.html" \
+            --write-out '%{http_code}' "$APP_BASE_URL/")"
+          test "$status" = "200"
+          cmp "$RUNNER_TEMP/public-demo-previous.html" holding/login.html
+          health_status="$(curl --connect-timeout 10 --max-time 30 --silent --show-error \
+            --output /dev/null --write-out '%{http_code}' "$APP_BASE_URL/api/health")"
+          test "$health_status" = "404"
+          printf 'verified_at_epoch=%s\n' "$(date +%s)" >> "$GITHUB_OUTPUT"
+
       - name: Prove automatic custom-domain assignment remains disabled
         env:
           EXPECTED_VERCEL_PROJECT_NAME: kinresolve-demo
@@ -402,50 +446,6 @@ jobs:
           )"
           printf 'runtime_role_identity_sha256=%s\n' "$runtime_role_identity_sha256" >> "$GITHUB_OUTPUT"
 
-      - name: Capture the current healthy canonical deployment for rollback
-        id: previous
-        env:
-          APP_BASE_URL: ${{ vars.APP_BASE_URL }}
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-        run: |
-          set -euo pipefail
-          deployment_host="${APP_BASE_URL#https://}"
-          scope_query=""
-          if [[ "$VERCEL_ORG_ID" == team_* ]]; then scope_query="?teamId=$VERCEL_ORG_ID"; fi
-          curl --connect-timeout 10 --max-time 30 --retry 3 --retry-all-errors \
-            --fail --silent --show-error --header "Authorization: Bearer $VERCEL_TOKEN" \
-            "https://api.vercel.com/v13/deployments/$deployment_host$scope_query" \
-            --output "$RUNNER_TEMP/public-demo-previous.json"
-          node --experimental-strip-types scripts/validate-vercel-deployment.mjs demo-rollback-or-holding \
-            "$RUNNER_TEMP/public-demo-previous.json"
-
-      - name: Prove the captured rollback target is healthy before candidate deployment
-        env:
-          APP_BASE_URL: ${{ vars.APP_BASE_URL }}
-          EXPECTED_RUNTIME_ROLE_IDENTITY_SHA256: ${{ steps.runtime_grants.outputs.runtime_role_identity_sha256 }}
-          KINRESOLVE_DEMO_CANARY_SECRET: ${{ secrets.KINRESOLVE_DEMO_CANARY_SECRET }}
-          KINRESOLVE_OBSERVABILITY_PROBE_SECRET: ${{ secrets.KINRESOLVE_OBSERVABILITY_PROBE_SECRET }}
-          PUBLIC_DEMO_ORIGIN: ${{ vars.APP_BASE_URL }}
-          ROLLBACK_KIND: ${{ steps.previous.outputs.rollback_kind }}
-        run: |
-          set -euo pipefail
-          if test "$ROLLBACK_KIND" = "holding"; then
-            status="$(curl --connect-timeout 10 --max-time 30 --silent --show-error \
-              --max-filesize 1048576 --output "$RUNNER_TEMP/public-demo-previous.html" \
-              --write-out '%{http_code}' "$APP_BASE_URL/")"
-            test "$status" = "200"
-            cmp "$RUNNER_TEMP/public-demo-previous.html" holding/login.html
-            health_status="$(curl --connect-timeout 10 --max-time 30 --silent --show-error \
-              --output /dev/null --write-out '%{http_code}' "$APP_BASE_URL/api/health")"
-            test "$health_status" = "404"
-          else
-            test "$ROLLBACK_KIND" = "public-demo"
-            node --experimental-strip-types scripts/public-demo-monitor.mjs shallow
-            node --experimental-strip-types scripts/public-demo-internal-health-monitor.mjs
-          fi
-
       - name: Fetch and validate the pinned demo holding deployment
         id: holding
         env:
@@ -571,6 +571,48 @@ jobs:
           node --experimental-strip-types scripts/probe-vercel-candidate-protection.mjs
           "$RUNNER_TEMP/public-demo-candidate.json"
 
+      - name: Reprove canonical holding after request quiescence
+        env:
+          APPROVED_HOLDING_DEPLOYMENT_ID: ${{ secrets.DEMO_HOLDING_DEPLOYMENT_ID }}
+          APP_BASE_URL: ${{ vars.APP_BASE_URL }}
+          EXPECTED_HOLDING_DEPLOYMENT_ID: ${{ steps.previous.outputs.deployment_id }}
+          HOLDING_VERIFIED_AT_EPOCH: ${{ steps.holding_preflight.outputs.verified_at_epoch }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          [[ "$HOLDING_VERIFIED_AT_EPOCH" =~ ^[0-9]{10}$ ]]
+          [[ "$EXPECTED_HOLDING_DEPLOYMENT_ID" =~ ^dpl_[A-Za-z0-9]{8,96}$ ]]
+          minimum_quiescence_seconds=65
+          now_epoch="$(date +%s)"
+          elapsed_seconds=$((now_epoch - HOLDING_VERIFIED_AT_EPOCH))
+          test "$elapsed_seconds" -ge 0
+          if test "$elapsed_seconds" -lt "$minimum_quiescence_seconds"; then
+            sleep "$((minimum_quiescence_seconds - elapsed_seconds))"
+          fi
+          deployment_host="${APP_BASE_URL#https://}"
+          scope_query=""
+          if [[ "$VERCEL_ORG_ID" == team_* ]]; then scope_query="?teamId=$VERCEL_ORG_ID"; fi
+          curl --connect-timeout 10 --max-time 30 --retry 3 --retry-all-errors \
+            --fail --silent --show-error --header "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v13/deployments/$deployment_host$scope_query" \
+            --output "$RUNNER_TEMP/public-demo-held-before-drain.json"
+          env -u GITHUB_OUTPUT node --experimental-strip-types \
+            scripts/validate-vercel-deployment.mjs holding-record \
+            "$RUNNER_TEMP/public-demo-held-before-drain.json"
+          actual_holding_id="$(jq -er '.id | select(test("^dpl_[A-Za-z0-9]{8,96}$"))' \
+            "$RUNNER_TEMP/public-demo-held-before-drain.json")"
+          test "$actual_holding_id" = "$EXPECTED_HOLDING_DEPLOYMENT_ID"
+          status="$(curl --connect-timeout 10 --max-time 30 --silent --show-error \
+            --max-filesize 1048576 --output "$RUNNER_TEMP/public-demo-held-before-drain.html" \
+            --write-out '%{http_code}' "$APP_BASE_URL/")"
+          test "$status" = "200"
+          cmp "$RUNNER_TEMP/public-demo-held-before-drain.html" holding/login.html
+          health_status="$(curl --connect-timeout 10 --max-time 30 --silent --show-error \
+            --output /dev/null --write-out '%{http_code}' "$APP_BASE_URL/api/health")"
+          test "$health_status" = "404"
+
       - name: Bootstrap lifecycle cleanup before staged candidate health
         timeout-minutes: 5
         env:
@@ -601,6 +643,50 @@ jobs:
             KINRESOLVE_DEMO_BROWSER="$browser" \
               node --experimental-strip-types scripts/public-demo-browser-canary.mjs
           done
+
+      - name: Reprove canonical holding immediately before final lifecycle drain
+        env:
+          APPROVED_HOLDING_DEPLOYMENT_ID: ${{ secrets.DEMO_HOLDING_DEPLOYMENT_ID }}
+          APP_BASE_URL: ${{ vars.APP_BASE_URL }}
+          EXPECTED_HOLDING_DEPLOYMENT_ID: ${{ steps.previous.outputs.deployment_id }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          [[ "$EXPECTED_HOLDING_DEPLOYMENT_ID" =~ ^dpl_[A-Za-z0-9]{8,96}$ ]]
+          deployment_host="${APP_BASE_URL#https://}"
+          scope_query=""
+          if [[ "$VERCEL_ORG_ID" == team_* ]]; then scope_query="?teamId=$VERCEL_ORG_ID"; fi
+          curl --connect-timeout 10 --max-time 30 --retry 3 --retry-all-errors \
+            --fail --silent --show-error --header "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v13/deployments/$deployment_host$scope_query" \
+            --output "$RUNNER_TEMP/public-demo-held-before-final-drain.json"
+          env -u GITHUB_OUTPUT node --experimental-strip-types \
+            scripts/validate-vercel-deployment.mjs holding-record \
+            "$RUNNER_TEMP/public-demo-held-before-final-drain.json"
+          actual_holding_id="$(jq -er '.id | select(test("^dpl_[A-Za-z0-9]{8,96}$"))' \
+            "$RUNNER_TEMP/public-demo-held-before-final-drain.json")"
+          test "$actual_holding_id" = "$EXPECTED_HOLDING_DEPLOYMENT_ID"
+          status="$(curl --connect-timeout 10 --max-time 30 --silent --show-error \
+            --max-filesize 1048576 --output "$RUNNER_TEMP/public-demo-held-before-final-drain.html" \
+            --write-out '%{http_code}' "$APP_BASE_URL/")"
+          test "$status" = "200"
+          cmp "$RUNNER_TEMP/public-demo-held-before-final-drain.html" holding/login.html
+          health_status="$(curl --connect-timeout 10 --max-time 30 --silent --show-error \
+            --output /dev/null --write-out '%{http_code}' "$APP_BASE_URL/api/health")"
+          test "$health_status" = "404"
+
+      - name: Final zero-capacity lifecycle drain before load
+        timeout-minutes: 5
+        env:
+          DATABASE_AUTO_MIGRATE: "false"
+          EXPECTED_RUNTIME_ROLE_IDENTITY_SHA256: ${{ steps.runtime_grants.outputs.runtime_role_identity_sha256 }}
+          KINRESOLVE_DATASET_MODE: demo
+          KINRESOLVE_PUBLIC_DEMO_ENABLED: "true"
+          PUBLIC_DEMO_RUNTIME_DATABASE_URL: ${{ secrets.PUBLIC_DEMO_RUNTIME_DATABASE_URL }}
+          ROLLBACK_KIND: ${{ steps.previous.outputs.rollback_kind }}
+        run: node --import tsx scripts/public-demo-cleanup-bootstrap.mjs
 
       - name: Prove 25-session capacity and five-second p95 on the held demo cell
         env:

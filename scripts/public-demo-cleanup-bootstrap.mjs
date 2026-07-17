@@ -4,6 +4,7 @@ import { pathToFileURL } from "node:url";
 import { closeDatabasePools } from "../lib/db.ts";
 import {
   cleanupPublicDemoSessions,
+  drainPublicDemoSessionsForRelease,
   readPublicDemoDiagnostics
 } from "../lib/public-demo-session-store.ts";
 import { readRuntimeDatabaseRoleIdentitySha256 } from "../lib/runtime-database-role-identity.ts";
@@ -15,9 +16,15 @@ const maximumClockSkewMs = 60 * 1000;
 // workflow step's five-minute timeout.
 const liveCleanupPollAttempts = 49;
 const liveCleanupPollDelayMs = 5_000;
+// Bound holding cleanup to 100 mutation batches plus one explicit zero-result
+// proof batch. The workflow's five-minute timeout remains the outer wall-clock
+// bound for slow batches.
+const holdingCleanupBatchLimit = 100;
+const maximumHoldingCleanupBatches = 101;
 
 const defaultOperations = Object.freeze({
   cleanup: cleanupPublicDemoSessions,
+  drain: drainPublicDemoSessionsForRelease,
   readDiagnostics: readPublicDemoDiagnostics,
   readRuntimeRoleIdentity: readRuntimeDatabaseRoleIdentitySha256,
   sleep: (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds))
@@ -31,6 +38,7 @@ export async function runPublicDemoCleanupBootstrap(
   const configuration = resolveConfiguration(environment);
   if (
     typeof operations?.cleanup !== "function"
+    || typeof operations?.drain !== "function"
     || typeof operations?.readDiagnostics !== "function"
     || typeof operations?.readRuntimeRoleIdentity !== "function"
     || typeof operations?.sleep !== "function"
@@ -56,12 +64,36 @@ export async function runPublicDemoCleanupBootstrap(
     throw bootstrapError();
   }
 
-  const cleanupAt = validNow(clock());
-  const result = await operations.cleanup({ limit: 100, now: cleanupAt }, databaseOptions);
-  if (!validCleanupResult(result)) throw bootstrapError();
+  const drainAt = validNow(clock());
+  const drainResult = await operations.drain({ now: drainAt }, databaseOptions);
+  if (!validDrainResult(drainResult)) throw bootstrapError();
+  let cleanupCompleted = false;
+  for (let attempt = 1; attempt <= maximumHoldingCleanupBatches; attempt += 1) {
+    const cleanupAt = validNow(clock());
+    const result = await operations.cleanup(
+      { limit: holdingCleanupBatchLimit, now: cleanupAt },
+      databaseOptions
+    );
+    if (
+      !validCleanupResult(result)
+      || result.archivesCleaned > holdingCleanupBatchLimit
+    ) {
+      throw bootstrapError();
+    }
+    if (result.archivesCleaned === 0) {
+      cleanupCompleted = true;
+      break;
+    }
+  }
+  if (!cleanupCompleted) throw bootstrapError();
   const observedAt = validNow(clock());
   const diagnostics = await operations.readDiagnostics({ now: observedAt }, databaseOptions);
-  if (cleanupState(diagnostics, observedAt) !== "healthy") throw bootstrapError();
+  if (
+    cleanupState(diagnostics, observedAt) !== "healthy"
+    || !emptyCapacity(diagnostics)
+  ) {
+    throw bootstrapError();
+  }
   return Object.freeze({ bootstrapped: true });
 }
 
@@ -130,6 +162,20 @@ function validCleanupResult(value) {
   if (!result) return false;
   const keys = ["archivesCleaned", "eventsDeleted", "expired", "staleProvisioningRecovered"];
   return sameKeys(result, keys) && keys.every((key) => nonnegativeInteger(result[key]));
+}
+
+function validDrainResult(value) {
+  const result = objectValue(value);
+  if (!result) return false;
+  const keys = ["aiAttemptsClosed", "sessionsDrained"];
+  return sameKeys(result, keys) && keys.every((key) => nonnegativeInteger(result[key]));
+}
+
+function emptyCapacity(diagnostics) {
+  const capacity = objectValue(diagnostics?.capacity);
+  return capacity?.active === 0
+    && capacity.provisioning === 0
+    && capacity.available === 25;
 }
 
 function objectValue(value) {
