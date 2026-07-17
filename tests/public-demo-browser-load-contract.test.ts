@@ -211,6 +211,70 @@ describe("public demo browser and capacity launch gates", () => {
     );
   });
 
+  it("emits only fixed-stage numeric load-gate diagnostics and retains primary failures", () => {
+    const cli = load.slice(load.indexOf("if (import.meta.url"));
+    expect(cli).toMatch(/\.catch\(\s*\(?error\)?\s*=>/);
+    expect(cli).toContain("safePublicDemoLoadFailure(error)");
+    expect(cli).not.toMatch(/\.catch\(\s*\(\s*\)\s*=>/);
+
+    const stageStart = load.indexOf("const safePublicDemoLoadStages");
+    const stageEnd = load.indexOf("]);", stageStart);
+    expect(stageStart).toBeGreaterThan(-1);
+    expect(stageEnd).toBeGreaterThan(stageStart);
+    const stages = load.slice(stageStart, stageEnd);
+    for (const stage of [
+      "configuration",
+      "start-request",
+      "start-response",
+      "start-cookie",
+      "start-body",
+      "start-uniqueness",
+      "start-p95",
+      "capacity-response",
+      "capacity-contract",
+      "session-read-response",
+      "session-read-contract",
+      "guided-read-response",
+      "guided-read-contract",
+      "cleanup",
+      "unknown"
+    ]) {
+      expect(stages).toContain(`"${stage}"`);
+    }
+
+    const formatterStart = load.indexOf("export function safePublicDemoLoadFailure");
+    const formatterEnd = load.indexOf("\nasync function request", formatterStart);
+    expect(formatterStart).toBeGreaterThan(-1);
+    expect(formatterEnd).toBeGreaterThan(formatterStart);
+    const formatter = load.slice(formatterStart, formatterEnd);
+    expect(formatter).toContain("safePublicDemoLoadStages.includes");
+    for (const field of [
+      "status",
+      "attempted",
+      "succeeded",
+      "failed",
+      "invalid",
+      "unique",
+      "p95Milliseconds",
+      "cleanupFailed"
+    ]) {
+      expect(formatter).toContain(`"${field}"`);
+    }
+    expect(formatter).not.toMatch(/error\.(?:message|stack|cause)|JSON\.stringify\(\s*error|\.\.\.error/);
+    expect(formatter).not.toMatch(
+      /process\.env|\benvironment\b|\borigin\b|\bheaders?\b|\bcookies?\b|\b(?:response)?bod(?:y|ies)\b|\bprompts?\b|\bsecrets?\b/i
+    );
+
+    const runStart = load.indexOf("export async function runPublicDemoLoadTest");
+    const runEnd = load.indexOf("async function assertCapacityBoundary", runStart);
+    const run = load.slice(runStart, runEnd);
+    expect(run).toMatch(/let\s+primaryFailure\s*;/);
+    expect(run).toMatch(/primaryFailure\s*=\s*isLoadGateFailure\(error\)/);
+    expect(run).toMatch(
+      /if\s*\(primaryFailure\)\s*\{\s*throw\s+extendLoadGateFailure\(primaryFailure,\s*["']unknown["'],\s*\{\s*cleanupFailed\s*\}\)/
+    );
+  });
+
   it("guided diagnostics use fixed sub-stages, allowlisted surfaces, and numeric HTTP status", () => {
     const stageStart = browser.indexOf("const safeBrowserCanaryStages");
     const stageEnd = browser.indexOf("]);", stageStart);

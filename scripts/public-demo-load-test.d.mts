@@ -9,3 +9,5 @@ export function runPublicDemoLoadTest(
   environment?: PublicDemoLoadTestEnvironment,
   fetchImplementation?: typeof fetch
 ): Promise<PublicDemoLoadTestResult>;
+
+export function safePublicDemoLoadFailure(error: unknown): string;

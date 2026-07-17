@@ -8,27 +8,53 @@ const sessionCount = 25;
 const p95LimitMs = 5_000;
 const requestTimeoutMs = 30_000;
 const maximumResponseBytes = 256 * 1024;
+const safePublicDemoLoadStages = Object.freeze([
+  "configuration",
+  "start-request",
+  "start-response",
+  "start-cookie",
+  "start-body",
+  "start-uniqueness",
+  "start-p95",
+  "capacity-response",
+  "capacity-contract",
+  "session-read-response",
+  "session-read-contract",
+  "guided-read-response",
+  "guided-read-contract",
+  "cleanup",
+  "unknown"
+]);
 
 export async function runPublicDemoLoadTest(
   environment = process.env,
   fetchImplementation = globalThis.fetch
 ) {
-  if (typeof fetchImplementation !== "function") throw new Error("The load test requires fetch.");
-  const configuration = resolveConfiguration(environment);
+  if (typeof fetchImplementation !== "function") throw loadGateFailure("configuration");
+  let configuration;
+  try {
+    configuration = resolveConfiguration(environment);
+  } catch {
+    throw loadGateFailure("configuration");
+  }
   const cookies = [];
+  let primaryFailure;
+  let result;
   try {
     const starts = await Promise.allSettled(Array.from({ length: sessionCount }, async () => {
       const startedAt = performance.now();
-      const response = await request(configuration, fetchImplementation, "/api/demo/sessions", {
-        body: JSON.stringify({ noticeVersion }),
-        method: "POST"
-      });
+      const response = await runLoadStage("start-request", () => (
+        request(configuration, fetchImplementation, "/api/demo/sessions", {
+          body: JSON.stringify({ noticeVersion }),
+          method: "POST"
+        })
+      ));
       const elapsedMs = performance.now() - startedAt;
       if (response.status !== 201) {
         await response.body?.cancel().catch(() => undefined);
-        throw new Error("A simultaneous demo start was rejected.");
+        throw loadGateFailure("start-response", { status: response.status });
       }
-      const cookie = extractCookie(response);
+      const cookie = await runLoadStage("start-cookie", () => extractCookie(response));
       let bodyValid = false;
       try {
         const document = await boundedJson(response);
@@ -42,20 +68,35 @@ export async function runPublicDemoLoadTest(
       .filter((result) => result.status === "fulfilled")
       .map((result) => result.value);
     cookies.push(...created.map(({ cookie }) => cookie));
-    if (starts.some(({ status }) => status === "rejected")) {
-      throw new Error("The 25-session demo capacity gate failed.");
+    const rejectedStarts = starts.filter(({ status }) => status === "rejected");
+    if (rejectedStarts.length > 0) {
+      throw extendLoadGateFailure(rejectedStarts[0].reason, "start-request", {
+        attempted: sessionCount,
+        succeeded: created.length,
+        failed: rejectedStarts.length
+      });
     }
-    if (created.some(({ bodyValid }) => !bodyValid)) {
-      throw new Error("A simultaneous demo start returned an invalid body.");
+    const invalidBodies = created.filter(({ bodyValid }) => !bodyValid).length;
+    if (invalidBodies > 0) {
+      throw loadGateFailure("start-body", {
+        attempted: sessionCount,
+        succeeded: created.length,
+        invalid: invalidBodies
+      });
     }
-    if (new Set(cookies).size !== sessionCount) {
-      throw new Error("The capacity gate did not issue unique demo cookies.");
+    const uniqueCookies = new Set(cookies).size;
+    if (uniqueCookies !== sessionCount) {
+      throw loadGateFailure("start-uniqueness", {
+        attempted: sessionCount,
+        succeeded: created.length,
+        unique: uniqueCookies
+      });
     }
 
     const elapsed = created.map(({ elapsedMs }) => elapsedMs).sort((left, right) => left - right);
     const p95 = elapsed[Math.ceil(elapsed.length * 0.95) - 1];
     if (!Number.isFinite(p95) || p95 > p95LimitMs) {
-      throw new Error("The demo session-creation p95 exceeded five seconds.");
+      throw loadGateFailure("start-p95", { p95Milliseconds: Math.ceil(p95) });
     }
 
     await assertCapacityBoundary(configuration, fetchImplementation);
@@ -64,33 +105,53 @@ export async function runPublicDemoLoadTest(
       readSession(configuration, fetchImplementation, cookie),
       readGuidedPage(configuration, fetchImplementation, cookie)
     ]));
-    if (reads.some(({ status }) => status === "rejected")) {
-      throw new Error("The 25-session core-read gate failed.");
+    const rejectedReads = reads.filter(({ status }) => status === "rejected");
+    if (rejectedReads.length > 0) {
+      throw extendLoadGateFailure(rejectedReads[0].reason, "unknown", {
+        attempted: reads.length,
+        succeeded: reads.length - rejectedReads.length,
+        failed: rejectedReads.length
+      });
     }
-    return Object.freeze({ sessionCount, p95Milliseconds: Math.ceil(p95) });
-  } finally {
-    const cleanup = await Promise.allSettled(cookies.map((cookie) => (
-      request(configuration, fetchImplementation, "/api/demo/session/end", {
+    result = Object.freeze({ sessionCount, p95Milliseconds: Math.ceil(p95) });
+  } catch (error) {
+    primaryFailure = isLoadGateFailure(error) ? error : loadGateFailure("unknown");
+  }
+
+  const cleanup = await Promise.allSettled(cookies.map((cookie) => (
+    runLoadStage("cleanup", async () => {
+      const response = await request(configuration, fetchImplementation, "/api/demo/session/end", {
         body: "{}",
         cookie,
         method: "POST"
-      }).then((response) => {
-        if (response.status !== 200 && response.status !== 204) {
-          throw new Error("A load-test demo session could not be ended.");
-        }
-      })
-    )));
-    if (cleanup.some(({ status }) => status === "rejected")) {
-      throw new Error("The load gate could not clean up every disposable session.");
-    }
+      });
+      if (response.status !== 200 && response.status !== 204) {
+        throw loadGateFailure("cleanup", { status: response.status });
+      }
+    })
+  )));
+  const cleanupFailed = cleanup.filter(({ status }) => status === "rejected").length;
+  if (primaryFailure) {
+    throw extendLoadGateFailure(primaryFailure, "unknown", { cleanupFailed });
   }
+  if (cleanupFailed > 0) {
+    throw loadGateFailure("cleanup", {
+      attempted: cleanup.length,
+      succeeded: cleanup.length - cleanupFailed,
+      failed: cleanupFailed,
+      cleanupFailed
+    });
+  }
+  return result;
 }
 
 async function assertCapacityBoundary(configuration, fetchImplementation) {
-  const response = await request(configuration, fetchImplementation, "/api/demo/sessions", {
-    body: JSON.stringify({ noticeVersion }),
-    method: "POST"
-  });
+  const response = await runLoadStage("capacity-response", () => (
+    request(configuration, fetchImplementation, "/api/demo/sessions", {
+      body: JSON.stringify({ noticeVersion }),
+      method: "POST"
+    })
+  ));
   const retryAfter = response.headers.get("retry-after");
   const setCookie = response.headers.get("set-cookie");
   if (
@@ -103,9 +164,9 @@ async function assertCapacityBoundary(configuration, fetchImplementation) {
     || setCookie !== null
   ) {
     await response.body?.cancel().catch(() => undefined);
-    throw new Error("The 26th demo start did not fail closed at capacity.");
+    throw loadGateFailure("capacity-response", { status: response.status });
   }
-  const document = await boundedJson(response);
+  const document = await runLoadStage("capacity-contract", () => boundedJson(response));
   if (
     document.maximumActiveSessions !== 25
     || document.familyUrl !== "/family"
@@ -113,32 +174,126 @@ async function assertCapacityBoundary(configuration, fetchImplementation) {
     || typeof document.error !== "string"
     || !document.error.includes("at capacity")
   ) {
-    throw new Error("The capacity rejection did not include the safe fallback contract.");
+    throw loadGateFailure("capacity-contract", { status: response.status });
   }
 }
 
 async function readSession(configuration, fetchImplementation, cookie) {
-  const response = await request(configuration, fetchImplementation, "/api/demo/session", {
-    cookie,
-    method: "GET"
-  });
-  if (response.status !== 200) throw new Error("A load-test session read failed.");
-  const document = await boundedJson(response);
+  const response = await runLoadStage("session-read-response", () => (
+    request(configuration, fetchImplementation, "/api/demo/session", {
+      cookie,
+      method: "GET"
+    })
+  ));
+  if (response.status !== 200) {
+    throw loadGateFailure("session-read-response", { status: response.status });
+  }
+  const document = await runLoadStage("session-read-contract", () => boundedJson(response));
   if (document?.session?.status !== "active") {
-    throw new Error("A load-test session was not active.");
+    throw loadGateFailure("session-read-contract", { status: response.status });
   }
 }
 
 async function readGuidedPage(configuration, fetchImplementation, cookie) {
-  const response = await request(configuration, fetchImplementation, guidedPath, {
-    accept: "text/html",
-    cookie,
-    method: "GET"
-  });
-  if (response.status !== 200) throw new Error("A load-test guided page read failed.");
-  const body = await boundedText(response);
+  const response = await runLoadStage("guided-read-response", () => (
+    request(configuration, fetchImplementation, guidedPath, {
+      accept: "text/html",
+      cookie,
+      method: "GET"
+    })
+  ));
+  if (response.status !== 200) {
+    throw loadGateFailure("guided-read-response", { status: response.status });
+  }
+  const body = await runLoadStage("guided-read-contract", () => boundedText(response));
   if (!body.includes("Do these signatures point to the same fictional person?")) {
-    throw new Error("A load-test guided page body was unexpected.");
+    throw loadGateFailure("guided-read-contract", { status: response.status });
+  }
+}
+
+async function runLoadStage(stage, operation) {
+  try {
+    return await operation();
+  } catch (error) {
+    throw isLoadGateFailure(error) ? error : loadGateFailure(stage);
+  }
+}
+
+function loadGateFailure(stage, detail = {}) {
+  const failure = new Error("The 25-session demo capacity gate failed.");
+  failure.stage = safePublicDemoLoadStages.includes(stage) ? stage : "unknown";
+  failure.status = safeHttpStatus(detail.status);
+  failure.attempted = safeLoadCount(detail.attempted);
+  failure.succeeded = safeLoadCount(detail.succeeded);
+  failure.failed = safeLoadCount(detail.failed);
+  failure.invalid = safeLoadCount(detail.invalid);
+  failure.unique = safeLoadCount(detail.unique);
+  failure.p95Milliseconds = safeP95Milliseconds(detail.p95Milliseconds);
+  failure.cleanupFailed = safeLoadCount(detail.cleanupFailed);
+  return failure;
+}
+
+function isLoadGateFailure(error) {
+  return error instanceof Error && safePublicDemoLoadStages.includes(error.stage);
+}
+
+function extendLoadGateFailure(error, fallbackStage, detail) {
+  const failure = isLoadGateFailure(error) ? error : loadGateFailure(fallbackStage);
+  return loadGateFailure(failure.stage, {
+    status: failure.status,
+    attempted: failure.attempted,
+    succeeded: failure.succeeded,
+    failed: failure.failed,
+    invalid: failure.invalid,
+    unique: failure.unique,
+    p95Milliseconds: failure.p95Milliseconds,
+    cleanupFailed: failure.cleanupFailed,
+    ...detail
+  });
+}
+
+function safeHttpStatus(value) {
+  return Number.isSafeInteger(value) && value >= 100 && value <= 599 ? value : null;
+}
+
+function safeLoadCount(value) {
+  return Number.isSafeInteger(value) && value >= 0 ? Math.min(value, 50) : null;
+}
+
+function safeP95Milliseconds(value) {
+  return Number.isFinite(value) && value >= 0 ? Math.min(Math.ceil(value), 30_000) : null;
+}
+
+export function safePublicDemoLoadFailure(error) {
+  const candidateStage = safeLoadDiagnosticProperty(error, "stage");
+  const stage = typeof candidateStage === "string" && safePublicDemoLoadStages.includes(candidateStage)
+    ? candidateStage
+    : "unknown";
+  const details = [
+    ["status", safeHttpStatus(safeLoadDiagnosticProperty(error, "status"))],
+    ["attempted", safeLoadCount(safeLoadDiagnosticProperty(error, "attempted"))],
+    ["succeeded", safeLoadCount(safeLoadDiagnosticProperty(error, "succeeded"))],
+    ["failed", safeLoadCount(safeLoadDiagnosticProperty(error, "failed"))],
+    ["invalid", safeLoadCount(safeLoadDiagnosticProperty(error, "invalid"))],
+    ["unique", safeLoadCount(safeLoadDiagnosticProperty(error, "unique"))],
+    ["p95Milliseconds", safeP95Milliseconds(
+      safeLoadDiagnosticProperty(error, "p95Milliseconds")
+    )],
+    ["cleanupFailed", safeLoadCount(safeLoadDiagnosticProperty(error, "cleanupFailed"))]
+  ].flatMap(([name, value]) => value === null ? [] : [`${name}=${value}`]);
+  return `Public demo 25-session load gate failed. stage=${stage}${
+    details.length > 0 ? ` ${details.join(" ")}` : ""
+  }`;
+}
+
+function safeLoadDiagnosticProperty(value, property) {
+  if ((typeof value !== "object" && typeof value !== "function") || value === null) {
+    return undefined;
+  }
+  try {
+    return Reflect.get(value, property);
+  } catch {
+    return undefined;
   }
 }
 
@@ -248,8 +403,8 @@ function requiredSecret(value) {
 if (import.meta.url === new URL(process.argv[1], "file:").href) {
   runPublicDemoLoadTest().then(() => {
     console.log("Public demo 25-session load gate passed.");
-  }).catch(() => {
-    console.error("Public demo 25-session load gate failed.");
+  }).catch((error) => {
+    console.error(safePublicDemoLoadFailure(error));
     process.exitCode = 1;
   });
 }
