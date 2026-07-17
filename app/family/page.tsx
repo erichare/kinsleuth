@@ -3,6 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { Icons } from "@/components/icons";
+import { PublicFamilyTree } from "@/components/public-family-tree";
 import { PublicShell } from "@/components/public-shell";
 import { PersonMonogram, Status, TableScroll } from "@/components/ui";
 import { readPublicFamilyProjection } from "@/lib/public-family";
@@ -12,7 +13,7 @@ export const dynamic = "force-static";
 
 export const metadata: Metadata = {
   title: "Hartwell–Mercer Family Archive · Kin Resolve",
-  description: "Explore eight fictional Hartwell–Mercer profiles and seven curated source citations.",
+  description: "Explore the complete four-generation fictional Hartwell–Mercer family tree and its curated source citations.",
   robots: { index: true, follow: true },
   alternates: { canonical: "/family" }
 };
@@ -33,8 +34,9 @@ export default async function FamilyPage() {
           <span className="eyebrow">Public family archive</span>
           <h1>{family.archiveName}</h1>
           <p>
-            Explore the curated public side of Kin Resolve through eight deceased fictional profiles and seven source
-            citations. Research cases, source detail, DNA, imports, and analysis remain outside this projection.
+            Explore the curated public side of Kin Resolve through {family.people.length} deceased fictional profiles,
+            a complete four-generation tree, and {family.citations.length} source citations. Research cases, source
+            detail, DNA, imports, and analysis remain outside this projection.
           </p>
           <p className="fiction-disclosure" role="note">
             <strong>Everything here is fictional.</strong> Every name, date, place, and citation was invented for this
@@ -47,10 +49,12 @@ export default async function FamilyPage() {
           </div>
         </section>
 
+        <PublicFamilyTree people={family.people} tree={family.tree} />
+
         <section aria-labelledby="public-family-people" className="section public-family-section">
           <div className="section-heading heading-row">
             <div>
-              <span className="card-kicker">Eight connected lives</span>
+              <span className="card-kicker">{family.people.length} connected lives</span>
               <h2 id="public-family-people">Published profiles</h2>
             </div>
             <Link className="button-secondary" href="/people">Open the people index</Link>

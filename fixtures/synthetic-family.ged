@@ -51,6 +51,7 @@
 2 DATE 14 JAN 1934
 2 PLAC Lantern Bay, Wisconsin
 2 SOUR @S4@
+1 FAMC @F5@
 1 FAMS @F2@
 1 NOTE Fictional demo person. Her invented recipe notebook records assembling the blue memory tin in 1922 around Samuel's two older items.
 0 @I4@ INDI
@@ -64,6 +65,7 @@
 2 DATE 30 AUG 1926
 2 PLAC Lantern Bay, Wisconsin
 2 SOUR @S4@
+1 FAMC @F4@
 1 FAMS @F2@
 1 NOTE Fictional demo person. Elias worked on the Lantern Bay docks.
 0 @I5@ INDI
@@ -103,6 +105,7 @@
 2 DATE 2 APR 1941
 2 PLAC Northstar Cove, Nova Scotia
 2 SOUR @S4@
+1 FAMC @F7@
 1 FAMS @F3@
 1 NOTE Fictional demo person. Her invented letter says Samuel practiced signing Mercer and March.
 0 @I8@ INDI
@@ -116,8 +119,113 @@
 2 DATE 17 OCT 1911
 2 PLAC Northstar Cove, Nova Scotia
 2 SOUR @S4@
+1 FAMC @F6@
 1 FAMS @F3@
 1 NOTE Fictional demo person. A page in his invented tide table contains S.M. west beside a blue square.
+0 @I9@ INDI
+1 NAME Orson Hale /Hartwell/
+1 SEX M
+1 BIRT
+2 DATE 14 APR 1825
+2 PLAC Northstar Cove, Nova Scotia
+2 SOUR @S2@
+1 DEAT
+2 DATE 3 SEP 1899
+2 PLAC Northstar Cove, Nova Scotia
+2 SOUR @S4@
+1 FAMS @F4@
+1 NOTE Fictional demo person. His invented harbor ledger records changing fog signals and compass roses beside uncertain entries.
+0 @I10@ INDI
+1 NAME Lydia Anne /Thorne/
+1 SEX F
+1 BIRT
+2 DATE 8 JAN 1829
+2 PLAC Northstar Cove, Nova Scotia
+2 SOUR @S2@
+1 DEAT
+2 DATE 11 MAR 1907
+2 PLAC Lantern Bay, Wisconsin
+2 SOUR @S4@
+1 FAMS @F4@
+1 NOTE Fictional demo person. Her invented letters describe sending Elias west with a stitched signal flag.
+0 @I11@ INDI
+1 NAME Luca Matteo /Bellandi/
+1 SEX M
+1 BIRT
+2 DATE 2 DEC 1828
+2 PLAC Ceraluna Alta, Italy
+2 SOUR @S3@
+1 DEAT
+2 DATE 8 AUG 1902
+2 PLAC Ceraluna Alta, Italy
+2 SOUR @S3@
+1 FAMS @F5@
+1 NOTE Fictional demo person. An invented parish household series anchors his place in the Bellandi sibling reconstruction.
+0 @I12@ INDI
+1 NAME Mira Elisabetta /Solari/
+1 SEX F
+1 BIRT
+2 DATE 16 JUN 1834
+2 PLAC Ceraluna Alta, Italy
+2 SOUR @S3@
+1 DEAT
+2 DATE 26 JAN 1911
+2 PLAC Ceraluna Alta, Italy
+2 SOUR @S3@
+1 FAMS @F5@
+1 NOTE Fictional demo person. Her invented household entry names Rosa, Amalia, and Ettore in age order.
+0 @I13@ INDI
+1 NAME Micah Amos /Mercer/
+1 SEX M
+1 BIRT
+2 DATE 30 MAY 1827
+2 PLAC Northstar Cove, Nova Scotia
+2 SOUR @S2@
+1 DEAT
+2 DATE 12 FEB 1900
+2 PLAC Northstar Cove, Nova Scotia
+2 SOUR @S4@
+1 FAMS @F6@
+1 NOTE Fictional demo person. His invented vessel accounts contain the earliest Mercer entries in the Northstar Cove branch.
+0 @I14@ INDI
+1 NAME Eliza Fern /Fenwick/
+1 SEX F
+1 BIRT
+2 DATE 21 SEP 1831
+2 PLAC Northstar Cove, Nova Scotia
+2 SOUR @S2@
+1 DEAT
+2 DATE 7 JUL 1909
+2 PLAC Northstar Cove, Nova Scotia
+2 SOUR @S4@
+1 FAMS @F6@
+1 NOTE Fictional demo person. Her invented almanac records family birthdays beside tide marks.
+0 @I15@ INDI
+1 NAME Declan Hugh /Rowan/
+1 SEX M
+1 BIRT
+2 DATE 5 NOV 1830
+2 PLAC Northstar Cove, Nova Scotia
+2 SOUR @S2@
+1 DEAT
+2 DATE 22 DEC 1904
+2 PLAC Northstar Cove, Nova Scotia
+2 SOUR @S4@
+1 FAMS @F7@
+1 NOTE Fictional demo person. His invented chapel and harbor entries establish the Rowan household used in the demo DNA case.
+0 @I16@ INDI
+1 NAME Eileen Grace /Pike/
+1 SEX F
+1 BIRT
+2 DATE 13 MAR 1837
+2 PLAC Northstar Cove, Nova Scotia
+2 SOUR @S2@
+1 DEAT
+2 DATE 29 AUG 1915
+2 PLAC Northstar Cove, Nova Scotia
+2 SOUR @S4@
+1 FAMS @F7@
+1 NOTE Fictional demo person. Her invented household notes distinguish the Rowan daughters by full name.
 0 @F1@ FAM
 1 HUSB @I2@
 1 WIFE @I1@
@@ -143,6 +251,38 @@
 2 PLAC Northstar Cove, Nova Scotia
 2 SOUR @S2@
 1 CHIL @I2@
+0 @F4@ FAM
+1 HUSB @I9@
+1 WIFE @I10@
+1 MARR
+2 DATE 2 NOV 1851
+2 PLAC Northstar Cove, Nova Scotia
+2 SOUR @S2@
+1 CHIL @I4@
+0 @F5@ FAM
+1 HUSB @I11@
+1 WIFE @I12@
+1 MARR
+2 DATE 12 FEB 1857
+2 PLAC Ceraluna Alta, Italy
+2 SOUR @S3@
+1 CHIL @I3@
+0 @F6@ FAM
+1 HUSB @I13@
+1 WIFE @I14@
+1 MARR
+2 DATE 17 JUL 1854
+2 PLAC Northstar Cove, Nova Scotia
+2 SOUR @S2@
+1 CHIL @I8@
+0 @F7@ FAM
+1 HUSB @I15@
+1 WIFE @I16@
+1 MARR
+2 DATE 4 OCT 1858
+2 PLAC Northstar Cove, Nova Scotia
+2 SOUR @S2@
+1 CHIL @I7@
 0 @S1@ SOUR
 1 TITL Fictional Lantern Bay civil register
 1 AUTH Kin Resolve demo writers

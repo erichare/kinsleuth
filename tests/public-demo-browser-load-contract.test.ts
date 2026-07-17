@@ -42,6 +42,29 @@ describe("public demo browser and capacity launch gates", () => {
     expect(browser).not.toContain('runPublicDemoMonitor("full")');
   });
 
+  it("exercises the complete public family tree in the dedicated public-demo canary", () => {
+    const stageStart = browser.indexOf("const safeBrowserCanaryStages");
+    const stageEnd = browser.indexOf("]);", stageStart);
+    const stageAllowlist = browser.slice(stageStart, stageEnd);
+
+    expect(browser).toContain('runCanaryStage("family-tree"');
+    expect(stageAllowlist).toContain('"family-tree"');
+    expect(stageAllowlist).toContain('"mobile-overflow-family"');
+    expect(browser).toContain('page.locator("[data-tree-person]")');
+    expect(browser).toContain("page.setViewportSize({ width: 390, height: 844 })");
+    expect(browser).toContain("auditPublicFamilyTree(page, dependencies.axeSource, journey.mobile)");
+    expect(browser).toMatch(/context\(\)\.cookies\(\)[\s\S]*sessionCookieName/);
+    expect(browser).toContain('getByRole("button", { name: "Reset family tree view" })');
+    expect(browser).toContain("viewport.scrollHeight !== viewport.clientHeight");
+    expect(browser).toContain(
+      "document.documentElement.scrollWidth > document.documentElement.clientWidth"
+    );
+    expect(browser.indexOf('runCanaryStage("family-tree"')).toBeLessThan(
+      browser.indexOf('runCanaryStage("landing"')
+    );
+    expect(release).toContain('KINRESOLVE_PUBLIC_ARCHIVE_ENABLED: "true"');
+  });
+
   it("settles sibling canary work and drains intercepted routes before context teardown", () => {
     const runStart = browser.indexOf("export async function runPublicDemoBrowserCanary");
     const runEnd = browser.indexOf("async function createContext", runStart);

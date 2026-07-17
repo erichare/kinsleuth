@@ -108,7 +108,7 @@ describe("runtime status", () => {
         archiveName: "Hartwell–Mercer Family Archive",
         archiveTagline: "Fictional public demo",
         archiveCount: 1,
-        peopleCount: 8,
+        peopleCount: 16,
         caseCount: 5,
         aiRunCount: 0,
         provisioned: true,

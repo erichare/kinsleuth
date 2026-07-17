@@ -39,11 +39,13 @@ const safeBrowserCanaryStages = Object.freeze([
   "capacity-result",
   "capacity-links",
   "guided-journey",
+  "family-tree",
   "landing",
   "session-start",
   "outcome-save",
   "accessibility",
   "mobile-overflow",
+  "mobile-overflow-family",
   "mobile-overflow-landing",
   "mobile-overflow-outcome",
   "mobile-overflow-completion",
@@ -139,6 +141,9 @@ export async function runPublicDemoBrowserCanary(
         runCanaryStage("guided-journey", async () => {
           const surface = journey.mobile ? "mobile" : "desktop";
           const page = await journey.context.newPage();
+          await runCanaryStage("family-tree", () => (
+            auditPublicFamilyTree(page, dependencies.axeSource, journey.mobile)
+          ), surface);
           await runCanaryStage("landing", () => (
             startGuidedDemo(page, dependencies.axeSource, journey.mobile)
           ), surface);
@@ -387,6 +392,64 @@ async function startGuidedDemo(page, axeSource, mobile) {
     name: "Do these signatures point to the same fictional person?"
   }).waitFor();
   await auditAccessibility(page, axeSource);
+}
+
+async function auditPublicFamilyTree(page, axeSource, mobile) {
+  if ((await page.context().cookies()).some(({ name }) => name === sessionCookieName)) {
+    throw browserCanaryFailure("family-tree");
+  }
+  const response = await page.goto("/family", { waitUntil: "domcontentloaded" });
+  if (response?.status() !== 200) throw browserCanaryFailure("family-tree");
+
+  await page.getByRole("heading", { level: 1, name: "Hartwell–Mercer Family Archive" }).waitFor();
+  const treeViewport = page.getByRole("region", {
+    name: "Complete Hartwell–Mercer family tree with 16 fictional people across 4 generations"
+  });
+  await treeViewport.waitFor();
+  if (await page.locator("[data-tree-person]").count() !== 16) {
+    throw browserCanaryFailure("family-tree");
+  }
+  await auditAccessibility(page, axeSource);
+
+  await page.getByRole("status", { name: "Family tree zoom 90%" }).waitFor();
+  await page.getByRole("button", { name: "Zoom in" }).click();
+  await page.getByRole("status", { name: "Family tree zoom 100%" }).waitFor();
+  const pannedScrollLeft = await treeViewport.evaluate((element) => {
+    element.scrollLeft = 60;
+    return element.scrollLeft;
+  });
+  if (pannedScrollLeft !== 60) throw browserCanaryFailure("family-tree");
+
+  if (!mobile) await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole("status", { name: "Family tree zoom 100%" }).waitFor();
+  await assertNoMobileOverflow(page, "mobile-overflow-family", mobile ? "mobile" : "desktop");
+  const responsiveMetrics = await treeViewport.evaluate((element) => {
+    const viewport = element;
+    return {
+      documentOverflows:
+        document.documentElement.scrollWidth > document.documentElement.clientWidth,
+      hasHorizontalTreeScroll: viewport.scrollWidth > viewport.clientWidth,
+      hasVerticalTreeScroll: viewport.scrollHeight !== viewport.clientHeight,
+      scrollLeft: viewport.scrollLeft
+    };
+  });
+  if (
+    responsiveMetrics.documentOverflows
+    || !responsiveMetrics.hasHorizontalTreeScroll
+    || responsiveMetrics.hasVerticalTreeScroll
+    || responsiveMetrics.scrollLeft !== 60
+  ) throw browserCanaryFailure("family-tree");
+
+  await page.getByRole("button", { name: "Reset family tree view" }).click();
+  await page.getByRole("status", { name: "Family tree zoom 90%" }).waitFor();
+  await page.waitForFunction(() => {
+    const viewport = document.querySelector("[data-public-family-tree]");
+    return viewport instanceof HTMLElement && viewport.scrollLeft === 0;
+  });
+  if ((await page.context().cookies()).some(({ name }) => name === sessionCookieName)) {
+    throw browserCanaryFailure("family-tree");
+  }
+  if (!mobile) await page.setViewportSize({ width: 1280, height: 900 });
 }
 
 async function chooseOutcome(page, label) {

@@ -118,8 +118,8 @@ describe("GEDCOM export", () => {
     const result = exportGedcom(workspaceFromFixture(), { now: exportedAt });
 
     const parsed = parseGedcom(result.content);
-    expect(parsed.summary.individuals).toBe(8);
-    expect(parsed.summary.families).toBe(3);
+    expect(parsed.summary.individuals).toBe(16);
+    expect(parsed.summary.families).toBe(7);
     expect(parsed.summary.sources).toBe(4);
     expect(parsed.summary.media).toBe(1);
     expect(parsed.records.filter((record) => record.type === "HEAD")).toHaveLength(1);

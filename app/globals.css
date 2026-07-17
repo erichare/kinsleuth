@@ -5643,6 +5643,221 @@ h3,
   padding-top: 12px;
 }
 
+.public-family-tree-section {
+  margin-top: 8px;
+}
+
+.public-family-tree-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  padding-right: 0;
+  padding-left: 0;
+}
+
+.public-family-tree-heading > div:first-child {
+  max-width: 720px;
+}
+
+.public-family-tree-heading p {
+  margin: 8px 0 0;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.public-family-tree-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 5px;
+  background: rgba(255, 255, 253, 0.94);
+  box-shadow: var(--shadow-soft);
+}
+
+.public-family-tree-controls button,
+.public-family-tree-controls output {
+  min-width: 38px;
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 8px;
+  color: var(--accent-strong);
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.public-family-tree-controls button {
+  cursor: pointer;
+}
+
+.public-family-tree-controls button:hover:not(:disabled) {
+  background: var(--accent-soft);
+}
+
+.public-family-tree-controls button:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+
+.public-family-tree-controls button:focus-visible,
+.public-family-tree-viewport:focus-visible,
+.public-family-tree-person:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.public-family-tree-controls .public-family-tree-fit {
+  gap: 7px;
+  min-width: auto;
+  padding: 0 9px;
+}
+
+.public-family-tree-viewport {
+  overflow-x: auto;
+  overflow-y: hidden;
+  border: 1px solid rgba(101, 124, 114, 0.28);
+  border-radius: 20px;
+  padding: 14px;
+  background:
+    radial-gradient(circle at 50% 12%, rgba(226, 244, 237, 0.78), transparent 36%),
+    linear-gradient(180deg, rgba(255, 255, 253, 0.98), rgba(244, 247, 245, 0.94)),
+    var(--texture);
+  background-size: auto, auto, 1280px auto;
+  box-shadow: var(--shadow-card);
+  overscroll-behavior: contain;
+  scrollbar-color: rgba(0, 107, 88, 0.48) rgba(214, 225, 220, 0.5);
+  scrollbar-width: thin;
+}
+
+.public-family-tree-viewport::-webkit-scrollbar {
+  width: 11px;
+  height: 11px;
+}
+
+.public-family-tree-viewport::-webkit-scrollbar-track {
+  border-radius: 999px;
+  background: rgba(214, 225, 220, 0.5);
+}
+
+.public-family-tree-viewport::-webkit-scrollbar-thumb {
+  border: 2px solid rgba(214, 225, 220, 0.5);
+  border-radius: 999px;
+  background: rgba(0, 107, 88, 0.48);
+}
+
+.public-family-tree-stage {
+  position: relative;
+  margin: 0 auto;
+}
+
+.public-family-tree-canvas {
+  position: absolute;
+  inset: 0 auto auto 0;
+  transform-origin: top left;
+}
+
+.public-family-tree-generation {
+  position: absolute;
+  left: 18px;
+  z-index: 2;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 850;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.public-family-tree-connectors {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.public-family-tree-connectors path {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.public-family-tree-partners {
+  stroke: rgba(184, 123, 24, 0.72);
+  stroke-width: 2.5;
+}
+
+.public-family-tree-descendants {
+  stroke: rgba(0, 107, 88, 0.62);
+  stroke-width: 2;
+}
+
+.public-family-tree-person {
+  position: absolute;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  border: 1px solid rgba(101, 124, 114, 0.32);
+  border-top: 3px solid var(--accent);
+  border-radius: 14px;
+  padding: 10px;
+  color: var(--ink);
+  background: rgba(255, 255, 253, 0.98);
+  box-shadow: 0 10px 26px rgba(13, 26, 22, 0.09);
+  text-decoration: none;
+  transition: border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
+}
+
+.public-family-tree-person:hover {
+  border-color: rgba(0, 107, 88, 0.58);
+  box-shadow: 0 14px 32px rgba(13, 26, 22, 0.14);
+  transform: translateY(-2px);
+}
+
+.public-family-tree-person > span:last-child {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.public-family-tree-person strong {
+  overflow: hidden;
+  font-size: 14px;
+  line-height: 1.24;
+  text-overflow: ellipsis;
+}
+
+.public-family-tree-person small {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.public-family-tree-person small:first-of-type {
+  color: var(--accent-strong);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.public-family-tree-instruction {
+  margin: 10px 3px 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .public-family-person-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -5870,6 +6085,11 @@ h3,
 }
 
 @media (max-width: 960px) {
+  .public-family-tree-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
   .demo-session-bar {
     top: 64px;
     z-index: 40;
@@ -5910,6 +6130,29 @@ h3,
 
   .public-family-metrics span {
     flex: 1 1 145px;
+  }
+
+  .public-family-tree-heading {
+    gap: 16px;
+  }
+
+  .public-family-tree-controls {
+    width: 100%;
+  }
+
+  .public-family-tree-controls output {
+    flex: 1 1 auto;
+  }
+
+  .public-family-tree-viewport {
+    margin-right: -8px;
+    margin-left: -8px;
+    border-radius: 16px;
+    padding: 10px;
+  }
+
+  .public-family-tree-instruction {
+    font-size: 11px;
   }
 
   .demo-session-bar {
