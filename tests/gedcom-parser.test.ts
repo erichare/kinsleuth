@@ -7,11 +7,11 @@ describe("GEDCOM parser", () => {
     const content = readFileSync("fixtures/synthetic-family.ged", "utf8");
     const parsed = parseGedcom(content);
 
-    expect(parsed.summary.individuals).toBe(8);
-    expect(parsed.summary.families).toBe(3);
+    expect(parsed.summary.individuals).toBe(16);
+    expect(parsed.summary.families).toBe(7);
     expect(parsed.summary.sources).toBe(4);
     expect(parsed.summary.media).toBe(1);
-    expect(parsed.summary.dateRange?.minYear).toBe(1856);
+    expect(parsed.summary.dateRange?.minYear).toBe(1825);
     expect(parsed.summary.dateRange?.maxYear).toBe(1998);
   });
 
@@ -27,6 +27,9 @@ describe("GEDCOM parser", () => {
     expect(nora?.relatives).toContain("@I2@");
     expect(nora?.relatives).not.toContain("@F1@");
     expect(nora?.notes).toContain("Nora's journal calls the memory box Amalia's tin");
+    expect(people.find((person) => person.displayName === "Elias Thorne Hartwell")?.relatives).toEqual(
+      expect.arrayContaining(["@I9@", "@I10@", "@I3@", "@I1@"])
+    );
   });
 
   it("resolves family records into person-to-person relationship links", () => {

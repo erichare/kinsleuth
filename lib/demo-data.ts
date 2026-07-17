@@ -130,7 +130,7 @@ const demoPersonDrafts: PersonSummary[] = [
     livingStatus: "deceased",
     privacy: "private",
     published: false,
-    relatives: ["p-elias-hartwell", "p-nora-hartwell"],
+    relatives: ["p-luca-bellandi", "p-mira-solari", "p-elias-hartwell", "p-nora-hartwell"],
     notes: `${demoFictionNotice} Amalia told stories in which Ceraluna Alta's bells could be heard across an entire valley. Her recipe notebook records her assembling the blue memory tin in 1922 from Samuel's two old papers and later family keepsakes.`,
     facts: [
       {
@@ -185,7 +185,7 @@ const demoPersonDrafts: PersonSummary[] = [
     livingStatus: "deceased",
     privacy: "private",
     published: false,
-    relatives: ["p-amalia-bellandi", "p-nora-hartwell"],
+    relatives: ["p-orson-hartwell", "p-lydia-thorne", "p-amalia-bellandi", "p-nora-hartwell"],
     notes: `${demoFictionNotice} Elias was said to recognize every working vessel by the rhythm of its harbor bell. A fictional dock payroll places him in Lantern Bay before Amalia arrived.`,
     facts: [
       {
@@ -323,7 +323,7 @@ const demoPersonDrafts: PersonSummary[] = [
     livingStatus: "deceased",
     privacy: "private",
     published: false,
-    relatives: ["p-jonah-mercer", "p-samuel-mercer"],
+    relatives: ["p-declan-rowan", "p-eileen-pike", "p-jonah-mercer", "p-samuel-mercer"],
     notes: `${demoFictionNotice} Maeve's surviving fictional letters describe Samuel as restless and mention that he practiced signing both “Mercer” and “March” before leaving Northstar Cove.`,
     facts: [
       {
@@ -369,7 +369,7 @@ const demoPersonDrafts: PersonSummary[] = [
     livingStatus: "deceased",
     privacy: "private",
     published: false,
-    relatives: ["p-maeve-mercer", "p-samuel-mercer"],
+    relatives: ["p-micah-mercer", "p-eliza-fenwick", "p-maeve-mercer", "p-samuel-mercer"],
     notes: `${demoFictionNotice} Jonah kept fictional tide tables filled with initials. One page for May 1907 contains “S.M. west” beside a sketch of a blue square.`,
     facts: [
       {
@@ -399,6 +399,374 @@ const demoPersonDrafts: PersonSummary[] = [
         source: "Fictional Northstar Cove memorial register",
         confidence: 0.85,
         privacy: "private"
+      }
+    ]
+  },
+  {
+    id: "p-orson-hartwell",
+    slug: "orson-hale-hartwell",
+    displayName: "Orson Hale Hartwell",
+    givenName: "Orson Hale",
+    surname: "Hartwell",
+    birthDate: "14 Apr 1825",
+    birthPlace: "Northstar Cove, Nova Scotia",
+    deathDate: "3 Sep 1899",
+    deathPlace: "Northstar Cove, Nova Scotia",
+    sex: "M",
+    livingStatus: "deceased",
+    privacy: "public",
+    published: true,
+    relatives: ["p-lydia-thorne", "p-elias-hartwell"],
+    notes: `${demoFictionNotice} Orson's invented harbor ledger records changing fog signals and a family habit of sketching a compass rose beside uncertain entries.`,
+    facts: [
+      {
+        id: "fact-orson-birth",
+        type: "BIRT",
+        date: "14 Apr 1825",
+        place: "Northstar Cove, Nova Scotia",
+        source: "Fictional Northstar Cove chapel register",
+        confidence: 0.81,
+        privacy: "public"
+      },
+      {
+        id: "fact-orson-marriage",
+        type: "MARR",
+        date: "2 Nov 1851",
+        place: "Northstar Cove, Nova Scotia",
+        source: "Fictional Northstar Cove chapel register",
+        confidence: 0.84,
+        privacy: "public"
+      },
+      {
+        id: "fact-orson-death",
+        type: "DEAT",
+        date: "3 Sep 1899",
+        place: "Northstar Cove, Nova Scotia",
+        source: "Fictional Northstar Cove memorial register",
+        confidence: 0.86,
+        privacy: "public"
+      }
+    ]
+  },
+  {
+    id: "p-lydia-thorne",
+    slug: "lydia-anne-thorne",
+    displayName: "Lydia Anne Thorne",
+    givenName: "Lydia Anne",
+    surname: "Thorne",
+    birthDate: "8 Jan 1829",
+    birthPlace: "Northstar Cove, Nova Scotia",
+    deathDate: "11 Mar 1907",
+    deathPlace: "Lantern Bay, Wisconsin",
+    sex: "F",
+    livingStatus: "deceased",
+    privacy: "public",
+    published: true,
+    relatives: ["p-orson-hartwell", "p-elias-hartwell"],
+    notes: `${demoFictionNotice} Lydia's fictional letters describe sending Elias west with a stitched signal flag and a list of Northstar Cove relatives to remember.`,
+    facts: [
+      {
+        id: "fact-lydia-birth",
+        type: "BIRT",
+        date: "8 Jan 1829",
+        place: "Northstar Cove, Nova Scotia",
+        source: "Fictional Northstar Cove birth ledger",
+        confidence: 0.82,
+        privacy: "public"
+      },
+      {
+        id: "fact-lydia-marriage",
+        type: "MARR",
+        date: "2 Nov 1851",
+        place: "Northstar Cove, Nova Scotia",
+        source: "Fictional Northstar Cove chapel register",
+        confidence: 0.84,
+        privacy: "public"
+      },
+      {
+        id: "fact-lydia-death",
+        type: "DEAT",
+        date: "11 Mar 1907",
+        place: "Lantern Bay, Wisconsin",
+        source: "Fictional Lantern Bay memorial register",
+        confidence: 0.8,
+        privacy: "public"
+      }
+    ]
+  },
+  {
+    id: "p-luca-bellandi",
+    slug: "luca-matteo-bellandi",
+    displayName: "Luca Matteo Bellandi",
+    givenName: "Luca Matteo",
+    surname: "Bellandi",
+    birthDate: "2 Dec 1828",
+    birthPlace: "Ceraluna Alta, Italy",
+    deathDate: "8 Aug 1902",
+    deathPlace: "Ceraluna Alta, Italy",
+    sex: "M",
+    livingStatus: "deceased",
+    privacy: "public",
+    published: true,
+    relatives: ["p-mira-solari", "p-amalia-bellandi"],
+    notes: `${demoFictionNotice} Luca appears in an invented parish household series that anchors the Bellandi sibling reconstruction without resolving Amalia's later migration route.`,
+    facts: [
+      {
+        id: "fact-luca-birth",
+        type: "BIRT",
+        date: "2 Dec 1828",
+        place: "Ceraluna Alta, Italy",
+        source: "Fictional Ceraluna Alta parish register",
+        confidence: 0.74,
+        privacy: "public"
+      },
+      {
+        id: "fact-luca-marriage",
+        type: "MARR",
+        date: "12 Feb 1857",
+        place: "Ceraluna Alta, Italy",
+        source: "Fictional Ceraluna Alta parish register",
+        confidence: 0.79,
+        privacy: "public"
+      },
+      {
+        id: "fact-luca-death",
+        type: "DEAT",
+        date: "8 Aug 1902",
+        place: "Ceraluna Alta, Italy",
+        source: "Fictional Ceraluna Alta civil register",
+        confidence: 0.78,
+        privacy: "public"
+      }
+    ]
+  },
+  {
+    id: "p-mira-solari",
+    slug: "mira-elisabetta-solari",
+    displayName: "Mira Elisabetta Solari",
+    givenName: "Mira Elisabetta",
+    surname: "Solari",
+    birthDate: "16 Jun 1834",
+    birthPlace: "Ceraluna Alta, Italy",
+    deathDate: "26 Jan 1911",
+    deathPlace: "Ceraluna Alta, Italy",
+    sex: "F",
+    livingStatus: "deceased",
+    privacy: "public",
+    published: true,
+    relatives: ["p-luca-bellandi", "p-amalia-bellandi"],
+    notes: `${demoFictionNotice} Mira's invented household entry names Rosa, Amalia, and Ettore in age order and supplies one documented link in the Solari-Bellandi branch.`,
+    facts: [
+      {
+        id: "fact-mira-birth",
+        type: "BIRT",
+        date: "16 Jun 1834",
+        place: "Ceraluna Alta, Italy",
+        source: "Fictional Ceraluna Alta parish register",
+        confidence: 0.76,
+        privacy: "public"
+      },
+      {
+        id: "fact-mira-marriage",
+        type: "MARR",
+        date: "12 Feb 1857",
+        place: "Ceraluna Alta, Italy",
+        source: "Fictional Ceraluna Alta parish register",
+        confidence: 0.79,
+        privacy: "public"
+      },
+      {
+        id: "fact-mira-death",
+        type: "DEAT",
+        date: "26 Jan 1911",
+        place: "Ceraluna Alta, Italy",
+        source: "Fictional Ceraluna Alta civil register",
+        confidence: 0.77,
+        privacy: "public"
+      }
+    ]
+  },
+  {
+    id: "p-micah-mercer",
+    slug: "micah-amos-mercer",
+    displayName: "Micah Amos Mercer",
+    givenName: "Micah Amos",
+    surname: "Mercer",
+    birthDate: "30 May 1827",
+    birthPlace: "Northstar Cove, Nova Scotia",
+    deathDate: "12 Feb 1900",
+    deathPlace: "Northstar Cove, Nova Scotia",
+    sex: "M",
+    livingStatus: "deceased",
+    privacy: "public",
+    published: true,
+    relatives: ["p-eliza-fenwick", "p-jonah-mercer"],
+    notes: `${demoFictionNotice} Micah's fictional vessel accounts contain the earliest Mercer entries in the Northstar Cove branch and several unexplained name abbreviations.`,
+    facts: [
+      {
+        id: "fact-micah-birth",
+        type: "BIRT",
+        date: "30 May 1827",
+        place: "Northstar Cove, Nova Scotia",
+        source: "Fictional Northstar Cove birth ledger",
+        confidence: 0.8,
+        privacy: "public"
+      },
+      {
+        id: "fact-micah-marriage",
+        type: "MARR",
+        date: "17 Jul 1854",
+        place: "Northstar Cove, Nova Scotia",
+        source: "Fictional Northstar Cove chapel register",
+        confidence: 0.85,
+        privacy: "public"
+      },
+      {
+        id: "fact-micah-death",
+        type: "DEAT",
+        date: "12 Feb 1900",
+        place: "Northstar Cove, Nova Scotia",
+        source: "Fictional Northstar Cove memorial register",
+        confidence: 0.84,
+        privacy: "public"
+      }
+    ]
+  },
+  {
+    id: "p-eliza-fenwick",
+    slug: "eliza-fern-fenwick",
+    displayName: "Eliza Fern Fenwick",
+    givenName: "Eliza Fern",
+    surname: "Fenwick",
+    birthDate: "21 Sep 1831",
+    birthPlace: "Northstar Cove, Nova Scotia",
+    deathDate: "7 Jul 1909",
+    deathPlace: "Northstar Cove, Nova Scotia",
+    sex: "F",
+    livingStatus: "deceased",
+    privacy: "public",
+    published: true,
+    relatives: ["p-micah-mercer", "p-jonah-mercer"],
+    notes: `${demoFictionNotice} Eliza's invented almanac records family birthdays beside tide marks, giving the Mercer branch a second independent chronology.`,
+    facts: [
+      {
+        id: "fact-eliza-birth",
+        type: "BIRT",
+        date: "21 Sep 1831",
+        place: "Northstar Cove, Nova Scotia",
+        source: "Fictional Northstar Cove birth ledger",
+        confidence: 0.81,
+        privacy: "public"
+      },
+      {
+        id: "fact-eliza-marriage",
+        type: "MARR",
+        date: "17 Jul 1854",
+        place: "Northstar Cove, Nova Scotia",
+        source: "Fictional Northstar Cove chapel register",
+        confidence: 0.85,
+        privacy: "public"
+      },
+      {
+        id: "fact-eliza-death",
+        type: "DEAT",
+        date: "7 Jul 1909",
+        place: "Northstar Cove, Nova Scotia",
+        source: "Fictional Northstar Cove memorial register",
+        confidence: 0.83,
+        privacy: "public"
+      }
+    ]
+  },
+  {
+    id: "p-declan-rowan",
+    slug: "declan-hugh-rowan",
+    displayName: "Declan Hugh Rowan",
+    givenName: "Declan Hugh",
+    surname: "Rowan",
+    birthDate: "5 Nov 1830",
+    birthPlace: "Northstar Cove, Nova Scotia",
+    deathDate: "22 Dec 1904",
+    deathPlace: "Northstar Cove, Nova Scotia",
+    sex: "M",
+    livingStatus: "deceased",
+    privacy: "public",
+    published: true,
+    relatives: ["p-eileen-pike", "p-maeve-mercer"],
+    notes: `${demoFictionNotice} Declan's invented chapel and harbor entries establish the Rowan household later referenced by Maeve's letters and the demo DNA case.`,
+    facts: [
+      {
+        id: "fact-declan-birth",
+        type: "BIRT",
+        date: "5 Nov 1830",
+        place: "Northstar Cove, Nova Scotia",
+        source: "Fictional Northstar Cove birth ledger",
+        confidence: 0.82,
+        privacy: "public"
+      },
+      {
+        id: "fact-declan-marriage",
+        type: "MARR",
+        date: "4 Oct 1858",
+        place: "Northstar Cove, Nova Scotia",
+        source: "Fictional Northstar Cove chapel register",
+        confidence: 0.86,
+        privacy: "public"
+      },
+      {
+        id: "fact-declan-death",
+        type: "DEAT",
+        date: "22 Dec 1904",
+        place: "Northstar Cove, Nova Scotia",
+        source: "Fictional Northstar Cove memorial register",
+        confidence: 0.84,
+        privacy: "public"
+      }
+    ]
+  },
+  {
+    id: "p-eileen-pike",
+    slug: "eileen-grace-pike",
+    displayName: "Eileen Grace Pike",
+    givenName: "Eileen Grace",
+    surname: "Pike",
+    birthDate: "13 Mar 1837",
+    birthPlace: "Northstar Cove, Nova Scotia",
+    deathDate: "29 Aug 1915",
+    deathPlace: "Northstar Cove, Nova Scotia",
+    sex: "F",
+    livingStatus: "deceased",
+    privacy: "public",
+    published: true,
+    relatives: ["p-declan-rowan", "p-maeve-mercer"],
+    notes: `${demoFictionNotice} Eileen's invented household notes distinguish the Rowan daughters by full name, preserving the branch that later led to Maeve and Elowen.`,
+    facts: [
+      {
+        id: "fact-eileen-birth",
+        type: "BIRT",
+        date: "13 Mar 1837",
+        place: "Northstar Cove, Nova Scotia",
+        source: "Fictional Northstar Cove birth ledger",
+        confidence: 0.82,
+        privacy: "public"
+      },
+      {
+        id: "fact-eileen-marriage",
+        type: "MARR",
+        date: "4 Oct 1858",
+        place: "Northstar Cove, Nova Scotia",
+        source: "Fictional Northstar Cove chapel register",
+        confidence: 0.86,
+        privacy: "public"
+      },
+      {
+        id: "fact-eileen-death",
+        type: "DEAT",
+        date: "29 Aug 1915",
+        place: "Northstar Cove, Nova Scotia",
+        source: "Fictional Northstar Cove memorial register",
+        confidence: 0.83,
+        privacy: "public"
       }
     ]
   }
@@ -1323,8 +1691,8 @@ export const demoCases: ResearchCase[] = [
 ];
 
 export const archiveStats = {
-  people: 8,
-  families: 3,
+  people: 16,
+  families: 7,
   sources: 7,
   citations: 48,
   dnaMatches: 3,

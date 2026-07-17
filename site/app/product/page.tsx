@@ -19,7 +19,7 @@ const productAreas = [
     title: "Import without flattening the record.",
     body: "Preview a GEDCOM before it changes the archive. Kin Resolve preserves raw records, xrefs, custom tags, notes, source references, and checksums, then shows reviewable changes on re-import.",
     points: ["Preview before apply", "Reviewable re-import differences", "Pre-import recovery snapshot", "Full GEDCOM 5.5.1 export"],
-    example: { label: "Import review", title: "hartwell-mercer-fictional-demo.ged", rows: [["New people", "8"], ["New families", "3"], ["New sources", "4"]] }
+    example: { label: "Import review", title: "hartwell-mercer-fictional-demo.ged", rows: [["New people", "16"], ["New families", "7"], ["New sources", "4"]] }
   },
   {
     number: "02",

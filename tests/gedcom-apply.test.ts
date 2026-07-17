@@ -44,7 +44,7 @@ describe("GEDCOM prepare", () => {
     const prepared = prepareGedcomImport("synthetic-family.ged", content, new Date("2026-01-01T00:00:00.000Z"));
     const nora = prepared.people.find((person) => person.id === "@I1@");
 
-    expect(prepared.people).toHaveLength(8);
+    expect(prepared.people).toHaveLength(16);
     expect(nora?.relatives).toContain("@I2@");
     expect(nora?.relatives).not.toContain("@F1@");
     expect(prepared.sources).toEqual(
@@ -67,7 +67,7 @@ describeIfDatabase("GEDCOM apply", () => {
     const result = await applyGedcomImport({ sourceName: "synthetic-family.ged", content }, storeOptions);
     const workspace = await readWorkspace(storeOptions);
 
-    expect(result.import.peopleImported).toBe(8);
+    expect(result.import.peopleImported).toBe(16);
     expect(workspace.imports[0]).toMatchObject({
       id: result.import.id,
       backupId: result.backup.id
@@ -81,10 +81,21 @@ describeIfDatabase("GEDCOM apply", () => {
         "@I5@",
         "@I6@",
         "@I7@",
-        "@I8@"
+        "@I8@",
+        "@I9@",
+        "@I10@",
+        "@I11@",
+        "@I12@",
+        "@I13@",
+        "@I14@",
+        "@I15@",
+        "@I16@"
       ])
     );
     expect(workspace.people.find((person) => person.id === "@I1@")?.relatives).toContain("@I2@");
+    expect(workspace.people.find((person) => person.id === "@I4@")?.relatives).toEqual(
+      expect.arrayContaining(["@I9@", "@I10@", "@I3@", "@I1@"])
+    );
     expect(workspace.rawRecords).toHaveLength(result.rawRecordCount);
     expect(result.backup.storageKey).toContain("postgres://workspace_backups/");
   });
