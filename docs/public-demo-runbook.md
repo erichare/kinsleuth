@@ -126,8 +126,10 @@ canonical deployment is verified holding. It then:
    `holding/login.html`, proves `/api/health` is `404`, and records the holding-proof time
    before any database or runtime-grant mutation;
 2. validates the pulled hosted-demo configuration and fictional fixture boundary;
-3. attests the migration database identity, migrates with the migration role, provisions
-   and verifies `kinresolve-demo-public`, and grants/re-attests only the runtime operations;
+3. attests the migration database identity, migrates with the migration role, performs only
+   the explicitly confirmed canonical fixture rotation compiled into that release when the
+   persisted synthetic fixture is the expected previous version, provisions and verifies
+   `kinresolve-demo-public`, and grants/re-attests only the runtime operations;
 4. deploys an unaliased protected candidate without waiting inside the Vercel CLI, then
    bounded-polls the exact REST record until it is both `READY` and `STAGED`; an
    `INITIALIZING/STAGED` record remains retryable and can never reach canaries or promotion.

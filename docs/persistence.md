@@ -47,7 +47,11 @@ GEDCOM people) take a contiguous descending range below the current minimum.
 - **Explicit archive provisioning**: `npm run archive:provision` creates an empty,
   versioned fictional demo, or pilot archive in one transaction. Ordinary reads and
   writes never create an archive. A demo upgrade rotates to a fresh archive rather
-  than partially resetting an existing cell.
+  than partially resetting an existing cell. The hosted public demo is the sole
+  identity-preserving exception: its release workflow may transactionally replace the
+  exact canonical synthetic workspace only when the archive id, hosted/demo mode,
+  persisted previous fixture version, compiled next version, and explicit confirmation
+  all match. Disposable guest archives remain separate and are provisioned fresh.
 - **`writeWorkspace`**: kept for tests and whole-workspace restores; not used by any
   route mutator anymore.
 - **GEDCOM apply**: still loads the full workspace once (the pre-import backup

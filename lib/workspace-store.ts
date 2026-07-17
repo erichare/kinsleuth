@@ -3,6 +3,7 @@ import type { PoolClient } from "pg";
 import { projectResearchCaseForDnaCapability } from "./case-search";
 import { withTransaction, type DatabaseOptions } from "./db";
 import { createDemoSources } from "./demo-sources";
+import { demoPurgeProductTables } from "./demo-purge";
 import { createDnaConnectionHypothesis, scoreDnaMatch } from "./dna";
 import { demoCases, demoDnaMatches, demoPeople } from "./demo-data";
 import { prepareGedcomImport, type PreparedGedcomImport } from "./gedcom/apply";
@@ -13,6 +14,7 @@ import {
   validateHostedGedcomPeople
 } from "./hosted-capabilities";
 import { datasetModes, resolveDatasetConfiguration, type DatasetMode } from "./hosted-config";
+import { publicDemoCanonicalArchiveId } from "./public-demo-config";
 import { buildResearchGuide } from "./research-guide";
 import {
   mapAIAnalysisRun,
@@ -126,6 +128,13 @@ export type ArchiveProvisioning = {
 
 export type ArchiveProvisioningResult = ArchiveProvisioning & {
   created: boolean;
+};
+
+export type CanonicalPublicDemoFixtureRotationResult = {
+  archiveId: typeof publicDemoCanonicalArchiveId;
+  previousDemoFixtureVersion: number | null;
+  demoFixtureVersion: number;
+  status: "not-provisioned" | "already-current" | "rotated";
 };
 
 type UpdateCaseTaskOptions = WorkspaceStoreOptions & {
@@ -256,6 +265,122 @@ export async function provisionArchive(
     }
     assertCurrentDemoFixture(provisioning);
     return { ...provisioning, created: false };
+  });
+}
+
+const canonicalDemoFixtureWorkspaceTables = new Set<string>([
+  "tasks",
+  "evidence_items",
+  "hypotheses",
+  "research_cases",
+  "dna_hypotheses",
+  "person_facts",
+  "ai_runs",
+  "sources",
+  "raw_records",
+  "import_snapshots",
+  "workspace_backups",
+  "dna_matches",
+  "people"
+]);
+const unsupportedCanonicalDemoFixtureRotationTables = demoPurgeProductTables.filter(
+  (name) => !canonicalDemoFixtureWorkspaceTables.has(name)
+);
+
+export async function rotateCanonicalPublicDemoFixture(
+  expectedPreviousFixtureVersion: number,
+  options: WorkspaceStoreOptions = {}
+): Promise<CanonicalPublicDemoFixtureRotationResult> {
+  const archiveId = getArchiveId(options);
+  if (archiveId !== publicDemoCanonicalArchiveId) {
+    throw new Error(`Demo fixture rotation is allowed only for ${publicDemoCanonicalArchiveId}.`);
+  }
+  if (
+    !Number.isSafeInteger(expectedPreviousFixtureVersion)
+    || expectedPreviousFixtureVersion < 1
+    || expectedPreviousFixtureVersion >= demoFixtureVersion
+  ) {
+    throw new Error("The expected previous demo fixture version must be a positive integer below the current version.");
+  }
+
+  return withTransaction(options, async (client) => {
+    await client.query("SET LOCAL lock_timeout = '60s'");
+    await client.query("SET LOCAL statement_timeout = '5min'");
+    const existing = await client.query<ArchiveProvisioningRow>(
+      `SELECT id, dataset_mode, demo_fixture_version
+       FROM archives
+       WHERE id = $1
+       FOR UPDATE`,
+      [archiveId]
+    );
+    const provisioning = existing.rows[0] ? mapArchiveProvisioning(existing.rows[0]) : null;
+    if (!provisioning) {
+      return {
+        archiveId,
+        previousDemoFixtureVersion: null,
+        demoFixtureVersion,
+        status: "not-provisioned"
+      };
+    }
+    if (provisioning.datasetMode !== "demo") {
+      throw new Error("The canonical public demo archive is not persisted as the demo dataset.");
+    }
+    if (provisioning.demoFixtureVersion === demoFixtureVersion) {
+      return {
+        archiveId,
+        previousDemoFixtureVersion: demoFixtureVersion,
+        demoFixtureVersion,
+        status: "already-current"
+      };
+    }
+    if (provisioning.demoFixtureVersion !== expectedPreviousFixtureVersion) {
+      throw new Error(
+        `Canonical public demo rotation expected fixture version ${expectedPreviousFixtureVersion}, `
+        + `but the persisted version is ${String(provisioning.demoFixtureVersion)}.`
+      );
+    }
+
+    await client.query(
+      `LOCK TABLE ${unsupportedCanonicalDemoFixtureRotationTables
+        .map((name) => `public.${name}`)
+        .join(", ")} IN SHARE ROW EXCLUSIVE MODE`
+    );
+    const unsupported = await client.query<{ table_name: string }>(
+      unsupportedCanonicalDemoFixtureRotationTables
+        .map((name) => (
+          `SELECT '${name}'::text AS table_name `
+          + `WHERE EXISTS (SELECT 1 FROM public.${name} WHERE archive_id = $1)`
+        ))
+        .join(" UNION ALL "),
+      [archiveId]
+    );
+    if (unsupported.rows.length > 0) {
+      throw new Error(
+        `Canonical public demo fixture rotation found unsupported product data in ${unsupported.rows
+          .map((row) => row.table_name)
+          .join(", ")}.`
+      );
+    }
+
+    await persistWorkspace(client, archiveId, createDemoWorkspace());
+    const updated = await client.query(
+      `UPDATE archives
+       SET demo_fixture_version = $2
+       WHERE id = $1
+         AND dataset_mode = 'demo'
+         AND demo_fixture_version = $3
+       RETURNING id`,
+      [archiveId, demoFixtureVersion, expectedPreviousFixtureVersion]
+    );
+    if (updated.rowCount !== 1) {
+      throw new Error("The canonical public demo fixture changed during rotation.");
+    }
+    return {
+      archiveId,
+      previousDemoFixtureVersion: expectedPreviousFixtureVersion,
+      demoFixtureVersion,
+      status: "rotated"
+    };
   });
 }
 

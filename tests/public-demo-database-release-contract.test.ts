@@ -58,6 +58,7 @@ describe("public demo database release contract", () => {
 
     const firstDatabaseMutation = Math.min(
       workflow.indexOf("npm run db:migrate"),
+      workflow.indexOf("npm run archive:rotate-public-demo-fixture"),
       workflow.indexOf("npm run archive:provision")
     );
     expect(firstDatabaseMutation).toBeGreaterThan(identity.start);
@@ -83,6 +84,20 @@ describe("public demo database release contract", () => {
     expect(verification.contents).toContain("EXPECTED_ARCHIVE_ID: kinresolve-demo-public");
     expect(verification.contents).toContain("npm run db:migrations:verify-production");
     expect(verification.contents).not.toMatch(/^\s*DATABASE_URL:/m);
+  });
+
+  it("rotates an explicitly expected stale canonical fixture before idempotent provisioning", () => {
+    const migration = workflowStep("Migrate and provision only the isolated demo database");
+    const rotation = migration.contents.indexOf("npm run archive:rotate-public-demo-fixture");
+    const provisioning = migration.contents.indexOf("npm run archive:provision");
+
+    expect(rotation).toBeGreaterThan(-1);
+    expect(rotation).toBeLessThan(provisioning);
+    expect(migration.contents).toContain("-- --from-version 2");
+    expect(migration.contents).toContain(
+      "DEMO_FIXTURE_ROTATION_CONFIRMATION: ROTATE-DEMO-FIXTURE:kinresolve-demo-public:2:3"
+    );
+    expect(migration.contents).toContain("KINRESOLVE_PUBLIC_DEMO_ENABLED: \"true\"");
   });
 
   it("uses the protected public-demo runtime credential and binds it to candidate health", () => {

@@ -6,6 +6,8 @@ export {
   getArchiveProvisioning,
   provisionArchive,
   requireProvisionedArchive,
+  rotateCanonicalPublicDemoFixture,
   type ArchiveProvisioning,
-  type ArchiveProvisioningResult
+  type ArchiveProvisioningResult,
+  type CanonicalPublicDemoFixtureRotationResult
 } from "./workspace-store";

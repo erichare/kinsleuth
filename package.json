@@ -30,6 +30,7 @@
     "db:identity": "node --experimental-strip-types scripts/database-identity.mjs",
     "storage:identity:provision": "node --experimental-strip-types scripts/provision-object-storage-identity.mjs",
     "archive:provision": "node scripts/provision-archive.mjs",
+    "archive:rotate-public-demo-fixture": "node --import tsx scripts/rotate-public-demo-fixture-command.ts",
     "migrations:verify": "node --experimental-strip-types scripts/verify-migration-history.mjs",
     "release:validate": "node --experimental-strip-types scripts/validate-release-contract.mjs",
     "vercel:config:validate": "node --experimental-strip-types scripts/validate-vercel-deployment-config.mjs",

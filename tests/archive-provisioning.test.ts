@@ -5,7 +5,8 @@ import {
   demoFixtureVersion,
   getArchiveProvisioning,
   provisionArchive,
-  requireProvisionedArchive
+  requireProvisionedArchive,
+  rotateCanonicalPublicDemoFixture
 } from "@/lib/archive-provisioning";
 import { closeDatabasePools, query } from "@/lib/db";
 import { readArchiveBranding } from "@/lib/store/people-queries";
@@ -168,5 +169,130 @@ describeIfDatabase("archive provisioning", () => {
       datasetMode: "demo",
       demoFixtureVersion
     });
+  });
+
+  it("rotates only the canonical public demo fixture from the explicitly expected version", async () => {
+    const canonicalOptions = {
+      databaseUrl: databaseUrl!,
+      archiveId: "kinresolve-demo-public",
+      datasetMode: "demo" as const
+    };
+    archiveIds.push(canonicalOptions.archiveId);
+    await provisionArchive("demo", canonicalOptions);
+    const before = await query<{ api_id: string }>(
+      "SELECT api_id::text FROM people WHERE archive_id = $1 AND id = 'p-nora-hartwell'",
+      [canonicalOptions.archiveId],
+      canonicalOptions
+    );
+    await createCase({ title: "Remove during rotation", question: "Is this disposable?" }, canonicalOptions);
+    await query(
+      `DELETE FROM people
+       WHERE archive_id = $1
+         AND id = ANY($2::text[])`,
+      [
+        canonicalOptions.archiveId,
+        [
+          "p-orson-hartwell",
+          "p-lydia-thorne",
+          "p-luca-bellandi",
+          "p-mira-solari",
+          "p-micah-mercer",
+          "p-eliza-fenwick",
+          "p-declan-rowan",
+          "p-eileen-pike"
+        ]
+      ],
+      canonicalOptions
+    );
+    await query(
+      "UPDATE archives SET demo_fixture_version = 2 WHERE id = $1",
+      [canonicalOptions.archiveId],
+      canonicalOptions
+    );
+    await expect(
+      query<{ total: number }>(
+        "SELECT count(*)::int AS total FROM people WHERE archive_id = $1",
+        [canonicalOptions.archiveId],
+        canonicalOptions
+      )
+    ).resolves.toMatchObject({ rows: [{ total: 8 }] });
+
+    await expect(
+      rotateCanonicalPublicDemoFixture(2, canonicalOptions)
+    ).resolves.toEqual({
+      archiveId: canonicalOptions.archiveId,
+      previousDemoFixtureVersion: 2,
+      demoFixtureVersion,
+      status: "rotated"
+    });
+
+    const workspace = await readWorkspace(canonicalOptions);
+    const after = await query<{ api_id: string }>(
+      "SELECT api_id::text FROM people WHERE archive_id = $1 AND id = 'p-nora-hartwell'",
+      [canonicalOptions.archiveId],
+      canonicalOptions
+    );
+    expect(workspace.people).toHaveLength(16);
+    expect(workspace.cases.some((item) => item.title === "Remove during rotation")).toBe(false);
+    expect(after.rows[0]?.api_id).toBe(before.rows[0]?.api_id);
+    await expect(
+      rotateCanonicalPublicDemoFixture(2, canonicalOptions)
+    ).resolves.toMatchObject({ status: "already-current", demoFixtureVersion });
+  });
+
+  it("refuses canonical rotation from an unexpected version or for another archive", async () => {
+    const canonicalOptions = {
+      databaseUrl: databaseUrl!,
+      archiveId: "kinresolve-demo-public",
+      datasetMode: "demo" as const
+    };
+    archiveIds.push(canonicalOptions.archiveId);
+    await provisionArchive("demo", canonicalOptions);
+    await query(
+      "UPDATE archives SET demo_fixture_version = 1 WHERE id = $1",
+      [canonicalOptions.archiveId],
+      canonicalOptions
+    );
+
+    await expect(
+      rotateCanonicalPublicDemoFixture(2, canonicalOptions)
+    ).rejects.toThrow(/expected fixture version 2.*persisted version is 1/i);
+    await expect(
+      rotateCanonicalPublicDemoFixture(2, storeOptions)
+    ).rejects.toThrow(/only.*kinresolve-demo-public/i);
+  });
+
+  it("refuses to discard integration product data during canonical rotation", async () => {
+    const canonicalOptions = {
+      databaseUrl: databaseUrl!,
+      archiveId: "kinresolve-demo-public",
+      datasetMode: "demo" as const
+    };
+    archiveIds.push(canonicalOptions.archiveId);
+    await provisionArchive("demo", canonicalOptions);
+    await query(
+      "UPDATE archives SET demo_fixture_version = 2 WHERE id = $1",
+      [canonicalOptions.archiveId],
+      canonicalOptions
+    );
+    await query(
+      `INSERT INTO integration_connections
+         (archive_id, id, provider, authority, display_name, capabilities)
+       VALUES ($1, 'rotation-connection', 'gedcom', 'local-file', 'Rotation guard',
+               '{"read": true, "writeback": false}'::jsonb)`,
+      [canonicalOptions.archiveId],
+      canonicalOptions
+    );
+
+    await expect(
+      rotateCanonicalPublicDemoFixture(2, canonicalOptions)
+    ).rejects.toThrow(/unsupported product data.*integration_connections/i);
+    await expect(
+      query<{ demo_fixture_version: number }>(
+        "SELECT demo_fixture_version FROM archives WHERE id = $1",
+        [canonicalOptions.archiveId],
+        canonicalOptions
+      )
+    ).resolves.toMatchObject({ rows: [{ demo_fixture_version: 2 }] });
   });
 });
