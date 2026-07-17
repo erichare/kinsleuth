@@ -28,4 +28,20 @@ describe("direct Node probe CLIs", () => {
     expect(result.stderr).toBe(expectedError);
     expect(result.stderr).not.toContain("ERR_MODULE_NOT_FOUND");
   });
+
+  it("loads the public demo cleanup bootstrap module graph through tsx", () => {
+    const result = spawnSync(process.execPath, [
+      "--import",
+      "tsx",
+      "scripts/public-demo-cleanup-bootstrap.mjs"
+    ], {
+      cwd: process.cwd(),
+      encoding: "utf8"
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stdout).toBe("");
+    expect(result.stderr).toBe("Protected public demo cleanup bootstrap failed.\n");
+    expect(result.stderr).not.toContain("ERR_MODULE_NOT_FOUND");
+  });
 });

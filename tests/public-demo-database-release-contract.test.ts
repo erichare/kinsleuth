@@ -92,4 +92,31 @@ describe("public demo database release contract", () => {
       "EXPECTED_RUNTIME_ROLE_IDENTITY_SHA256: ${{ steps.runtime_grants.outputs.runtime_role_identity_sha256 }}"
     );
   });
+
+  it("bootstraps lifecycle cleanup on the staged candidate before requiring fresh health", () => {
+    const runtimeGrant = workflowStep("Grant and re-attest public demo runtime access");
+    const candidate = workflowStep("Fetch and validate the exact candidate record");
+    const protection = workflowStep("Prove every generated candidate origin remains protected");
+    const bootstrap = workflowStep("Bootstrap lifecycle cleanup before staged candidate health");
+    const health = workflowStep("Prove protected public demo operational health on the candidate");
+
+    expect(bootstrap.start).toBeGreaterThan(candidate.start);
+    expect(bootstrap.start).toBeGreaterThan(protection.start);
+    expect(bootstrap.start).toBeGreaterThan(runtimeGrant.start);
+    expect(bootstrap.start).toBeLessThan(health.start);
+    expect(bootstrap.contents).toContain(
+      "EXPECTED_RUNTIME_ROLE_IDENTITY_SHA256: ${{ steps.runtime_grants.outputs.runtime_role_identity_sha256 }}"
+    );
+    expect(bootstrap.contents).toContain(
+      "PUBLIC_DEMO_RUNTIME_DATABASE_URL: ${{ secrets.PUBLIC_DEMO_RUNTIME_DATABASE_URL }}"
+    );
+    expect(bootstrap.contents).toContain('DATABASE_AUTO_MIGRATE: "false"');
+    expect(bootstrap.contents).toContain("KINRESOLVE_DATASET_MODE: demo");
+    expect(bootstrap.contents).toContain('KINRESOLVE_PUBLIC_DEMO_ENABLED: "true"');
+    expect(bootstrap.contents).toContain(
+      "ROLLBACK_KIND: ${{ steps.previous.outputs.rollback_kind }}"
+    );
+    expect(bootstrap.contents).toContain("scripts/public-demo-cleanup-bootstrap.mjs");
+    expect(bootstrap.contents).not.toContain("CRON_SECRET");
+  });
 });

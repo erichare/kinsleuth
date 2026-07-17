@@ -19,7 +19,22 @@ describe("runtime database role identity", () => {
       runtimeDatabaseRoleIdentitySha256("krdemo_runtime")
     );
     expect(mocks.query).toHaveBeenCalledExactlyOnceWith(
-      "SELECT current_user::text AS role_name"
+      "SELECT current_user::text AS role_name",
+      [],
+      {}
+    );
+  });
+
+  it("can bind the role proof to an explicit protected runtime credential", async () => {
+    mocks.query.mockResolvedValue({ rows: [{ role_name: "krdemo_runtime" }] });
+    const options = { databaseUrl: "postgresql://runtime:synthetic@db.example.test/postgres" };
+
+    await readRuntimeDatabaseRoleIdentitySha256(options);
+
+    expect(mocks.query).toHaveBeenCalledExactlyOnceWith(
+      "SELECT current_user::text AS role_name",
+      [],
+      options
     );
   });
 

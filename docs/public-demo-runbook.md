@@ -124,8 +124,13 @@ and hostname identities match, and the demo database differs from production. It
    `INITIALIZING/STAGED` record remains retryable and can never reach canaries or promotion.
    The candidate carries exact SHA/run/version plus `releaseRole=public-demo`,
    `datasetMode=demo`, and `canonicalArchiveId=kinresolve-demo-public` metadata;
-5. runs protected health, Chromium/WebKit/Firefox journeys, archive-isolation/reset checks,
-   and the 25-session capacity/p95 gate; and
+5. uses the already attested runtime credential to prepare lifecycle health. When the
+   canonical target is holding, it runs the existing leased, retry-safe cleanup and proves
+   the fresh idle postcondition. When the canonical target is a live demo, it never mutates
+   cleanup state and requires the scheduler heartbeat to already be healthy; stale, failed,
+   or interrupted state blocks release. The workflow then runs protected health,
+   Chromium/WebKit/Firefox journeys, archive-isolation/reset checks, and the 25-session
+   capacity/p95 gate; and
 6. rechecks current `main`, promotes the exact candidate, proves the canonical deployment,
    then runs the full public monitor.
 

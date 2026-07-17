@@ -571,6 +571,17 @@ jobs:
           node --experimental-strip-types scripts/probe-vercel-candidate-protection.mjs
           "$RUNNER_TEMP/public-demo-candidate.json"
 
+      - name: Bootstrap lifecycle cleanup before staged candidate health
+        timeout-minutes: 5
+        env:
+          DATABASE_AUTO_MIGRATE: "false"
+          EXPECTED_RUNTIME_ROLE_IDENTITY_SHA256: ${{ steps.runtime_grants.outputs.runtime_role_identity_sha256 }}
+          KINRESOLVE_DATASET_MODE: demo
+          KINRESOLVE_PUBLIC_DEMO_ENABLED: "true"
+          PUBLIC_DEMO_RUNTIME_DATABASE_URL: ${{ secrets.PUBLIC_DEMO_RUNTIME_DATABASE_URL }}
+          ROLLBACK_KIND: ${{ steps.previous.outputs.rollback_kind }}
+        run: node --import tsx scripts/public-demo-cleanup-bootstrap.mjs
+
       - name: Prove protected public demo operational health on the candidate
         env:
           EXPECTED_RUNTIME_ROLE_IDENTITY_SHA256: ${{ steps.runtime_grants.outputs.runtime_role_identity_sha256 }}
