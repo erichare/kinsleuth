@@ -43,6 +43,66 @@ describe("public demo guided case journey", () => {
     expect(styles).toMatch(/@media \(max-width: 520px\)[\s\S]*\.demo-signature-grid/);
   });
 
+  it("uses a minmax column on the guided journey grid root", async () => {
+    const styles = await source("app/globals.css");
+    const rule = styles.match(/\.demo-guided-journey\s*\{([^{}]*)\}/)?.[1] ?? "";
+
+    expect(rule).toMatch(/grid-template-columns:\s*minmax\(0,\s*1fr\)\s*;/);
+  });
+
+  it("uses a minmax single column for outcomes below 760px", async () => {
+    const styles = await source("app/globals.css");
+    const start = styles.indexOf("@media (max-width: 760px)");
+    const end = styles.indexOf("@media (max-width: 520px)", start);
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+    const media = styles.slice(start, end);
+    const rule = media.match(/\.demo-outcome-options\s*\{([^{}]*)\}/)?.[1] ?? "";
+
+    expect(rule).toMatch(/grid-template-columns:\s*minmax\(0,\s*1fr\)\s*;/);
+    expect(rule).not.toMatch(/grid-template-columns:\s*1fr\s*;/);
+  });
+
+  it("uses a minmax single column for signatures below 520px", async () => {
+    const styles = await source("app/globals.css");
+    const start = styles.indexOf("@media (max-width: 520px)");
+    const end = styles.indexOf("/* Private guided research loop", start);
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+    const media = styles.slice(start, end);
+    const rule = media.match(/\.demo-signature-grid\s*\{([^{}]*)\}/)?.[1] ?? "";
+
+    expect(rule).toMatch(/grid-template-columns:\s*minmax\(0,\s*1fr\)\s*;/);
+    expect(rule).not.toMatch(/grid-template-columns:\s*1fr\s*;/);
+  });
+
+  it("uses a minmax column for the curated AI grid", async () => {
+    const styles = await source("app/globals.css");
+    const rule = styles.match(/\.demo-curated-ai\s*\{([^{}]*)\}/)?.[1] ?? "";
+
+    expect(rule).toMatch(/display:\s*grid\s*;/);
+    expect(rule).toMatch(/grid-template-columns:\s*minmax\(0,\s*1fr\)\s*;/);
+  });
+
+  it("uses a minmax column for the AI result grid", async () => {
+    const styles = await source("app/globals.css");
+    const rule = [...styles.matchAll(/(?:^|\n)\.demo-ai-result\s*\{([^{}]*)\}/g)]
+      .map((match) => match[1] ?? "")
+      .find((body) => /display:\s*grid\s*;/.test(body)) ?? "";
+
+    expect(rule).toMatch(/display:\s*grid\s*;/);
+    expect(rule).toMatch(/grid-template-columns:\s*minmax\(0,\s*1fr\)\s*;/);
+  });
+
+  it("wraps bounded AI result text at any character when necessary", async () => {
+    const styles = await source("app/globals.css");
+    const rule = [...styles.matchAll(/(?:^|\n)\.demo-ai-result\s*\{([^{}]*)\}/g)]
+      .map((match) => match[1] ?? "")
+      .find((body) => /display:\s*grid\s*;/.test(body)) ?? "";
+
+    expect(rule).toMatch(/overflow-wrap:\s*anywhere\s*;/);
+  });
+
   it("gives the next-assignment paragraph AA text contrast on its accent background", async () => {
     const styles = await source("app/globals.css");
     const mutedRule = styles.match(
