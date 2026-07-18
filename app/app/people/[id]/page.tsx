@@ -7,6 +7,7 @@ import { PersonCurationPanel } from "@/components/person-curation-panel";
 import { PersonProfileTabs } from "@/components/person-profile-tabs";
 import { PersonMonogram, Status } from "@/components/ui";
 import { isDnaResearchCase, projectResearchCaseForDnaCapability } from "@/lib/case-search";
+import { projectDemoSeededAnalysisRun } from "@/lib/demo-ai-runs";
 import { resolveHostedCapabilities } from "@/lib/hosted-capabilities";
 import { getSessionContext, workspaceOptionsForSession } from "@/lib/auth-session";
 import { buildPersonProfile } from "@/lib/person-profile";
@@ -29,12 +30,20 @@ export default async function AppPersonPage({ params }: { params: Promise<{ id: 
   const visibleCases = (workspace.cases ?? [])
     .filter((researchCase) => capabilities.dna || !isDnaResearchCase(researchCase))
     .map((researchCase) => projectResearchCaseForDnaCapability(researchCase, capabilities.dna));
+  const profileAiRuns = (workspace.aiRuns ?? []).flatMap((run) => {
+    const seededRun = capabilities.datasetMode === "demo"
+      ? projectDemoSeededAnalysisRun(run)
+      : undefined;
+    if (seededRun) return [seededRun];
+    return capabilities.dna ? [run] : [];
+  });
   const profile = buildPersonProfile(person, {
     ...workspace,
     cases: visibleCases,
     // Saved answers can contain DNA details even when their structured context
-    // is incomplete, so hide them at the server boundary with the capability.
-    aiRuns: capabilities.dna ? (workspace.aiRuns ?? []) : [],
+    // is incomplete. When DNA is disabled, admit only the exact repository-owned
+    // fictional fixture analyses; arbitrary saved answers remain server-hidden.
+    aiRuns: profileAiRuns,
     includeProviderMetadata: capabilities.externalAi,
     includeDemoMedia: capabilities.datasetMode === "demo"
   });

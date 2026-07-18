@@ -5,15 +5,30 @@ import { describe, expect, it } from "vitest";
 const root = process.cwd();
 
 describe("public demo guided case journey", () => {
-  it("replaces generic case mutations with the dedicated fixed-input journey for guests", async () => {
+  it("keeps the fixed-input signature journey exclusive to the Mercer-March demo case", async () => {
     const page = await source("app/app/cases/[id]/page.tsx");
     const journey = await source("components/demo-guided-case-journey.tsx");
+    const contract = await source("lib/public-demo-contract.ts");
 
     expect(page).toContain('session.kind === "demo-guest"');
-    expect(page).toContain("DemoGuidedCaseJourney");
+    expect(page).toContain('import { publicDemoGuidedCaseId } from "@/lib/public-demo-contract"');
+    expect(page).toMatch(/visibleResearchCase\.id\s*===\s*publicDemoGuidedCaseId[\s\S]{0,160}<DemoGuidedCaseJourney/);
+    expect(contract).toMatch(/publicDemoGuidedCaseId\s*=\s*["']case-mercer-march-identity["']/);
     expect(journey).toContain("/api/demo/cases/");
     expect(journey).toContain('command: "record_outcome"');
     expect(journey).not.toMatch(/<textarea|contentEditable|type=["']text["']/i);
+  });
+
+  it("shows every non-guided demo case a read-only research brief without mutation controls", async () => {
+    const page = await source("app/app/cases/[id]/page.tsx");
+    const brief = await source("components/demo-case-research-brief.tsx");
+
+    expect(page).toMatch(/visibleResearchCase\.id\s*===\s*publicDemoGuidedCaseId[\s\S]{0,240}<DemoGuidedCaseJourney[\s\S]{0,160}:\s*\(\s*<DemoCaseResearchBrief/);
+    expect(brief).toContain("Working hypotheses");
+    expect(brief).toContain("Research guidance");
+    expect(brief).toContain("Latest result");
+    expect(brief).toContain("researchScopeDetails");
+    expect(brief).not.toMatch(/<button|<form|<input|<select|<textarea/i);
   });
 
   it("shows both fictional signature records and only fixed research outcomes", async () => {

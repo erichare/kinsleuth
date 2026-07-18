@@ -22,7 +22,27 @@ const people: PersonSummary[] = [
     privacy: "private",
     published: false,
     livingStatus: "unknown",
-    notes: "Family story mentions Ceraluna Alta."
+    notes: "Family story mentions Ceraluna Alta.",
+    facts: [
+      {
+        id: "fact-amalia-name-malia",
+        type: "NAME",
+        value: "Malia Bellandi",
+        confidence: 0.74
+      },
+      {
+        id: "fact-amalia-name-malia-duplicate",
+        type: " name ",
+        value: "  Malia Bellandi  ",
+        confidence: 0.7
+      },
+      {
+        id: "fact-amalia-name-current",
+        type: "NAME",
+        value: "Amalia Rose Bellandi",
+        confidence: 0.91
+      }
+    ]
   }),
   person({
     id: "p-living",
@@ -73,6 +93,17 @@ describe("people search", () => {
       protectedCount: 2,
       living: 1
     });
+  });
+
+  it("projects distinct recorded names as aliases and keeps them searchable", () => {
+    const result = searchPeoplePage(people, { query: "malia" }, { page: 1, pageSize: 50 });
+
+    expect(result.items).toEqual([
+      expect.objectContaining({
+        id: "p-amalia-bellandi",
+        aliases: ["Malia Bellandi"]
+      })
+    ]);
   });
 });
 

@@ -1526,6 +1526,62 @@ textarea {
   outline-offset: -3px;
 }
 
+.person-identity-section {
+  margin-bottom: 24px;
+  border: 1px solid rgba(184, 123, 24, 0.22);
+  border-radius: 10px;
+  padding: 18px;
+  background: linear-gradient(135deg, rgba(255, 250, 237, 0.88), rgba(255, 255, 253, 0.94));
+}
+
+.person-identity-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.person-identity-heading h2 {
+  margin: 4px 0 0;
+  font-size: 24px;
+}
+
+.person-identity-section > p {
+  max-width: 840px;
+  margin: 9px 0 16px;
+  line-height: 1.55;
+}
+
+.person-identity-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 11px;
+}
+
+.person-identity-card {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-left: 3px solid rgba(184, 123, 24, 0.56);
+  border-radius: 8px;
+  padding: 13px;
+  background: rgba(255, 255, 253, 0.92);
+}
+
+.person-identity-card:first-child {
+  border-left-color: rgba(0, 107, 88, 0.52);
+}
+
+.person-identity-card h3 {
+  margin: 12px 0 4px;
+  font-size: 19px;
+}
+
+.person-identity-card p {
+  overflow-wrap: anywhere;
+  margin: 5px 0 0;
+  line-height: 1.45;
+}
+
 .person-source-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1581,6 +1637,10 @@ textarea {
 .person-source-card-body p {
   overflow-wrap: anywhere;
   line-height: 1.55;
+}
+
+.person-source-support {
+  margin: 10px 0;
 }
 
 .person-source-limit {
@@ -1722,6 +1782,11 @@ textarea {
   line-height: 1.6;
 }
 
+.person-insight-link {
+  width: fit-content;
+  margin-top: 12px;
+}
+
 .saved-analysis-section {
   margin-bottom: 24px;
 }
@@ -1745,6 +1810,10 @@ textarea {
 }
 
 @media (max-width: 600px) {
+  .person-identity-heading {
+    flex-direction: column;
+  }
+
   .person-profile-tabs {
     padding: 0 12px;
   }
@@ -1755,9 +1824,13 @@ textarea {
   }
 
   .person-source-card {
-    grid-template-columns: 112px minmax(0, 1fr);
+    grid-template-columns: 1fr;
     gap: 11px;
     padding: 11px;
+  }
+
+  .person-source-card .evidence-scan-image {
+    height: 176px;
   }
 
   .person-source-placeholder {
@@ -1780,6 +1853,13 @@ textarea {
     align-items: flex-start;
     flex-direction: column;
     gap: 9px;
+  }
+
+  .person-relationship-card strong,
+  .person-relationship-card .muted {
+    overflow: visible;
+    text-overflow: initial;
+    white-space: normal;
   }
 }
 
@@ -2220,14 +2300,149 @@ textarea {
   font-size: 10px;
 }
 
+.evidence-record-details {
+  min-width: 0;
+  margin-top: 14px;
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+}
+
+.evidence-record-details > summary {
+  width: fit-content;
+  border-radius: 5px;
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.evidence-record-details > summary:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.evidence-record-details > summary:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 3px;
+}
+
+.evidence-record-details-body {
+  display: grid;
+  gap: 16px;
+  margin-top: 12px;
+  border-radius: 8px;
+  padding: 13px;
+  background: rgba(238, 244, 241, 0.58);
+}
+
+.evidence-record-metadata {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px 14px;
+  margin: 0;
+}
+
+.evidence-record-metadata div {
+  min-width: 0;
+}
+
+.evidence-record-metadata dt {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.evidence-record-metadata dd {
+  overflow-wrap: anywhere;
+  margin: 2px 0 0;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.evidence-record-transcript {
+  min-width: 0;
+}
+
+.evidence-record-transcript h3 {
+  margin: 0 0 8px;
+  font-size: 17px;
+}
+
+.evidence-record-table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: rgba(255, 255, 253, 0.94);
+}
+
+.evidence-record-table-scroll:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.evidence-record-table-scroll table {
+  width: 100%;
+  min-width: 520px;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.evidence-record-table-scroll caption {
+  padding: 9px 10px;
+  color: var(--muted);
+  font-weight: 750;
+  text-align: left;
+}
+
+.evidence-record-table-scroll th,
+.evidence-record-table-scroll td {
+  border-top: 1px solid var(--line);
+  padding: 8px 10px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.evidence-record-table-scroll th {
+  color: var(--accent-strong);
+  background: rgba(226, 244, 237, 0.54);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.evidence-record-letter {
+  border-left: 3px solid rgba(184, 123, 24, 0.36);
+  padding: 2px 0 2px 13px;
+}
+
+.evidence-record-letter p {
+  margin: 0 0 8px;
+  line-height: 1.65;
+}
+
+.evidence-record-letter p:last-child {
+  margin-bottom: 0;
+}
+
+.evidence-record-details--compact .evidence-record-details-body {
+  padding: 10px;
+}
+
 @media (max-width: 540px) {
   .evidence-item--scan {
-    grid-template-columns: 112px minmax(0, 1fr);
+    grid-template-columns: 1fr;
     gap: 12px;
   }
 
   .evidence-scan-image {
-    height: 96px;
+    height: 176px;
+  }
+
+  .evidence-record-metadata {
+    grid-template-columns: 1fr;
   }
 }
 

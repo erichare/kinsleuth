@@ -23,6 +23,7 @@ import {
 } from "./browser-canary-contract.ts";
 
 const stateSchemaVersion = 4;
+const maxStateBytes = 64 * 1024;
 const fixtureObjectPurpose = "integration-artifacts";
 type CanonicalDigest = {
   rows: number;
@@ -788,7 +789,7 @@ async function readState(
   databaseIdentity: string | undefined
 ): Promise<CanaryState> {
   const metadata = await stat(statePath);
-  if (!metadata.isFile() || metadata.size < 2 || metadata.size > 32 * 1024) throw new Error();
+  if (!metadata.isFile() || metadata.size < 2 || metadata.size > maxStateBytes) throw new Error();
   const parsed = JSON.parse(await readFile(statePath, "utf8")) as unknown;
   if (
     !isRecord(parsed)

@@ -258,6 +258,9 @@ export function PeopleWorkspace({
                   <Link className="person-name-link" href={`/app/people/${encodeURIComponent(person.id)}`}>
                     <span>{person.displayName}</span>
                     <small>{person.surname || person.slug}</small>
+                    {person.aliases.length > 0 ? (
+                      <small>Also recorded as {person.aliases.join(" · ")}</small>
+                    ) : null}
                   </Link>
                 </td>
                 <td>{formatVital(person.birthDate, person.birthPlace)}</td>
@@ -324,6 +327,7 @@ function searchInitialPeople(
         person.id,
         person.slug,
         person.displayName,
+        person.aliases.join(" "),
         person.surname,
         person.birthDate,
         person.birthPlace,

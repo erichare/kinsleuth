@@ -6,7 +6,7 @@ import { resolvePublicDemoFixtureRotationRequest } from "@/scripts/rotate-public
 
 const validEnvironment = {
   DATABASE_URL: "postgres://demo.invalid/kinresolve",
-  DEMO_FIXTURE_ROTATION_CONFIRMATION: "ROTATE-DEMO-FIXTURE:kinresolve-demo-public:3:4",
+  DEMO_FIXTURE_ROTATION_CONFIRMATION: "ROTATE-DEMO-FIXTURE:kinresolve-demo-public:4:5",
   KINSLEUTH_ARCHIVE_ID: "kinresolve-demo-public",
   KINRESOLVE_DATASET_MODE: "demo",
   KINRESOLVE_DEPLOYMENT_MODE: "hosted",
@@ -14,13 +14,13 @@ const validEnvironment = {
 };
 
 describe("public demo fixture rotation command", () => {
-  it("binds an exact v3-to-v4 request to the hosted canonical public demo", () => {
+  it("binds an exact v4-to-v5 request to the hosted canonical public demo", () => {
     expect(
-      resolvePublicDemoFixtureRotationRequest(["--from-version", "3"], validEnvironment)
+      resolvePublicDemoFixtureRotationRequest(["--from-version", "4"], validEnvironment)
     ).toEqual({
       archiveId: "kinresolve-demo-public",
       databaseUrl: validEnvironment.DATABASE_URL,
-      expectedPreviousFixtureVersion: 3
+      expectedPreviousFixtureVersion: 4
     });
   });
 
@@ -32,14 +32,14 @@ describe("public demo fixture rotation command", () => {
     [{ ...validEnvironment, DEMO_FIXTURE_ROTATION_CONFIRMATION: "wrong" }, /exact fixture rotation confirmation/i]
   ])("refuses an unsafe environment", (environment, message) => {
     expect(() =>
-      resolvePublicDemoFixtureRotationRequest(["--from-version", "3"], environment)
+      resolvePublicDemoFixtureRotationRequest(["--from-version", "4"], environment)
     ).toThrow(message);
   });
 
   it("refuses implicit, stale, or malformed version transitions", () => {
     expect(() => resolvePublicDemoFixtureRotationRequest([], validEnvironment)).toThrow(/usage/i);
     expect(() =>
-      resolvePublicDemoFixtureRotationRequest(["--from-version", "2"], validEnvironment)
+      resolvePublicDemoFixtureRotationRequest(["--from-version", "3"], validEnvironment)
     ).toThrow(/confirmation/i);
     expect(() =>
       resolvePublicDemoFixtureRotationRequest(["--from-version", "three"], validEnvironment)

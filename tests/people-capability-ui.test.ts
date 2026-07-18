@@ -11,6 +11,7 @@ const result: PeopleSearchResult = {
       id: "person-1",
       slug: "ada-example",
       displayName: "Ada Example",
+      aliases: ["Ada Northwood"],
       surname: "Example",
       livingStatus: "deceased",
       privacy: "private",
@@ -59,5 +60,6 @@ describe("people capability UI", () => {
     expect(html).toMatch(/publication review/i);
     expect(html).toMatch(/>Publication</i);
     expect(html).toMatch(/>published</i);
+    expect(html).toMatch(/also recorded as Ada Northwood/i);
   });
 });

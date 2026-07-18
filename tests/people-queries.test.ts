@@ -65,6 +65,13 @@ async function seededWorkspace() {
     [storeOptions.archiveId, "@I1@"],
     storeOptions
   );
+  await query(
+    `INSERT INTO person_facts (
+       id, archive_id, person_id, fact_type, value_text, privacy, confidence, sort_order
+     ) VALUES ($1, $2, $3, 'NAME', $4, 'public', 0.720, 99)`,
+    ["fact-lucia-recorded-name", storeOptions.archiveId, "@I1@", "Lucia Rossi"],
+    storeOptions
+  );
   await updatePersonCuration("@I2@", { privacy: "sensitive", livingStatus: "living" }, storeOptions);
   return readWorkspace(storeOptions);
 }
@@ -77,6 +84,7 @@ describeIfDatabase("SQL people search", () => {
       {},
       { query: "bellandi" },
       { query: "Bellàndi" },
+      { query: "lucia rossi" },
       { query: "ceraluna alta" },
       { query: "shipwright" },
       { query: "lucia ceraluna alta" },
@@ -121,7 +129,8 @@ describeIfDatabase("SQL people search", () => {
       livingStatus: "deceased",
       privacy: "public",
       published: true,
-      factCount: 2
+      factCount: 3,
+      aliases: ["Lucia Rossi"]
     });
   });
 

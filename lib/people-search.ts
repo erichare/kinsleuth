@@ -21,6 +21,7 @@ export type PeopleListItem = {
   id: string;
   slug: string;
   displayName: string;
+  aliases: string[];
   surname?: string;
   birthDate?: string;
   birthPlace?: string;
@@ -92,6 +93,12 @@ export function toPeopleListItem(person: PersonSummary): PeopleListItem {
     id: person.id,
     slug: person.slug,
     displayName: person.displayName,
+    aliases: normalizeAliases(
+      person.facts
+        .filter((fact) => fact.type.trim().toUpperCase() === "NAME")
+        .map((fact) => fact.value),
+      person.displayName
+    ),
     surname: person.surname,
     birthDate: person.birthDate,
     birthPlace: person.birthPlace,
@@ -102,6 +109,26 @@ export function toPeopleListItem(person: PersonSummary): PeopleListItem {
     published: person.published,
     factCount: person.facts.length
   };
+}
+
+function normalizeAliases(values: Array<string | undefined>, displayName: string): string[] {
+  const displayNameKey = normalizeAliasKey(displayName);
+  const aliases = new Map<string, string>();
+
+  for (const value of values) {
+    const alias = value?.trim();
+    const key = normalizeAliasKey(alias ?? "");
+    if (!alias || !key || key === displayNameKey || aliases.has(key)) {
+      continue;
+    }
+    aliases.set(key, alias);
+  }
+
+  return [...aliases.values()];
+}
+
+function normalizeAliasKey(value: string): string {
+  return normalizeSearchValue(value).replace(/\s+/g, " ").trim();
 }
 
 export function buildPersonSearchText(person: PersonSummary): string {

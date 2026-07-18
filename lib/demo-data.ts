@@ -51,6 +51,16 @@ const demoPersonDrafts: PersonSummary[] = [
         privacy: "public"
       },
       {
+        id: "fact-nora-name-mercer",
+        type: "NAME",
+        date: "8 Jan 1922",
+        place: "Lantern Bay, Wisconsin",
+        value: "Nora Elise Hartwell Mercer",
+        source: "Fictional 1922 Nora Hartwell household journal",
+        confidence: 0.86,
+        privacy: "public"
+      },
+      {
         id: "fact-nora-residence",
         type: "RESI",
         date: "1921",
@@ -115,6 +125,16 @@ const demoPersonDrafts: PersonSummary[] = [
         privacy: "private"
       },
       {
+        id: "fact-samuel-name-march",
+        type: "NAME",
+        date: "4 May 1907",
+        place: "Lantern Bay, Wisconsin",
+        value: "Samuel March",
+        source: "Fictional Lantern Bay passenger list",
+        confidence: 0.72,
+        privacy: "private"
+      },
+      {
         id: "fact-samuel-marriage",
         type: "MARR",
         date: "19 Oct 1909",
@@ -168,6 +188,16 @@ const demoPersonDrafts: PersonSummary[] = [
         privacy: "private"
       },
       {
+        id: "fact-amalia-name-malia-household",
+        type: "NAME",
+        date: "18 Mar 1868",
+        place: "Ceraluna Alta, Italy",
+        value: "Malia Bellandi",
+        source: "Fictional Ceraluna Alta household register",
+        confidence: 0.74,
+        privacy: "private"
+      },
+      {
         id: "fact-amalia-arrival",
         type: "IMMI",
         date: "2 Apr 1883",
@@ -177,12 +207,32 @@ const demoPersonDrafts: PersonSummary[] = [
         privacy: "private"
       },
       {
+        id: "fact-amalia-name-malia-passenger",
+        type: "NAME",
+        date: "2 Apr 1883",
+        place: "Lantern Bay, Wisconsin",
+        value: "Malia Bellandi",
+        source: "Fictional Ceraluna–Lantern passenger ledger",
+        confidence: 0.73,
+        privacy: "private"
+      },
+      {
         id: "fact-amalia-marriage",
         type: "MARR",
         date: "22 Sep 1885",
         place: "Lantern Bay, Wisconsin",
         source: "Fictional Lantern Bay marriage ledger",
         confidence: 0.87,
+        privacy: "private"
+      },
+      {
+        id: "fact-amalia-name-malia-signature",
+        type: "NAME",
+        date: "22 Sep 1885",
+        place: "Lantern Bay, Wisconsin",
+        value: "Malia Bellandi",
+        source: "Fictional Lantern Bay marriage application",
+        confidence: 0.86,
         privacy: "private"
       },
       {
@@ -293,6 +343,16 @@ const demoPersonDrafts: PersonSummary[] = [
         privacy: "private"
       },
       {
+        id: "fact-clara-name-vale",
+        type: "NAME",
+        date: "8 Jun 1935",
+        place: "Lantern Bay, Wisconsin",
+        value: "Clara Juniper Mercer Vale",
+        source: "Fictional Lantern Bay marriage register",
+        confidence: 0.88,
+        privacy: "private"
+      },
+      {
         id: "fact-clara-death",
         type: "DEAT",
         date: "5 May 1998",
@@ -388,6 +448,16 @@ const demoPersonDrafts: PersonSummary[] = [
         place: "Northstar Cove, Nova Scotia",
         source: "Fictional Northstar Cove chapel register",
         confidence: 0.86,
+        privacy: "private"
+      },
+      {
+        id: "fact-maeve-name-rowan",
+        type: "NAME",
+        date: "24 Jun 1883",
+        place: "Northstar Cove, Nova Scotia",
+        value: "Maeve Lenora Rowan",
+        source: "Fictional Northstar Cove chapel register",
+        confidence: 0.83,
         privacy: "private"
       },
       {
@@ -1183,19 +1253,11 @@ export const demoCases: ResearchCase[] = [
     ],
     evidence: [
       {
-        id: "ev-fictional-passenger-list",
-        title: "Fictional 1907 passenger list",
-        type: "Passenger list",
-        summary: "Lists Samuel March, age 21, traveling from Northstar Cove to Lantern Bay on 4 May 1907.",
-        confidence: 0.72,
-        linkedPersonId: "p-samuel-mercer"
-      },
-      {
-        id: "ev-fictional-marriage-signature",
-        title: "Fictional 1909 marriage signature",
-        type: "Vital record",
-        summary: "Samuel Mercer's 1909 signature has an unusually tall final stroke also visible in the passenger-list signature.",
-        confidence: 0.68,
+        id: "ev-fictional-northstar-household",
+        title: "Fictional 1901 Northstar Cove household schedule",
+        type: "Household schedule",
+        summary: "Lists Jonah and Maeve Mercer with their son Samuel R. Mercer, born 18 February 1886 and apprenticed in the lantern works.",
+        confidence: 0.88,
         linkedPersonId: "p-samuel-mercer"
       },
       {
@@ -1205,6 +1267,38 @@ export const demoCases: ResearchCase[] = [
         summary: "A 1906 letter says Samuel practiced signing both Mercer and March, without explaining why.",
         confidence: 0.61,
         linkedPersonId: "p-maeve-mercer"
+      },
+      {
+        id: "ev-fictional-northstar-departure",
+        title: "Fictional Northstar Cove departure ledger",
+        type: "Harbor ledger",
+        summary: "Certificate 418 records a 21-year-old lamp mechanic as S. M— leaving for Lantern B— on 1 May 1907; water damage hides the rest of the surname and destination.",
+        confidence: 0.66,
+        linkedPersonId: "p-samuel-mercer"
+      },
+      {
+        id: "ev-fictional-passenger-list",
+        title: "Fictional 1907 passenger list",
+        type: "Passenger list",
+        summary: "Lists Samuel March, age 21, traveling from Northstar Cove to Lantern Bay on 4 May 1907.",
+        confidence: 0.72,
+        linkedPersonId: "p-samuel-mercer"
+      },
+      {
+        id: "ev-fictional-lantern-directory",
+        title: "Fictional 1908–1909 Lantern Bay directory",
+        type: "City directory",
+        summary: "Prints Samuel March, laborer and boarder, and Samuel R. Mercer, lamp repairer and resident, as separate entries at 14 Dock Street.",
+        confidence: 0.59,
+        linkedPersonId: "p-samuel-mercer"
+      },
+      {
+        id: "ev-fictional-marriage-signature",
+        title: "Fictional 1909 marriage signature",
+        type: "Vital record",
+        summary: "Samuel Mercer's 1909 signature has an unusually tall final stroke also visible in the passenger-list signature.",
+        confidence: 0.68,
+        linkedPersonId: "p-samuel-mercer"
       }
     ],
     tasks: [
@@ -1299,12 +1393,27 @@ export const demoCases: ResearchCase[] = [
     ],
     evidence: [
       {
-        id: "ev-fictional-blue-tin-inventory",
-        title: "Fictional 1984 blue-tin inventory",
-        type: "Artifact inventory",
-        summary: "Tobias listed a brass key, a 1907 passenger notice, a 1921 repair receipt, violet thread, and an unidentified harbor photograph.",
-        confidence: 0.81,
-        linkedPersonId: "p-tobias-mercer"
+        id: "ev-fictional-blue-tin-passenger-notice",
+        title: "Fictional 1907 Lantern Packet passenger notice",
+        type: "Passenger notice",
+        summary: "Certificate 418 names Samuel March and dates one folded paper to 4 May 1907, but does not show when that paper entered the blue tin.",
+        confidence: 0.74,
+        linkedPersonId: "p-samuel-mercer"
+      },
+      {
+        id: "ev-fictional-blue-tin-repair-receipt",
+        title: "Fictional 1921 North Quay repair receipt",
+        type: "Commercial receipt",
+        summary: "A lamp-repair receipt for S. R. Mercer at 14 Dock Street is dated 8 February 1921, ruling out the complete surviving contents traveling together in 1907.",
+        confidence: 0.83,
+        linkedPersonId: "p-samuel-mercer"
+      },
+      {
+        id: "ev-fictional-blue-tin-circular",
+        title: "Fictional 1921 blue-tin trade circular",
+        type: "Manufacturer circular",
+        summary: "The NCW 21-B blue harbor-pattern keepsake tin was first offered on 15 September 1921, setting the earliest possible manufacture window for the box.",
+        confidence: 0.9
       },
       {
         id: "ev-fictional-amalia-notebook",
@@ -1321,6 +1430,14 @@ export const demoCases: ResearchCase[] = [
         summary: "Nora calls the box “Amalia's tin” and distinguishes the folded passenger notice and harbor photograph Samuel carried in 1907 from objects Amalia added later.",
         confidence: 0.76,
         linkedPersonId: "p-nora-hartwell"
+      },
+      {
+        id: "ev-fictional-blue-tin-inventory",
+        title: "Fictional 1984 blue-tin inventory",
+        type: "Artifact inventory",
+        summary: "Tobias listed a brass key, a 1907 passenger notice, a 1921 repair receipt, violet thread, and an unidentified harbor photograph.",
+        confidence: 0.81,
+        linkedPersonId: "p-tobias-mercer"
       }
     ],
     tasks: [
@@ -1475,6 +1592,13 @@ export const demoCases: ResearchCase[] = [
         confidence: 0.79
       },
       {
+        id: "ev-fictional-lantern-harbor-directory",
+        title: "Fictional 1908 Lantern Bay harbor directory",
+        type: "Business directory",
+        summary: "A Harbor Star Outfitters advertisement explains how a Lantern Bay sign could also end in 'AR', but its awning, rack, and inspection mark do not match the photograph's full feature cluster.",
+        confidence: 0.76
+      },
+      {
         id: "ev-fictional-photo-comparison",
         title: "Fictional Mercer portrait comparison worksheet",
         type: "Research note",
@@ -1574,14 +1698,15 @@ export const demoCases: ResearchCase[] = [
         contextRefs: [
           { type: "case", id: "case-harbor-photograph" },
           { type: "hypothesis", id: "hyp-photo-lantern-bay" },
-          { type: "evidence", id: "ev-fictional-harbor-photo" }
+          { type: "evidence", id: "ev-fictional-harbor-photo" },
+          { type: "evidence", id: "ev-fictional-lantern-harbor-directory" }
         ],
         outcomes: [
           {
             id: "outcome-photo-lantern-signs",
             requestId: "demo-request-photo-lantern-signs",
-            type: "not_found",
-            note: "No matching sign appears in the invented Lantern Bay directories searched. This bounded negative result does not by itself prove the photograph was taken elsewhere.",
+            type: "inconclusive",
+            note: "Harbor Star Outfitters supplied a Lantern Bay sign ending in 'AR', but its awning, lantern rack, and inspection mark do not match the photograph's full feature cluster. The candidate explains the letters without matching the scene.",
             searchScope: {
               repository: "Fictional Lantern Bay Archive",
               collection: "Illustrated harbor business directories",
@@ -1723,12 +1848,36 @@ export const demoCases: ResearchCase[] = [
         linkedPersonId: "p-amalia-bellandi"
       },
       {
+        id: "ev-fictional-bellandi-name-index",
+        title: "Fictional Ceraluna Alta name index and clerk's key",
+        type: "Derivative name index",
+        summary: "A later index files Malia and Amalia together but lists two Malia Bellandi entries without parents, so the familiar-name rule identifies candidates rather than a person.",
+        confidence: 0.58,
+        linkedPersonId: "p-amalia-bellandi"
+      },
+      {
         id: "ev-fictional-amalia-departure",
         title: "Fictional 1883 Ceraluna Alta departure entry",
         type: "Migration record",
         summary: "Amalia Rose Bellandi, born 7 July 1861, names Rosa Bellandi as her local contact before leaving Ceraluna Alta.",
         confidence: 0.73,
         linkedPersonId: "p-amalia-bellandi"
+      },
+      {
+        id: "ev-fictional-malia-passenger-ledger",
+        title: "Fictional 1883 Ceraluna–Lantern passenger ledger",
+        type: "Passenger ledger",
+        summary: "Ticket 612 carries Malia Bellandi to Lantern Bay one month after permit 612, but the clerk records age 22 instead of 21 and omits her parents.",
+        confidence: 0.73,
+        linkedPersonId: "p-amalia-bellandi"
+      },
+      {
+        id: "ev-fictional-amalia-marriage-application",
+        title: "Fictional 1885 Lantern Bay marriage application",
+        type: "Vital record",
+        summary: "The application prints Amalia Rose Bellandi with her exact birth date and parents, while the bride signs Malia Bellandi; Elias Thorne Hartwell is the groom.",
+        confidence: 0.86,
+        linkedPersonId: "p-elias-hartwell"
       }
     ],
     tasks: [
@@ -1863,6 +2012,14 @@ export const demoCases: ResearchCase[] = [
         summary: "A wholly invented 37 cM match with no usable tree; its profile supplies Bellandi and Ceraluna Alta clues but no relationship proof.",
         confidence: 0.42,
         linkedDnaMatchId: "dna-r-solari"
+      },
+      {
+        id: "ev-fictional-dna-shared-match-matrix",
+        title: "Invented qualifying shared-match matrix",
+        type: "DNA",
+        summary: "The fictional platform lists M. Alder and T. Pike with each other, but not with R. Solari; thresholds and missing segment coordinates mean this is a network clue, not triangulation.",
+        confidence: 0.74,
+        linkedDnaMatchId: "dna-m-alder"
       },
       {
         id: "ev-fictional-rowan-sibling-register",
@@ -2017,10 +2174,13 @@ export const demoCases: ResearchCase[] = [
 ];
 
 export const archiveStats = {
-  people: 16,
-  families: 7,
+  people: demoPeople.length,
+  families: 8,
   sources: 7,
-  citations: 48,
+  citations: demoPeople.reduce(
+    (total, person) => total + person.facts.filter((fact) => Boolean(fact.source?.trim())).length,
+    0
+  ),
   dnaMatches: 3,
   triagedMatches: 2,
   highPriorityMatches: 1

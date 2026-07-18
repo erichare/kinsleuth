@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import { projectResearchCaseForDnaCapability } from "./case-search";
 import { withTransaction, type DatabaseOptions } from "./db";
+import { createDemoAiRuns } from "./demo-ai-runs";
 import { createDemoSources } from "./demo-sources";
 import { demoPurgeProductTables } from "./demo-purge";
 import { createDnaConnectionHypothesis, scoreDnaMatch } from "./dna";
@@ -142,7 +143,7 @@ type UpdateCaseTaskOptions = WorkspaceStoreOptions & {
 };
 
 const defaultArchiveId = "archive-default";
-export const demoFixtureVersion = 4;
+export const demoFixtureVersion = 5;
 // Full pre-import snapshots are large; retain only the most recent ones.
 const retainedBackupCount = 10;
 const retainedAiRunCount = 25;
@@ -160,7 +161,7 @@ export function createDemoWorkspace(now = new Date()): WorkspaceData {
     cases: demoCases,
     sources: createDemoSources(now),
     dnaMatches: demoDnaMatches,
-    aiRuns: [],
+    aiRuns: createDemoAiRuns(),
     imports: [],
     rawRecords: [],
     backups: [],

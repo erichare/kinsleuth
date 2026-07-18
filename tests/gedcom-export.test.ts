@@ -163,6 +163,63 @@ describe("GEDCOM export", () => {
     expect(privacyTagCount).toBe(1);
   });
 
+  it("round-trips secondary names as alias facts without duplicating the canonical name", () => {
+    const person = curatedPerson({
+      facts: [
+        ...curatedPerson().facts,
+        {
+          id: "fact-name-canonical",
+          type: "NAME",
+          value: "Nora Elise /Hartwell/",
+          confidence: 0.9,
+          privacy: "public"
+        },
+        {
+          id: "fact-name-married",
+          type: "NAME",
+          value: "Nora Elise /Mercer/",
+          date: "8 JAN 1922",
+          place: "Lantern Bay, Wisconsin",
+          source: "@S1@",
+          confidence: 0.86,
+          privacy: "public"
+        },
+        {
+          id: "fact-name-journal",
+          type: "NAME",
+          value: "Nora E. Hartwell Mercer",
+          date: "1922",
+          source: "Fictional household journal",
+          confidence: 0.8,
+          privacy: "private"
+        }
+      ]
+    });
+
+    const exported = exportGedcom(
+      { archiveName: "Test Archive", people: [person], rawRecords: [], imports: [] },
+      { now: exportedAt }
+    );
+    const reimported = prepareGedcomImport("round-trip-names.ged", exported.content, exportedAt);
+    const [reimportedPerson] = reimported.people;
+    const nameFacts = reimportedPerson.facts.filter((fact) => fact.type === "NAME");
+
+    expect(reimportedPerson.displayName).toBe("Nora Elise Hartwell");
+    expect(nameFacts).toEqual([
+      expect.objectContaining({
+        value: "Nora Elise /Mercer/",
+        date: "8 JAN 1922",
+        place: "Lantern Bay, Wisconsin",
+        source: "@S1@"
+      }),
+      expect.objectContaining({
+        value: "Nora E. Hartwell Mercer",
+        date: "1922",
+        source: "Fictional household journal"
+      })
+    ]);
+  });
+
   it("ignores malformed curation tags on import and keeps safe defaults", () => {
     const content = [
       "0 HEAD",

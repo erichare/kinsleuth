@@ -18,6 +18,7 @@ vi.mock("@/lib/workspace-store", () => workspaceMocks);
 
 import AppPersonPage from "@/app/app/people/[id]/page";
 import { PersonCurationPanel } from "@/components/person-curation-panel";
+import { createDemoAiRuns } from "@/lib/demo-ai-runs";
 import { demoPeople } from "@/lib/demo-data";
 
 beforeEach(() => {
@@ -124,6 +125,37 @@ describe("person curation publishing capability", () => {
     expect(html).not.toContain("SECRET_DNA_ANSWER");
   });
 
+  it("shows only exact seeded demo analyses when DNA is disabled in demo mode", async () => {
+    stubHostedPrivateBeta({ datasetMode: "demo", externalAi: true });
+    const person = { ...demoPeople[0], published: true };
+    const seededRun = createDemoAiRuns().find((run) =>
+      run.contextReferences.some((reference) => reference.type === "person" && reference.id === person.id)
+    );
+    if (!seededRun) throw new Error("Missing Nora's seeded demo analysis");
+    workspaceMocks.readWorkspace.mockResolvedValue({
+      archiveName: "Synthetic demo archive",
+      people: [person],
+      sources: [],
+      cases: [],
+      aiRuns: [
+        { ...seededRun, provider: "local", model: "local" },
+        {
+          ...seededRun,
+          id: "run-arbitrary-demo-answer",
+          answer: "ARBITRARY_DEMO_SAVED_ANSWER"
+        }
+      ]
+    });
+
+    const html = renderToStaticMarkup(await AppPersonPage({
+      params: Promise.resolve({ id: person.id })
+    }));
+
+    expect(html).toContain("The box and its surviving contents cannot have traveled together in 1907");
+    expect(html).not.toContain("ARBITRARY_DEMO_SAVED_ANSWER");
+    expect(html).not.toContain("local · local");
+  });
+
   it("keeps a saved local analysis while hiding provider metadata when external AI is disabled", async () => {
     stubHostedPrivateBeta({ dna: true });
     const person = { ...demoPeople[0], published: true };
@@ -166,10 +198,14 @@ function render(publicPublishingEnabled: boolean, published: boolean): string {
   }));
 }
 
-function stubHostedPrivateBeta(overrides: { dna?: boolean; externalAi?: boolean } = {}): void {
+function stubHostedPrivateBeta(overrides: {
+  datasetMode?: "demo" | "pilot";
+  dna?: boolean;
+  externalAi?: boolean;
+} = {}): void {
   const environment = {
     KINRESOLVE_DEPLOYMENT_MODE: "hosted",
-    KINRESOLVE_DATASET_MODE: "pilot",
+    KINRESOLVE_DATASET_MODE: overrides.datasetMode ?? "pilot",
     KINRESOLVE_DNA_ENABLED: String(overrides.dna ?? false),
     KINRESOLVE_EXTERNAL_AI_ENABLED: String(overrides.externalAi ?? false),
     KINRESOLVE_PUBLIC_ARCHIVE_ENABLED: "false",

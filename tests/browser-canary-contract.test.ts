@@ -270,6 +270,12 @@ describe("browser canary source and artifact boundary", () => {
     expect(stateSource).not.toMatch(/DELETE FROM (?:people|person_facts|sources|raw_records)\s+WHERE archive_id = \$1\s*$/m);
   });
 
+  it("admits the enriched demo baseline while retaining a bounded state file", () => {
+    expect(stateSource).toContain("const maxStateBytes = 64 * 1024;");
+    expect(stateSource).toContain("metadata.size > maxStateBytes");
+    expect(stateSource).not.toContain("metadata.size > 32 * 1024");
+  });
+
   it("runs the full browser journey only in an ephemeral synthetic CI cell with guaranteed cleanup", () => {
     const job = ciSource.slice(
       ciSource.indexOf("  browser-canary:"),

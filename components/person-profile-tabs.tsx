@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState, type KeyboardEvent } from "react";
 
-import { EvidenceScan } from "@/components/evidence-scan";
+import { EvidenceRecordDetails, EvidenceScan } from "@/components/evidence-scan";
 import { Icons } from "@/components/icons";
 import { Confidence, EmptyState, PersonMonogram, Status, TableScroll } from "@/components/ui";
 import type { PersonProfileSource, PersonProfileView } from "@/lib/person-profile";
@@ -39,6 +39,7 @@ export function PersonProfileTabs({
   profile: PersonProfileView;
 }) {
   const [activeTab, setActiveTab] = useState<PersonProfileTabId>("facts");
+  const eventFacts = profile.facts.filter((fact) => fact.type.trim().toUpperCase() !== "NAME");
   const counts: Record<PersonProfileTabId, number> = {
     facts: profile.facts.length,
     sources: profile.sourceTotal,
@@ -95,8 +96,39 @@ export function PersonProfileTabs({
         role="tabpanel"
         tabIndex={0}
       >
+        {profile.identityTrail.length > 0 ? (
+          <section className="person-identity-section" aria-labelledby="person-identity-heading">
+            <div className="person-identity-heading">
+              <div>
+                <span className="card-kicker">Name changes and record variants</span>
+                <h2 id="person-identity-heading">Identity trail</h2>
+              </div>
+              <Status tone="warning">Review together</Status>
+            </div>
+            <p className="muted">
+              {profile.isFictionalDemo
+                ? "These names are preserved exactly as they appear in the fictional records. A shared profile does not erase conflicts or prove why a name changed."
+                : "These names are preserved as recorded in the linked sources. A shared profile does not erase conflicts or prove why a name changed."}
+            </p>
+            <div className="person-identity-grid">
+              {profile.identityTrail.map((entry) => (
+                <article className="person-identity-card" key={entry.id}>
+                  <div className="evidence-item-heading">
+                    <Status tone={entry.kind === "profile" ? "ok" : "private"}>
+                      {entry.kind === "profile" ? "Profile identity" : "Recorded variant"}
+                    </Status>
+                    {entry.confidence !== undefined ? <Confidence value={entry.confidence} /> : null}
+                  </div>
+                  <h3>{entry.name}</h3>
+                  <p>{[entry.date, entry.place].filter(Boolean).join(" · ") || "Date and place not recorded"}</p>
+                  <p className="muted">{entry.source ? `Source: ${entry.source}` : "Current profile heading; compare it with each recorded occurrence below."}</p>
+                </article>
+              ))}
+            </div>
+          </section>
+        ) : null}
         <div className="table-panel">
-          {profile.facts.length > 0 ? (
+          {eventFacts.length > 0 ? (
             <TableScroll label={`${personName} facts`}>
               <table className="data-table">
                 <thead>
@@ -109,7 +141,7 @@ export function PersonProfileTabs({
                   </tr>
                 </thead>
                 <tbody>
-                  {profile.facts.map((fact) => (
+                  {eventFacts.map((fact) => (
                     <tr key={fact.id}>
                       <td>
                         <strong>{fact.label}</strong>
@@ -161,7 +193,13 @@ export function PersonProfileTabs({
                 <h2>{source.title}</h2>
                 <p className="muted">{source.sourceType}{source.repository ? ` · ${source.repository}` : ""}</p>
                 {source.summary ? <p>{source.summary}</p> : null}
+                {source.supportCount > 1 ? (
+                  <p className="person-source-support">
+                    <Status tone="private">Supports {source.supportCount} linked claims</Status>
+                  </p>
+                ) : null}
                 <Confidence value={source.confidence} />
+                {source.media ? <EvidenceRecordDetails compact media={source.media} /> : null}
               </div>
             </article>
           ))}
@@ -285,7 +323,11 @@ export function PersonProfileTabs({
           <Icons.Brain size={22} aria-hidden />
           <div>
             <strong>Reviewable, read-only analysis</strong>
-            <p>These profile checks use saved facts, citations, confidence, and case links. Nothing is written back to the tree.</p>
+            <p>
+              {profile.isFictionalDemo
+                ? "These are prewritten fictional examples built from the synthetic facts, citations, confidence, and case links. Nothing is written back to the tree."
+                : "These profile checks use saved facts, citations, confidence, and case links. Nothing is written back to the tree."}
+            </p>
           </div>
         </div>
 
@@ -295,7 +337,9 @@ export function PersonProfileTabs({
             <div className="person-insight-grid">
               {profile.savedAnalyses.map((analysis) => (
                 <article className="app-card saved-analysis-card" key={analysis.id}>
-                  <span className="card-kicker">Saved analysis · {analysis.createdAt.slice(0, 10)}</span>
+                  <span className="card-kicker">
+                    {profile.isFictionalDemo ? "Seeded demo analysis" : "Saved analysis"} · {analysis.createdAt.slice(0, 10)}
+                  </span>
                   <h3>{analysis.question}</h3>
                   <p>{analysis.answer}</p>
                   {analysis.uncertainty.length > 0 ? (
@@ -327,6 +371,12 @@ export function PersonProfileTabs({
                 <p><strong>{insight.summary}</strong></p>
                 <p className="muted">{insight.detail}</p>
                 {insight.confidence !== undefined ? <Confidence value={insight.confidence} /> : null}
+                {insight.href ? (
+                  <Link className="row-action-link person-insight-link" href={insight.href}>
+                    {insight.actionLabel ?? "Open related research"}
+                    <Icons.ChevronRight size={14} aria-hidden />
+                  </Link>
+                ) : null}
               </article>
             ))}
           </div>

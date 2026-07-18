@@ -49,11 +49,69 @@ describe("person profile tabs", () => {
   it("uses neutral case wording when a profile spans active and planning research", () => {
     const workspace = createDemoWorkspace(now);
     const amalia = requiredPerson("p-amalia-bellandi");
-    const insight = buildPersonProfile(amalia, workspace).insights
-      .find((candidate) => candidate.id === "case-connections");
+    const insights = buildPersonProfile(amalia, workspace).insights
+      .filter((candidate) => candidate.id.startsWith("case-connection:"));
 
-    expect(insight?.summary).toMatch(/connect this profile to 2 research cases/);
-    expect(insight?.summary).not.toMatch(/2 active research cases/);
+    expect(insights).toHaveLength(2);
+    expect(insights.map((insight) => insight.href)).toEqual([
+      "/app/cases/case-blue-tin",
+      "/app/cases/case-bellandi-ceraluna-alta"
+    ]);
+    expect(insights.every((insight) => !insight.summary.includes("active research case"))).toBe(true);
+  });
+
+  it("preserves canonical names and every conflicting record occurrence in identity trails", () => {
+    const workspace = createDemoWorkspace(now);
+    const samuelProfile = buildPersonProfile(requiredPerson("p-samuel-mercer"), workspace);
+    const amaliaProfile = buildPersonProfile(requiredPerson("p-amalia-bellandi"), workspace);
+    const maeveProfile = buildPersonProfile(requiredPerson("p-maeve-mercer"), workspace);
+
+    expect(samuelProfile.identityTrail.map((entry) => entry.name)).toEqual([
+      "Samuel Rowan Mercer",
+      "Samuel March"
+    ]);
+    expect(amaliaProfile.identityTrail.map((entry) => [entry.name, entry.date])).toEqual([
+      ["Amalia Rose Bellandi", undefined],
+      ["Malia Bellandi", "18 Mar 1868"],
+      ["Malia Bellandi", "2 Apr 1883"],
+      ["Malia Bellandi", "22 Sep 1885"]
+    ]);
+    expect(amaliaProfile.insights.map((insight) => insight.id)).toEqual(
+      expect.arrayContaining(["amalia-age-conflict", "amalia-namesake-conflict"])
+    );
+    expect(maeveProfile.identityTrail[0]).toMatchObject({
+      name: "Maeve Lenora Rowan Mercer",
+      kind: "profile"
+    });
+    expect(maeveProfile.identityTrail[0]?.date).toBeUndefined();
+    expect(maeveProfile.identityTrail[0]?.source).toBeUndefined();
+  });
+
+  it("deduplicates scan-backed source cards while retaining their claim count", () => {
+    const workspace = createDemoWorkspace(now);
+    const profile = buildPersonProfile(requiredPerson("p-samuel-mercer"), workspace);
+    const recordIds = profile.sources.flatMap((source) => source.media ? [source.media.recordId] : []);
+
+    expect(new Set(recordIds).size).toBe(recordIds.length);
+    expect(profile.sources.find((source) => source.media?.recordId === "lantern-passenger-declaration-1907")?.supportCount).toBe(3);
+  });
+
+  it("uses canonical scan metadata and preserves every linked claim summary", () => {
+    const workspace = createDemoWorkspace(now);
+    const profile = buildPersonProfile(requiredPerson("p-amalia-bellandi"), workspace);
+    const marriageApplication = profile.sources.find(
+      (source) => source.media?.recordId === "amalia-marriage-application-1885"
+    );
+
+    expect(marriageApplication).toMatchObject({
+      title: "Lantern Bay marriage application",
+      sourceType: "Signed civil marriage application",
+      repository: "KR-DEMO-C10-R6",
+      citationDate: "22 Sep 1885",
+      supportCount: 2
+    });
+    expect(marriageApplication?.summary).toContain("Cited for marriage.");
+    expect(marriageApplication?.summary).toContain("Cited for recorded name.");
   });
 
   it("supports arrow, Home, and End navigation with wraparound", () => {
@@ -77,19 +135,30 @@ describe("person profile tabs", () => {
     expect(html.match(/role="tab"/g)).toHaveLength(6);
     expect(html.match(/role="tabpanel"/g)).toHaveLength(6);
     expect(html.match(/aria-selected="true"/g)).toHaveLength(1);
-    expect(html).toMatch(/Facts, 4 items/);
+    expect(html).toMatch(/Facts, 5 items/);
     expect(html).toMatch(/Sources, [1-9][0-9]* items/);
     expect(html).toMatch(/Relationships, 7 items/);
-    expect(html).toMatch(/Fictional 1907 passenger list/);
+    expect(html).toMatch(/Lantern Packet passenger declaration/);
     expect(html).toMatch(/kr-demo-c07-r4-passenger-declaration\.webp/);
-    expect(html).toMatch(/Family research note/);
+    expect(html).toMatch(/Identity trail/);
+    expect(html).toMatch(/Samuel March/);
+    expect(html).toMatch(/Accessible transcript/);
+    expect(html).toMatch(/Supports 3 linked claims/);
+    expect(html).toMatch(/Family lore/);
+    expect(html).toMatch(/Research observation/);
+    expect(html).toMatch(/Open question/);
     expect(html).toMatch(/Evidence coverage/);
     expect(html).toMatch(/Suggested next check/);
+    expect(html).toMatch(/Two names at one address/);
+    expect(html).toMatch(/Open connected case/);
+    expect(html).toMatch(/Seeded demo analysis/);
+    expect(html).toMatch(/prewritten fictional examples/);
   });
 
   it("shows only analyses scoped to the person or one of their linked cases", () => {
     const workspace = createDemoWorkspace(now);
     const nora = requiredPerson("p-nora-hartwell");
+    workspace.aiRuns = [];
     workspace.aiRuns.push(
       {
         id: "run-nora",
@@ -212,8 +281,17 @@ describe("person profile tabs", () => {
 
     expect(profile.isFictionalDemo).toBe(false);
     expect(profile.sources.some((source) => source.media)).toBe(false);
+    expect(profile.notes.map((note) => note.title)).not.toContain("Open question");
+    expect(profile.insights.map((insight) => insight.id)).not.toContain("samuel-directory-conflict");
     expect(profile.insights.find((insight) => insight.id === "research-priority")?.detail)
       .toMatch(/profile suggestion/);
+
+    const html = renderToStaticMarkup(createElement(PersonProfileTabs, {
+      personName: samuel.displayName,
+      profile
+    }));
+    expect(html).toContain("recorded in the linked sources");
+    expect(html).not.toContain("appear in the fictional records");
   });
 
   it("bounds source previews and the number serialized into the client tab", () => {

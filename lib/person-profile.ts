@@ -6,6 +6,7 @@ import {
   demoArchiveMediaForSource,
   type DemoArchiveMedia
 } from "./demo-archive-media";
+import { demoProfileContentFor } from "./demo-profile-content";
 import type {
   AIAnalysisRun,
   PersonFact,
@@ -26,8 +27,19 @@ export type PersonProfileSource = {
   citationDate?: string;
   summary?: string;
   confidence: number;
+  supportCount: number;
   origin: "source-record" | "case-evidence" | "fact-citation";
   media?: DemoArchiveMedia;
+};
+
+export type PersonIdentityEntry = {
+  id: string;
+  name: string;
+  date?: string;
+  place?: string;
+  source?: string;
+  confidence?: number;
+  kind: "profile" | "recorded";
 };
 
 export type PersonTimelineEvent = {
@@ -61,6 +73,8 @@ export type PersonProfileInsight = {
   detail: string;
   confidence?: number;
   tone: "ok" | "attention" | "neutral";
+  href?: string;
+  actionLabel?: string;
 };
 
 export type PersonProfileAnalysis = {
@@ -75,6 +89,7 @@ export type PersonProfileAnalysis = {
 
 export type PersonProfileView = {
   facts: PersonProfileFact[];
+  identityTrail: PersonIdentityEntry[];
   sources: PersonProfileSource[];
   sourceTotal: number;
   timeline: PersonTimelineEvent[];
@@ -102,13 +117,17 @@ const factMediaRecordIds = new Map<string, string>([
   [factMediaKey("p-maeve-mercer", "Fictional Northstar Cove birth ledger"), "northstar-household-1901"],
   [factMediaKey("p-jonah-mercer", "Fictional Northstar Cove birth ledger"), "northstar-household-1901"],
   [factMediaKey("p-samuel-mercer", "Fictional Lantern Bay passenger list"), "lantern-passenger-declaration-1907"],
+  [factMediaKey("p-nora-hartwell", "Fictional 1922 Nora Hartwell household journal"), "blue-tin-nora-journal-1922"],
   [factMediaKey("p-nora-hartwell", "Fictional Lantern Bay marriage ledger"), "lantern-marriage-1909"],
   [factMediaKey("p-samuel-mercer", "Fictional Lantern Bay marriage ledger"), "lantern-marriage-1909"],
   [factMediaKey("p-amalia-bellandi", "Fictional Lantern Bay marriage ledger"), "amalia-marriage-application-1885"],
   [factMediaKey("p-amalia-bellandi", "Fictional Ceraluna Alta parish register"), "ceraluna-baptisms-1859-1864"],
+  [factMediaKey("p-amalia-bellandi", "Fictional Ceraluna Alta household register"), "ceraluna-households-1868"],
   [factMediaKey("p-luca-bellandi", "Fictional Ceraluna Alta parish register"), "ceraluna-baptisms-1859-1864"],
   [factMediaKey("p-mira-solari", "Fictional Ceraluna Alta parish register"), "ceraluna-baptisms-1859-1864"],
-  [factMediaKey("p-amalia-bellandi", "Fictional Lantern Bay arrivals ledger"), "malia-passenger-ledger-1883"]
+  [factMediaKey("p-amalia-bellandi", "Fictional Lantern Bay arrivals ledger"), "malia-passenger-ledger-1883"],
+  [factMediaKey("p-amalia-bellandi", "Fictional Ceraluna–Lantern passenger ledger"), "malia-passenger-ledger-1883"],
+  [factMediaKey("p-amalia-bellandi", "Fictional Lantern Bay marriage application"), "amalia-marriage-application-1885"]
 ]);
 
 export function buildPersonProfile(
@@ -122,8 +141,11 @@ export function buildPersonProfile(
     researchCase.evidence.some((evidence) => evidence.linkedPersonId === person.id)
   );
   const relevantCaseIds = new Set(relevantCases.map((researchCase) => researchCase.id));
-  const allSources = buildPersonSources(person, context.sources ?? [], relevantCases, includeDemoMedia);
+  const allSources = deduplicatePersonSources(
+    buildPersonSources(person, context.sources ?? [], relevantCases, includeDemoMedia)
+  );
   const sources = allSources.slice(0, maximumProfileSources);
+  const identityTrail = buildIdentityTrail(person, facts);
   const timeline = facts
     .map((fact) => ({
       id: fact.id,
@@ -136,9 +158,13 @@ export function buildPersonProfile(
     }))
     .sort(compareTimelineEvents);
   const noteBody = previewText(person.notes?.replace(demoFictionNotice, "").trim(), 4_000);
-  const notes = noteBody
-    ? [{ id: `${person.id}-profile-note`, title: "Family research note", body: noteBody }]
-    : [];
+  const demoContent = isFictionalDemo ? demoProfileContentFor(person.id) : undefined;
+  const notes: PersonProfileNote[] = [
+    ...(noteBody
+      ? [{ id: `${person.id}-profile-note`, title: isFictionalDemo ? "Family lore" : "Family research note", body: noteBody }]
+      : []),
+    ...(demoContent?.notes ?? [])
+  ];
   const peopleById = new Map(context.people.map((candidate) => [candidate.id, candidate]));
   const relationships = person.relatives.flatMap((relativeId) => {
     const relative = peopleById.get(relativeId);
@@ -170,12 +196,20 @@ export function buildPersonProfile(
 
   return {
     facts,
+    identityTrail,
     sources,
     sourceTotal: allSources.length,
     timeline,
     notes,
     relationships,
-    insights: buildProfileInsights(person, facts, allSources.length, relevantCases),
+    insights: [
+      ...buildProfileInsights(person, facts, allSources.length, relevantCases),
+      ...(demoContent?.insights ?? []).map(({ caseId, ...insight }) => ({
+        ...insight,
+        href: caseId ? `/app/cases/${encodeURIComponent(caseId)}` : undefined,
+        actionLabel: caseId ? "Open connected case" : undefined
+      }))
+    ],
     savedAnalyses,
     isFictionalDemo
   };
@@ -192,7 +226,8 @@ export function factTypeLabel(type: string): string {
     RESI: "Residence",
     OCCU: "Occupation",
     BAPM: "Baptism",
-    BURI: "Burial"
+    BURI: "Burial",
+    NAME: "Recorded name"
   };
   return labels[normalized] ?? type;
 }
@@ -230,6 +265,7 @@ function buildPersonSources(
       citationDate: previewText(source.citationDate, 80),
       summary: previewText(source.transcript, 520),
       confidence: source.confidence,
+      supportCount: 1,
       origin: "source-record" as const,
       media: includeDemoMedia ? demoArchiveMediaForSource(source.id) : undefined
     }));
@@ -244,6 +280,7 @@ function buildPersonSources(
         repository: previewText(researchCase.title, 140),
         summary: previewText(evidence.summary, 520),
         confidence: evidence.confidence,
+        supportCount: 1,
         origin: "case-evidence" as const,
         media: includeDemoMedia ? demoArchiveMediaForEvidence(evidence.id) : undefined
       }))
@@ -270,12 +307,94 @@ function buildPersonSources(
       citationDate: dates.join("; ") || undefined,
       summary: `Cited for ${joinList(labels.map((label) => label.toLowerCase()))}.`,
       confidence: average(facts.map((fact) => fact.confidence)),
+      supportCount: facts.length,
       origin: "fact-citation",
       media: includeDemoMedia && recordId ? demoArchiveMediaForRecord(recordId) : undefined
     };
   });
 
   return [...directSources, ...caseEvidence, ...factCitations];
+}
+
+function deduplicatePersonSources(sources: PersonProfileSource[]): PersonProfileSource[] {
+  const uniqueSources: PersonProfileSource[] = [];
+  const indexByRecordId = new Map<string, number>();
+
+  for (const source of sources) {
+    const recordId = source.media?.recordId;
+    if (!recordId) {
+      uniqueSources.push(source);
+      continue;
+    }
+
+    const canonicalSource = sourceWithCanonicalMediaMetadata(source);
+
+    const existingIndex = indexByRecordId.get(recordId);
+    if (existingIndex === undefined) {
+      indexByRecordId.set(recordId, uniqueSources.length);
+      uniqueSources.push(canonicalSource);
+      continue;
+    }
+
+    const existing = uniqueSources[existingIndex];
+    uniqueSources[existingIndex] = {
+      ...existing,
+      confidence: Math.max(existing.confidence, canonicalSource.confidence),
+      supportCount: existing.supportCount + canonicalSource.supportCount,
+      summary: mergeSourceSummaries(existing.summary, canonicalSource.summary)
+    };
+  }
+
+  return uniqueSources;
+}
+
+function sourceWithCanonicalMediaMetadata(source: PersonProfileSource): PersonProfileSource {
+  if (!source.media) return source;
+
+  return {
+    ...source,
+    title: source.media.title,
+    sourceType: source.media.kind,
+    repository: source.media.catalogId,
+    citationDate: source.media.date
+  };
+}
+
+function mergeSourceSummaries(...summaries: (string | undefined)[]): string | undefined {
+  const distinctSummaries = [...new Set(summaries.flatMap((summary) => summary?.trim() ? [summary.trim()] : []))];
+  return previewText(distinctSummaries.join(" "), 1_000);
+}
+
+function buildIdentityTrail(
+  person: PersonSummary,
+  facts: PersonProfileFact[]
+): PersonIdentityEntry[] {
+  const nameFacts = facts.filter((fact) => fact.type.trim().toUpperCase() === "NAME" && fact.value?.trim());
+  if (nameFacts.length === 0) return [];
+
+  const primaryEntry: PersonIdentityEntry = {
+    id: `${person.id}-profile-name`,
+    name: person.displayName,
+    kind: "profile"
+  };
+
+  return [
+    primaryEntry,
+    ...nameFacts.map((fact): PersonIdentityEntry => ({
+      id: fact.id,
+      name: fact.value?.trim() ?? person.displayName,
+      date: fact.date,
+      place: fact.place,
+      source: fact.source,
+      confidence: fact.confidence,
+      kind: "recorded"
+    }))
+  ].sort((left, right) => {
+    if (left.kind !== right.kind) return left.kind === "profile" ? -1 : 1;
+    return genealogicalDateSortKey(left.date ?? "") - genealogicalDateSortKey(right.date ?? "")
+      || (left.date ?? "").localeCompare(right.date ?? "")
+      || left.name.localeCompare(right.name);
+  });
 }
 
 function buildProfileInsights(
@@ -334,17 +453,20 @@ function buildProfileInsights(
   ];
 
   if (relevantCases.length > 0) {
-    const evidenceCount = relevantCases.reduce(
-      (total, researchCase) => total + researchCase.evidence.filter((evidence) => evidence.linkedPersonId === person.id).length,
-      0
-    );
-    insights.splice(2, 0, {
-      id: "case-connections",
-      title: "Research connections",
-      summary: `${evidenceCount} evidence item${evidenceCount === 1 ? "" : "s"} connect this profile to ${relevantCases.length} research case${relevantCases.length === 1 ? "" : "s"}.`,
-      detail: previewText(joinList(relevantCases.map((researchCase) => researchCase.title)), 520) ?? "Linked research cases",
-      tone: "neutral"
+    const caseInsights = relevantCases.map((researchCase): PersonProfileInsight => {
+      const evidenceCount = researchCase.evidence.filter((evidence) => evidence.linkedPersonId === person.id).length;
+      const connectedCaseSummary = `${evidenceCount} evidence item${evidenceCount === 1 ? "" : "s"} connect this profile to ${researchCase.title}`;
+      return {
+        id: `case-connection:${researchCase.id}`,
+        title: "Connected mystery",
+        summary: `${connectedCaseSummary}${/[.!?]$/.test(connectedCaseSummary) ? "" : "."}`,
+        detail: previewText(researchCase.question, 520) ?? "Open the case to compare its working hypotheses and research trail.",
+        tone: "neutral",
+        href: `/app/cases/${encodeURIComponent(researchCase.id)}`,
+        actionLabel: "Open connected case"
+      };
     });
+    insights.splice(2, 0, ...caseInsights);
   }
 
   return insights;

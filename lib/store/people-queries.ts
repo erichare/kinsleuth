@@ -18,17 +18,30 @@ const searchHaystackSql = `extensions.unaccent(lower(concat_ws(' ',
   p.sex, p.living_status, p.privacy, p.notes,
   array_to_string(p.relatives, ' '), coalesce(f.facts_text, ''))))`;
 
-// Two lateral variants: the haystack (with facts_text) is only paid for when
-// search terms actually reference it; plain browsing joins the count only.
+// The page variants project aliases from the same per-person fact scan that
+// supplies fact counts. The filtered-count variant omits both projections so
+// an alias list is not built just to count matching people.
 const factsSearchLateralSql = `LEFT JOIN LATERAL (
   SELECT count(*)::int AS fact_count,
-    string_agg(concat_ws(' ', pf.fact_type, pf.date_text, pf.place_text, pf.value_text, pf.source_text), ' ') AS facts_text
+    string_agg(concat_ws(' ', pf.fact_type, pf.date_text, pf.place_text, pf.value_text, pf.source_text), ' ') AS facts_text,
+    array_agg(btrim(pf.value_text) ORDER BY pf.sort_order) FILTER (
+      WHERE upper(btrim(pf.fact_type)) = 'NAME' AND nullif(btrim(pf.value_text), '') IS NOT NULL
+    ) AS aliases
+  FROM person_facts pf
+  WHERE pf.archive_id = p.archive_id AND pf.person_id = p.id
+) f ON true`;
+
+const factsSearchCountLateralSql = `LEFT JOIN LATERAL (
+  SELECT string_agg(concat_ws(' ', pf.fact_type, pf.date_text, pf.place_text, pf.value_text, pf.source_text), ' ') AS facts_text
   FROM person_facts pf
   WHERE pf.archive_id = p.archive_id AND pf.person_id = p.id
 ) f ON true`;
 
 const factsCountLateralSql = `LEFT JOIN LATERAL (
-  SELECT count(*)::int AS fact_count
+  SELECT count(*)::int AS fact_count,
+    array_agg(btrim(pf.value_text) ORDER BY pf.sort_order) FILTER (
+      WHERE upper(btrim(pf.fact_type)) = 'NAME' AND nullif(btrim(pf.value_text), '') IS NOT NULL
+    ) AS aliases
   FROM person_facts pf
   WHERE pf.archive_id = p.archive_id AND pf.person_id = p.id
 ) f ON true`;
@@ -49,6 +62,7 @@ type PersonRow = {
   published: boolean;
   relatives: string[] | null;
   fact_count?: number;
+  aliases?: string[] | null;
 };
 
 type FactRow = {
@@ -106,7 +120,7 @@ export async function searchPeoplePageFromDb(
 
     const whereSql = conditions.join(" AND ");
     // The count query only needs the facts join when a term can match facts_text.
-    const countLateralSql = terms.length > 0 ? factsSearchLateralSql : "";
+    const countLateralSql = terms.length > 0 ? factsSearchCountLateralSql : "";
     const pageLateralSql = terms.length > 0 ? factsSearchLateralSql : factsCountLateralSql;
 
     const [stats, filteredTotal] = await Promise.all([
@@ -122,7 +136,7 @@ export async function searchPeoplePageFromDb(
 
     const pageResult = await client.query<PersonRow>(
       `SELECT p.id, p.slug, p.display_name, p.surname, p.birth_date, p.birth_place,
-         p.death_date, p.death_place, p.living_status, p.privacy, p.published, f.fact_count
+         p.death_date, p.death_place, p.living_status, p.privacy, p.published, f.fact_count, f.aliases
        FROM people p
        ${pageLateralSql}
        WHERE ${whereSql}
@@ -373,6 +387,7 @@ function toListItem(row: PersonRow): PeopleListItem {
     id: row.id,
     slug: row.slug,
     displayName: row.display_name,
+    aliases: normalizeAliases(row.aliases ?? [], row.display_name),
     surname: row.surname ?? undefined,
     birthDate: row.birth_date ?? undefined,
     birthPlace: row.birth_place ?? undefined,
@@ -383,6 +398,31 @@ function toListItem(row: PersonRow): PeopleListItem {
     published: row.published,
     factCount: row.fact_count ?? 0
   };
+}
+
+function normalizeAliases(values: string[], displayName: string): string[] {
+  const displayNameKey = normalizeAliasKey(displayName);
+  const aliases = new Map<string, string>();
+
+  for (const value of values) {
+    const alias = value.trim();
+    const key = normalizeAliasKey(alias);
+    if (!alias || !key || key === displayNameKey || aliases.has(key)) {
+      continue;
+    }
+    aliases.set(key, alias);
+  }
+
+  return [...aliases.values()];
+}
+
+function normalizeAliasKey(value: string): string {
+  return value
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function mapPerson(row: PersonRow, facts: PersonFact[]): PersonSummary {

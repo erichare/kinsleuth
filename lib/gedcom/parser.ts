@@ -237,22 +237,33 @@ export function buildFamilyRelationshipMap(records: GedcomRecord[]): Map<string,
 
 export function extractFacts(root: GedcomNode): PersonFact[] {
   const facts: PersonFact[] = [];
+  const canonicalNameNode = findChild(root, "NAME");
+  const canonicalNameKey = normalizedNameKey(textWithContinuations(canonicalNameNode));
 
   for (const node of root.children) {
-    if (!eventTags.has(node.tag)) {
+    const isSecondaryName = node.tag === "NAME" && node !== canonicalNameNode;
+    if (!isSecondaryName && !eventTags.has(node.tag)) {
       continue;
     }
 
-    const date = findChild(node, "DATE")?.value;
-    const place = findChild(node, "PLAC")?.value;
-    const source = findChild(node, "SOUR")?.value ?? findChild(findChild(node, "SOUR") ?? node, "_APID")?.value;
+    const value = node.tag === "EVEN"
+      ? textWithContinuations(findChild(node, "TYPE"))
+      : textWithContinuations(node);
+    if (isSecondaryName && canonicalNameKey && normalizedNameKey(value) === canonicalNameKey) {
+      continue;
+    }
+
+    const date = textWithContinuations(findChild(node, "DATE"));
+    const place = textWithContinuations(findChild(node, "PLAC"));
+    const sourceNode = findChild(node, "SOUR");
+    const source = textWithContinuations(sourceNode) ?? textWithContinuations(findChild(sourceNode ?? node, "_APID"));
 
     facts.push({
       id: `${root.xref ?? root.value}-${node.number}`,
       type: node.tag,
       date,
       place,
-      value: node.tag === "EVEN" ? findChild(node, "TYPE")?.value : node.value,
+      value,
       source,
       confidence: source ? 0.8 : 0.45,
       privacy: "private"
@@ -260,6 +271,16 @@ export function extractFacts(root: GedcomNode): PersonFact[] {
   }
 
   return facts;
+}
+
+function normalizedNameKey(value: string | undefined): string {
+  return (value ?? "")
+    .replace(/\//g, " ")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 // KinSleuth's GEDCOM exporter writes curation flags as custom _KS_ tags so a

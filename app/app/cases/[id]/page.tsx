@@ -3,14 +3,16 @@ import { notFound } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { CaseResearchGuide } from "@/components/case-research-guide";
 import { CaseTaskList } from "@/components/case-task-list";
+import { DemoCaseResearchBrief } from "@/components/demo-case-research-brief";
 import { DemoGuidedCaseJourney } from "@/components/demo-guided-case-journey";
-import { EvidenceScan } from "@/components/evidence-scan";
+import { EvidenceRecordDetails, EvidenceScan } from "@/components/evidence-scan";
 import { Confidence, Status } from "@/components/ui";
 import { getSessionContext, workspaceOptionsForSession } from "@/lib/auth-session";
 import { isDnaResearchCase, projectResearchCaseForDnaCapability } from "@/lib/case-search";
 import { demoArchiveMediaForEvidence } from "@/lib/demo-archive-media";
 import { isGuidedResearchEnabled } from "@/lib/guided-research-config";
 import { resolveHostedCapabilities } from "@/lib/hosted-capabilities";
+import { publicDemoGuidedCaseId } from "@/lib/public-demo-contract";
 import { hasPermission } from "@/lib/rbac";
 import { readWorkspace } from "@/lib/workspace-store";
 
@@ -46,7 +48,13 @@ export default async function CaseDetailPage({ params }: { params: Promise<{ id:
       </section>
 
       {session.kind === "demo-guest" ? (
-        <DemoGuidedCaseJourney initialCase={visibleResearchCase} />
+        <div className="case-research-workspace demo-case-experience">
+          {visibleResearchCase.id === publicDemoGuidedCaseId ? (
+            <DemoGuidedCaseJourney initialCase={visibleResearchCase} />
+          ) : (
+            <DemoCaseResearchBrief researchCase={visibleResearchCase} />
+          )}
+        </div>
       ) : guidedResearchEnabled ? (
         <CaseResearchGuide
           initialCase={visibleResearchCase}
@@ -100,6 +108,7 @@ export default async function CaseDetailPage({ params }: { params: Promise<{ id:
                   ) : null}
                   <p>{evidence.summary}</p>
                   <Confidence value={evidence.confidence} />
+                  {scan ? <EvidenceRecordDetails media={scan} /> : null}
                 </div>
               </div>
             );

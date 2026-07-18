@@ -367,7 +367,7 @@ jobs:
       - name: Migrate and provision only the isolated demo database
         env:
           DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
-          DEMO_FIXTURE_ROTATION_CONFIRMATION: ROTATE-DEMO-FIXTURE:kinresolve-demo-public:3:4
+          DEMO_FIXTURE_ROTATION_CONFIRMATION: ROTATE-DEMO-FIXTURE:kinresolve-demo-public:4:5
           KINSLEUTH_ARCHIVE_ID: kinresolve-demo-public
           KINRESOLVE_DATASET_MODE: demo
           KINRESOLVE_DEPLOYMENT_MODE: hosted
@@ -375,7 +375,7 @@ jobs:
         run: |
           set -euo pipefail
           npm run db:migrate
-          npm run archive:rotate-public-demo-fixture -- --from-version 3
+          npm run archive:rotate-public-demo-fixture -- --from-version 4
           npm run archive:provision -- --mode demo
 
       - name: Verify the exact demo migration ledger and canonical archive
