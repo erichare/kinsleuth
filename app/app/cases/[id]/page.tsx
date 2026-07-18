@@ -4,9 +4,11 @@ import { AppShell } from "@/components/app-shell";
 import { CaseResearchGuide } from "@/components/case-research-guide";
 import { CaseTaskList } from "@/components/case-task-list";
 import { DemoGuidedCaseJourney } from "@/components/demo-guided-case-journey";
+import { EvidenceScan } from "@/components/evidence-scan";
 import { Confidence, Status } from "@/components/ui";
 import { getSessionContext, workspaceOptionsForSession } from "@/lib/auth-session";
 import { isDnaResearchCase, projectResearchCaseForDnaCapability } from "@/lib/case-search";
+import { demoArchiveMediaForEvidence } from "@/lib/demo-archive-media";
 import { isGuidedResearchEnabled } from "@/lib/guided-research-config";
 import { resolveHostedCapabilities } from "@/lib/hosted-capabilities";
 import { hasPermission } from "@/lib/rbac";
@@ -80,19 +82,28 @@ export default async function CaseDetailPage({ params }: { params: Promise<{ id:
       <section className="app-card" style={{ marginTop: 20 }}>
         <h2>Evidence</h2>
         <div className="evidence-list">
-          {visibleResearchCase.evidence.map((evidence) => (
-            <div className="evidence-item" key={evidence.id}>
-              <div className="evidence-item-heading">
-                <strong>{evidence.title}</strong>
-                {evidence.linkedDnaMatchId && dnaMatchesById ? <Status tone="warning">DNA linked</Status> : <Status>{evidence.type}</Status>}
+          {visibleResearchCase.evidence.map((evidence) => {
+            const scan = capabilities.datasetMode === "demo"
+              ? demoArchiveMediaForEvidence(evidence.id)
+              : undefined;
+
+            return (
+              <div className={`evidence-item${scan ? " evidence-item--scan" : ""}`} key={evidence.id}>
+                {scan ? <EvidenceScan media={scan} /> : null}
+                <div>
+                  <div className="evidence-item-heading">
+                    <strong>{evidence.title}</strong>
+                    {evidence.linkedDnaMatchId && dnaMatchesById ? <Status tone="warning">DNA linked</Status> : <Status>{evidence.type}</Status>}
+                  </div>
+                  {evidence.linkedDnaMatchId && dnaMatchesById ? (
+                    <p className="muted">Linked match: {dnaMatchesById.get(evidence.linkedDnaMatchId)?.displayName ?? evidence.linkedDnaMatchId}</p>
+                  ) : null}
+                  <p>{evidence.summary}</p>
+                  <Confidence value={evidence.confidence} />
+                </div>
               </div>
-              {evidence.linkedDnaMatchId && dnaMatchesById ? (
-                <p className="muted">Linked match: {dnaMatchesById.get(evidence.linkedDnaMatchId)?.displayName ?? evidence.linkedDnaMatchId}</p>
-              ) : null}
-              <p>{evidence.summary}</p>
-              <Confidence value={evidence.confidence} />
-            </div>
-          ))}
+            );
+          })}
         </div>
       </section>
     </AppShell>

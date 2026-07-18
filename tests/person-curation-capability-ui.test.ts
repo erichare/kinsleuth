@@ -68,10 +68,94 @@ describe("person curation publishing capability", () => {
     }));
 
     expect(html).toMatch(/>Private beta</i);
+    expect(html).toMatch(/Fictional demo archive/i);
     expect(html).not.toMatch(/>Published</i);
     expect(workspaceMocks.readWorkspace).toHaveBeenCalledWith({
       archiveId: "archive-private-beta"
     });
+  });
+
+  it("does not serialize DNA case evidence or saved answers when DNA is disabled", async () => {
+    stubHostedPrivateBeta();
+    const person = { ...demoPeople[0], published: true };
+    workspaceMocks.readWorkspace.mockResolvedValue({
+      archiveName: "Synthetic private archive",
+      people: [person],
+      sources: [],
+      cases: [{
+        id: "case-secret-dna",
+        title: "Secret DNA case",
+        question: "Does the DNA match connect this branch?",
+        status: "active",
+        focus: "DNA",
+        privacy: "sensitive",
+        hypotheses: [],
+        tasks: [],
+        evidence: [{
+          id: "evidence-secret-dna",
+          title: "Secret DNA match",
+          type: "DNA",
+          summary: "SECRET_DNA_SUMMARY",
+          confidence: 0.8,
+          linkedPersonId: person.id,
+          linkedDnaMatchId: "dna-secret"
+        }]
+      }],
+      aiRuns: [{
+        id: "run-secret-dna",
+        question: "Interpret the DNA match",
+        answer: "SECRET_DNA_ANSWER",
+        status: "ready",
+        evidenceUsed: [],
+        uncertainty: [],
+        anomalyCount: 0,
+        suggestions: [],
+        contextReferences: [{ id: person.id, type: "person", label: person.displayName }],
+        linkedCaseId: "case-secret-dna",
+        createdAt: "2026-07-16T12:00:00.000Z"
+      }]
+    });
+
+    const html = renderToStaticMarkup(await AppPersonPage({
+      params: Promise.resolve({ id: person.id })
+    }));
+
+    expect(html).not.toContain("SECRET_DNA_SUMMARY");
+    expect(html).not.toContain("SECRET_DNA_ANSWER");
+  });
+
+  it("keeps a saved local analysis while hiding provider metadata when external AI is disabled", async () => {
+    stubHostedPrivateBeta({ dna: true });
+    const person = { ...demoPeople[0], published: true };
+    workspaceMocks.readWorkspace.mockResolvedValue({
+      archiveName: "Synthetic private archive",
+      people: [person],
+      sources: [],
+      cases: [],
+      aiRuns: [{
+        id: "run-stale-provider-details",
+        question: "Review this profile",
+        answer: "SAVED_LOCAL_ANALYSIS",
+        status: "ready",
+        evidenceUsed: [],
+        uncertainty: [],
+        anomalyCount: 0,
+        suggestions: [],
+        contextReferences: [{ id: person.id, type: "person", label: person.displayName }],
+        provider: "SECRET_PROVIDER_HOST",
+        model: "SECRET_PROVIDER_MODEL",
+        providerStatus: "completed",
+        createdAt: "2026-07-16T12:00:00.000Z"
+      }]
+    });
+
+    const html = renderToStaticMarkup(await AppPersonPage({
+      params: Promise.resolve({ id: person.id })
+    }));
+
+    expect(html).toContain("SAVED_LOCAL_ANALYSIS");
+    expect(html).not.toContain("SECRET_PROVIDER_HOST");
+    expect(html).not.toContain("SECRET_PROVIDER_MODEL");
   });
 });
 
@@ -82,18 +166,18 @@ function render(publicPublishingEnabled: boolean, published: boolean): string {
   }));
 }
 
-function stubHostedPrivateBeta(): void {
+function stubHostedPrivateBeta(overrides: { dna?: boolean; externalAi?: boolean } = {}): void {
   const environment = {
     KINRESOLVE_DEPLOYMENT_MODE: "hosted",
     KINRESOLVE_DATASET_MODE: "pilot",
-    KINRESOLVE_DNA_ENABLED: "false",
-    KINRESOLVE_EXTERNAL_AI_ENABLED: "false",
+    KINRESOLVE_DNA_ENABLED: String(overrides.dna ?? false),
+    KINRESOLVE_EXTERNAL_AI_ENABLED: String(overrides.externalAi ?? false),
     KINRESOLVE_PUBLIC_ARCHIVE_ENABLED: "false",
     KINRESOLVE_PUBLIC_PUBLISHING_ENABLED: "false",
     KINRESOLVE_EVIDENCE_BINARY_UPLOADS_ENABLED: "false",
     KINRESOLVE_PACKAGE_MEDIA_ENABLED: "false",
     KINRESOLVE_PLAIN_GEDCOM_ENABLED: "true"
-  } as const;
+  };
   for (const [name, value] of Object.entries(environment)) {
     vi.stubEnv(name, value);
   }
