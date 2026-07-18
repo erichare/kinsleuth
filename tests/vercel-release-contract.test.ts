@@ -69,6 +69,7 @@ function deployment(overrides: Record<string, unknown> = {}): Record<string, unk
     id: "dpl_candidate1234567890abcdef",
     url: "kinresolve-candidate-a1b2c3-team.vercel.app",
     readyState: "READY",
+    readySubstate: "PROMOTED",
     target: "production",
     projectId: "prj_kinresolve",
     ownerId: "team_kinresolve",
@@ -161,6 +162,10 @@ describe("Vercel release deployment contract", () => {
       stagedDeployment(),
       promotedExpectations
     )).toThrow(/READY/i);
+    expect(() => validatePromotedDeployment(
+      deployment({ readySubstate: "STAGED" }),
+      promotedExpectations
+    )).toThrow(/PROMOTED/i);
   });
 
   it("accepts only the explicitly approved holding deployment returned by the canonical hostname lookup", () => {
@@ -329,16 +334,33 @@ describe("Vercel release deployment contract", () => {
     }), ownership)).toThrow(/ambiguous.*ID/i);
   });
 
-  it.each(["previous", "holding-record", "holding", "candidate", "promoted"] as const)(
+  it.each([
+    "previous",
+    "holding-record",
+    "holding",
+    "candidate",
+    "demo-candidate",
+    "promoted"
+  ] as const)(
     "validates %s mode through the nonsecret CLI contract",
     async (mode) => {
       const root = await mkdtemp(path.join(tmpdir(), "kinresolve-vercel-contract-"));
       scratchDirectories.push(root);
       const fixturePath = path.join(root, "deployment.json");
       const fixture = mode === "holding" || mode === "holding-record"
+        ? deployment({
+            id: holdingExpectations.approvedHoldingDeploymentId,
+            meta: staticHoldingMetadata
+          })
+        : mode === "demo-candidate"
           ? deployment({
-              id: holdingExpectations.approvedHoldingDeploymentId,
-              meta: staticHoldingMetadata
+              readySubstate: "STAGED",
+              meta: {
+                ...(deployment().meta as Record<string, string>),
+                releaseRole: "public-demo",
+                datasetMode: "demo",
+                canonicalArchiveId: "kinresolve-demo-public"
+              }
             })
           : deployment();
       await writeFile(fixturePath, JSON.stringify(fixture), "utf8");
@@ -421,7 +443,7 @@ describe("Vercel release deployment contract", () => {
 });
 
 function runCli(
-  mode: "previous" | "holding-record" | "holding" | "candidate" | "containment" | "promoted",
+  mode: "previous" | "holding-record" | "holding" | "candidate" | "demo-candidate" | "containment" | "promoted",
   fixturePath: string,
   environment: Record<string, string> = {},
   canonicalLookupHostname: string | null = ["holding", "containment", "promoted"].includes(mode)

@@ -214,7 +214,7 @@ jobs:
             echo "The exact pinned holding deployment is already current."
             exit 0
           fi
-          if vercel promote "$HOLDING_DEPLOYMENT_URL" --yes --timeout=5m; then
+          if vercel rollback "$HOLDING_DEPLOYMENT_URL" --yes --timeout=5m; then
             exit 0
           fi
           if holding_is_current "$RUNNER_TEMP/public-demo-safety-current-after.json"; then

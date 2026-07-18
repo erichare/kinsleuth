@@ -106,7 +106,7 @@ describe("public demo operational boundary", () => {
     expect(publicDemoRelease).toContain('vercel promote "$CANDIDATE_DEPLOYMENT_URL"');
     expect(publicDemoRelease).toContain("PREVIOUS_DEPLOYMENT_ID");
     expect(publicDemoRelease).toContain("DEMO_HOLDING_DEPLOYMENT_ID");
-    expect(publicDemoRelease).toContain('vercel promote "$HOLDING_DEPLOYMENT_URL"');
+    expect(publicDemoRelease).toContain('vercel rollback "$HOLDING_DEPLOYMENT_URL"');
 
     const protection = publicDemoRelease.indexOf("scripts/probe-vercel-candidate-protection.mjs");
     const canary = publicDemoRelease.search(/browser-canary\.(?:ts|mjs)/);

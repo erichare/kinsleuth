@@ -8,6 +8,7 @@ import {
   validateHoldingDeployment,
   validateHoldingRecordDeployment,
   validatePreviousDeployment,
+  validatePublicDemoCandidateDeployment,
   validatePublicDemoRollbackDeployment,
   validatePromotedDeployment
 } from "../lib/vercel-release-contract.ts";
@@ -19,6 +20,7 @@ const modes = new Set([
   "holding-record",
   "holding",
   "candidate",
+  "demo-candidate",
   "containment",
   "promoted"
 ]);
@@ -61,7 +63,7 @@ try {
     || (!requiresCanonicalLookup && canonicalLookupHostname !== undefined)
   ) {
     throw new Error(
-      "Usage: validate-vercel-deployment.mjs <previous|demo-rollback|demo-rollback-or-holding|holding-record|holding|candidate|containment|promoted> <json-file> [canonical-lookup-hostname]. The canonical lookup hostname is required only for holding, containment, and promoted modes."
+      "Usage: validate-vercel-deployment.mjs <previous|demo-rollback|demo-rollback-or-holding|holding-record|holding|candidate|demo-candidate|containment|promoted> <json-file> [canonical-lookup-hostname]. The canonical lookup hostname is required only for holding, containment, and promoted modes."
     );
   }
 
@@ -87,8 +89,8 @@ try {
       canonicalLookupHostname,
       approvedHoldingDeploymentId: requiredEnvironment("APPROVED_HOLDING_DEPLOYMENT_ID")
     });
-  } else if (mode === "candidate") {
-    result = validateCandidateDeployment(document, {
+  } else if (mode === "candidate" || mode === "demo-candidate") {
+    const expectations = {
       ...ownership,
       appBaseUrl: requiredEnvironment("APP_BASE_URL"),
       expectedGithubCommitSha: requiredEnvironment("EXPECTED_GITHUB_COMMIT_SHA"),
@@ -97,7 +99,10 @@ try {
       expectedReleaseTag: requiredEnvironment("RELEASE_TAG"),
       expectedPackageVersion: requiredEnvironment("PACKAGE_VERSION"),
       previousDeploymentId: requiredEnvironment("PREVIOUS_DEPLOYMENT_ID")
-    });
+    };
+    result = mode === "demo-candidate"
+      ? validatePublicDemoCandidateDeployment(document, expectations)
+      : validateCandidateDeployment(document, expectations);
   } else if (mode === "containment") {
     result = validateContainmentCanonicalDeployment(document, {
       ...ownership,

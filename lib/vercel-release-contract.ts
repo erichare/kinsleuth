@@ -62,6 +62,7 @@ export type ValidatedContainmentCanonical = ValidatedVercelDeployment & {
 type NormalizedDeployment = ValidatedVercelDeployment & {
   aliases: readonly string[];
   metadata: JsonObject | null;
+  readySubstate: string | null;
 };
 
 export const staticHoldingDeploymentMetadata = {
@@ -100,6 +101,7 @@ export function validatePublicDemoRollbackDeployment(
   if (!deployment.metadata) throw publicDemoRollbackError();
   const metadata = deployment.metadata;
   try {
+    requireReadySubstate(deployment, "PROMOTED", "public demo rollback");
     if (metadata.releaseRole === staticHoldingDeploymentMetadata.releaseRole) {
       if (!expectations.allowHolding) throw publicDemoRollbackError();
       for (const [name, expectedValue] of Object.entries(staticHoldingDeploymentMetadata)) {
@@ -136,6 +138,20 @@ export function validatePublicDemoRollbackDeployment(
   }
 }
 
+export function validatePublicDemoCandidateDeployment(
+  document: unknown,
+  expectations: CandidateDeploymentExpectations
+): ValidatedVercelDeployment {
+  const candidate = validateCandidateDeployment(document, expectations);
+  const deployment = normalizeReadyProductionDeployment(document, expectations);
+  requireReadySubstate(deployment, "STAGED", "public demo candidate");
+  if (!deployment.metadata) {
+    throw new Error("The public demo candidate deployment metadata is missing.");
+  }
+  requirePublicDemoIdentityMetadata(deployment.metadata, "public demo candidate");
+  return candidate;
+}
+
 export function validateHoldingDeployment(
   document: unknown,
   expectations: HoldingDeploymentExpectations
@@ -152,6 +168,7 @@ export function validateHoldingRecordDeployment(
   expectations: HoldingRecordExpectations
 ): ValidatedVercelDeployment {
   const deployment = normalizeReadyProductionDeployment(document, expectations);
+  requireReadySubstate(deployment, "PROMOTED", "holding");
   const approvedId = validateDeploymentId(
     expectations.approvedHoldingDeploymentId,
     "The approved holding deployment ID"
@@ -277,6 +294,7 @@ export function validatePromotedDeployment(
     expectations.appBaseUrl
   );
   const deployment = normalizeReadyProductionDeployment(document, expectations);
+  requireReadySubstate(deployment, "PROMOTED", "promoted application");
   const candidateDeploymentId = validateDeploymentId(
     expectations.candidateDeploymentId,
     "The candidate Vercel deployment ID"
@@ -332,7 +350,8 @@ function normalizeReadyProductionDeployment(
     url,
     status: "READY",
     aliases: readAliases(document),
-    metadata: isObject(metadataValue) ? metadataValue : null
+    metadata: isObject(metadataValue) ? metadataValue : null,
+    readySubstate: readOptionalString(document, "readySubstate", "deployment ready substate")
   };
 }
 
@@ -479,6 +498,38 @@ function requireExactMetadata(
   if (metadata[name] !== expectedValue) {
     throw new Error(`The ${deploymentKind} deployment ${name} metadata does not match the release.`);
   }
+}
+
+function requirePublicDemoIdentityMetadata(metadata: JsonObject, deploymentKind: string): void {
+  requireExactMetadata(metadata, "releaseRole", "public-demo", deploymentKind);
+  requireExactMetadata(metadata, "datasetMode", "demo", deploymentKind);
+  requireExactMetadata(
+    metadata,
+    "canonicalArchiveId",
+    "kinresolve-demo-public",
+    deploymentKind
+  );
+}
+
+function requireReadySubstate(
+  deployment: NormalizedDeployment,
+  expectedSubstate: string,
+  deploymentKind: string
+): void {
+  if (deployment.readySubstate !== expectedSubstate) {
+    throw new Error(
+      `The ${deploymentKind} deployment must have readySubstate ${expectedSubstate}.`
+    );
+  }
+}
+
+function readOptionalString(document: JsonObject, key: string, label: string): string | null {
+  const value = document[key];
+  if (value === undefined || value === null) return null;
+  if (typeof value !== "string" || value.trim() === "") {
+    throw new Error(`The Vercel ${label} must be a nonempty string when present.`);
+  }
+  return value;
 }
 
 function validatedMetadataValue(metadata: JsonObject, name: string, pattern: RegExp): string {

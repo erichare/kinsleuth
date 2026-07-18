@@ -121,12 +121,13 @@ describe("failed public demo release safety workflow", () => {
       "The exact pinned holding deployment became current during restoration."
     );
     expect(restoreBlock.indexOf("scripts/validate-vercel-deployment.mjs holding")).toBeLessThan(
-      restoreBlock.indexOf('vercel promote "$HOLDING_DEPLOYMENT_URL"')
+      restoreBlock.indexOf('vercel rollback "$HOLDING_DEPLOYMENT_URL"')
     );
     expect(restoreBlock.indexOf("public-demo-safety-current-after.json")).toBeGreaterThan(
-      restoreBlock.indexOf('vercel promote "$HOLDING_DEPLOYMENT_URL"')
+      restoreBlock.indexOf('vercel rollback "$HOLDING_DEPLOYMENT_URL"')
     );
-    expect(contain).toContain('vercel promote "$HOLDING_DEPLOYMENT_URL" --yes --timeout=5m');
+    expect(contain).toContain('vercel rollback "$HOLDING_DEPLOYMENT_URL" --yes --timeout=5m');
+    expect(contain).not.toContain('vercel promote "$HOLDING_DEPLOYMENT_URL"');
     expect(contain).toContain(`--data '{"autoAssignCustomDomains":false}'`);
     expect(contain).toContain("scripts/validate-vercel-project-safety.mjs");
     expect(contain).toContain("EXPECTED_VERCEL_PROJECT_NAME: kinresolve-demo");

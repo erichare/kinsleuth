@@ -547,10 +547,7 @@ jobs:
                   .errorMessage == null
                 ' "$RUNNER_TEMP/public-demo-candidate.json" >/dev/null \
                 && env -u GITHUB_OUTPUT node --experimental-strip-types \
-                  scripts/validate-vercel-deployment.mjs candidate \
-                  "$RUNNER_TEMP/public-demo-candidate.json" >/dev/null 2>&1 \
-                && env -u GITHUB_OUTPUT node --experimental-strip-types \
-                  scripts/validate-vercel-deployment.mjs demo-rollback \
+                  scripts/validate-vercel-deployment.mjs demo-candidate \
                   "$RUNNER_TEMP/public-demo-candidate.json" >/dev/null 2>&1; then
                 candidate_validated="true"
                 break
@@ -560,10 +557,7 @@ jobs:
             sleep 5
           done
           test "$candidate_validated" = "true"
-          node --experimental-strip-types scripts/validate-vercel-deployment.mjs candidate \
-            "$RUNNER_TEMP/public-demo-candidate.json"
-          env -u GITHUB_OUTPUT node --experimental-strip-types \
-            scripts/validate-vercel-deployment.mjs demo-rollback \
+          node --experimental-strip-types scripts/validate-vercel-deployment.mjs demo-candidate \
             "$RUNNER_TEMP/public-demo-candidate.json"
 
       - name: Prove every generated candidate origin remains protected
@@ -755,6 +749,8 @@ jobs:
         id: rollback
         if: failure() && steps.promote.outcome == 'success'
         env:
+          APP_BASE_URL: ${{ vars.APP_BASE_URL }}
+          CANDIDATE_DEPLOYMENT_ID: ${{ steps.previous.outputs.deployment_id }}
           PREVIOUS_DEPLOYMENT_ID: ${{ steps.previous.outputs.deployment_id }}
           PREVIOUS_DEPLOYMENT_URL: ${{ steps.previous.outputs.deployment_url }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
@@ -763,7 +759,32 @@ jobs:
         run: |
           set -euo pipefail
           [[ "$PREVIOUS_DEPLOYMENT_ID" =~ ^dpl_[A-Za-z0-9]{8,96}$ ]]
-          vercel promote "$PREVIOUS_DEPLOYMENT_URL" --yes --timeout=5m
+          deployment_host="${APP_BASE_URL#https://}"
+          scope_query=""
+          if [[ "$VERCEL_ORG_ID" == team_* ]]; then scope_query="?teamId=$VERCEL_ORG_ID"; fi
+          target_is_current() {
+            local output_path="$1"
+            rm -f "$output_path"
+            curl --connect-timeout 10 --max-time 30 --retry 3 --retry-all-errors \
+              --fail --silent --show-error --header "Authorization: Bearer $VERCEL_TOKEN" \
+              "https://api.vercel.com/v13/deployments/$deployment_host$scope_query" \
+              --output "$output_path" \
+            && env -u GITHUB_OUTPUT node --experimental-strip-types \
+              scripts/validate-vercel-deployment.mjs promoted \
+              "$output_path" "$deployment_host" >/dev/null 2>&1
+          }
+          if target_is_current "$RUNNER_TEMP/public-demo-rollback-current-before.json"; then
+            echo "The exact rollback deployment is already current."
+            exit 0
+          fi
+          if vercel rollback "$PREVIOUS_DEPLOYMENT_URL" --yes --timeout=5m; then
+            exit 0
+          fi
+          if target_is_current "$RUNNER_TEMP/public-demo-rollback-current-after.json"; then
+            echo "The exact rollback deployment became current during restoration."
+            exit 0
+          fi
+          exit 1
 
       - name: Prove the automatic rollback at the canonical hostname
         id: rollback-proof
@@ -827,6 +848,8 @@ jobs:
           steps.canonical-proof.outcome != 'success' &&
           steps.rollback-proof.outcome != 'success'
         env:
+          APP_BASE_URL: ${{ vars.APP_BASE_URL }}
+          CANDIDATE_DEPLOYMENT_ID: ${{ steps.holding.outputs.deployment_id }}
           DEMO_HOLDING_DEPLOYMENT_ID: ${{ steps.holding.outputs.deployment_id }}
           HOLDING_DEPLOYMENT_URL: ${{ steps.holding.outputs.deployment_url }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
@@ -835,7 +858,32 @@ jobs:
         run: |
           set -euo pipefail
           [[ "$DEMO_HOLDING_DEPLOYMENT_ID" =~ ^dpl_[A-Za-z0-9]{8,96}$ ]]
-          vercel promote "$HOLDING_DEPLOYMENT_URL" --yes --timeout=5m
+          deployment_host="${APP_BASE_URL#https://}"
+          scope_query=""
+          if [[ "$VERCEL_ORG_ID" == team_* ]]; then scope_query="?teamId=$VERCEL_ORG_ID"; fi
+          target_is_current() {
+            local output_path="$1"
+            rm -f "$output_path"
+            curl --connect-timeout 10 --max-time 30 --retry 3 --retry-all-errors \
+              --fail --silent --show-error --header "Authorization: Bearer $VERCEL_TOKEN" \
+              "https://api.vercel.com/v13/deployments/$deployment_host$scope_query" \
+              --output "$output_path" \
+            && env -u GITHUB_OUTPUT node --experimental-strip-types \
+              scripts/validate-vercel-deployment.mjs promoted \
+              "$output_path" "$deployment_host" >/dev/null 2>&1
+          }
+          if target_is_current "$RUNNER_TEMP/public-demo-holding-current-before.json"; then
+            echo "The exact holding deployment is already current."
+            exit 0
+          fi
+          if vercel rollback "$HOLDING_DEPLOYMENT_URL" --yes --timeout=5m; then
+            exit 0
+          fi
+          if target_is_current "$RUNNER_TEMP/public-demo-holding-current-after.json"; then
+            echo "The exact holding deployment became current during restoration."
+            exit 0
+          fi
+          exit 1
 
       - name: Prove the emergency holding fallback at the canonical hostname
         id: holding-fallback-proof
@@ -963,23 +1011,85 @@ jobs:
           node --experimental-strip-types scripts/validate-vercel-deployment.mjs "$mode" \
             "$RUNNER_TEMP/public-demo-containment-target.json"
 
-      - name: Promote the validated rollback deployment
+      - name: Roll back to the validated prior demo deployment
         if: needs.authorize.outputs.action == 'rollback'
         env:
+          APP_BASE_URL: ${{ vars.APP_BASE_URL }}
+          CANDIDATE_DEPLOYMENT_ID: ${{ steps.target.outputs.deployment_id }}
+          ROLLBACK_DEPLOYMENT_ID: ${{ steps.target.outputs.deployment_id }}
           ROLLBACK_DEPLOYMENT_URL: ${{ steps.target.outputs.deployment_url }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-        run: vercel promote "$ROLLBACK_DEPLOYMENT_URL" --yes --timeout=5m
+        run: |
+          set -euo pipefail
+          [[ "$ROLLBACK_DEPLOYMENT_ID" =~ ^dpl_[A-Za-z0-9]{8,96}$ ]]
+          deployment_host="${APP_BASE_URL#https://}"
+          scope_query=""
+          if [[ "$VERCEL_ORG_ID" == team_* ]]; then scope_query="?teamId=$VERCEL_ORG_ID"; fi
+          target_is_current() {
+            local output_path="$1"
+            rm -f "$output_path"
+            curl --connect-timeout 10 --max-time 30 --retry 3 --retry-all-errors \
+              --fail --silent --show-error --header "Authorization: Bearer $VERCEL_TOKEN" \
+              "https://api.vercel.com/v13/deployments/$deployment_host$scope_query" \
+              --output "$output_path" \
+            && env -u GITHUB_OUTPUT node --experimental-strip-types \
+              scripts/validate-vercel-deployment.mjs promoted \
+              "$output_path" "$deployment_host" >/dev/null 2>&1
+          }
+          if target_is_current "$RUNNER_TEMP/public-demo-manual-rollback-current-before.json"; then
+            echo "The exact requested rollback deployment is already current."
+            exit 0
+          fi
+          if vercel rollback "$ROLLBACK_DEPLOYMENT_URL" --yes --timeout=5m; then
+            exit 0
+          fi
+          if target_is_current "$RUNNER_TEMP/public-demo-manual-rollback-current-after.json"; then
+            echo "The exact requested rollback deployment became current during restoration."
+            exit 0
+          fi
+          exit 1
 
-      - name: Promote the pinned static holding deployment
+      - name: Roll back to the pinned static holding deployment
         if: needs.authorize.outputs.action == 'contain'
         env:
+          APP_BASE_URL: ${{ vars.APP_BASE_URL }}
+          CANDIDATE_DEPLOYMENT_ID: ${{ steps.target.outputs.deployment_id }}
+          DEMO_HOLDING_DEPLOYMENT_ID: ${{ steps.target.outputs.deployment_id }}
           HOLDING_DEPLOYMENT_URL: ${{ steps.target.outputs.deployment_url }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-        run: vercel promote "$HOLDING_DEPLOYMENT_URL" --yes --timeout=5m
+        run: |
+          set -euo pipefail
+          [[ "$DEMO_HOLDING_DEPLOYMENT_ID" =~ ^dpl_[A-Za-z0-9]{8,96}$ ]]
+          deployment_host="${APP_BASE_URL#https://}"
+          scope_query=""
+          if [[ "$VERCEL_ORG_ID" == team_* ]]; then scope_query="?teamId=$VERCEL_ORG_ID"; fi
+          target_is_current() {
+            local output_path="$1"
+            rm -f "$output_path"
+            curl --connect-timeout 10 --max-time 30 --retry 3 --retry-all-errors \
+              --fail --silent --show-error --header "Authorization: Bearer $VERCEL_TOKEN" \
+              "https://api.vercel.com/v13/deployments/$deployment_host$scope_query" \
+              --output "$output_path" \
+            && env -u GITHUB_OUTPUT node --experimental-strip-types \
+              scripts/validate-vercel-deployment.mjs promoted \
+              "$output_path" "$deployment_host" >/dev/null 2>&1
+          }
+          if target_is_current "$RUNNER_TEMP/public-demo-contain-current-before.json"; then
+            echo "The exact holding deployment is already current."
+            exit 0
+          fi
+          if vercel rollback "$HOLDING_DEPLOYMENT_URL" --yes --timeout=5m; then
+            exit 0
+          fi
+          if target_is_current "$RUNNER_TEMP/public-demo-contain-current-after.json"; then
+            echo "The exact holding deployment became current during restoration."
+            exit 0
+          fi
+          exit 1
 
       - name: Prove the requested canonical containment state
         env:
