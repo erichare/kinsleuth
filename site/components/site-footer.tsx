@@ -19,6 +19,7 @@ export function SiteFooter() {
         <div>
           <h2>Explore</h2>
           <nav aria-label="Footer navigation">
+            <a href={site.demoUrl}>Try the demo</a>
             {navigation.slice(0, 3).map((item) => <Link href={item.href} key={item.href}>{item.label}</Link>)}
           </nav>
         </div>

@@ -15,6 +15,16 @@ describe("public demo marketing conversion", () => {
     expect(hero.indexOf("Try Kin Resolve")).toBeLessThan(hero.indexOf("Apply for the private beta"));
   });
 
+  it("keeps the public demo discoverable in the shared header and footer", async () => {
+    const [header, footer] = await Promise.all([
+      readFile("site/components/site-header.tsx", "utf8"),
+      readFile("site/components/site-footer.tsx", "utf8")
+    ]);
+
+    expect(header).toMatch(/<a href=\{site\.demoUrl\}>Demo<\/a>/i);
+    expect(footer).toMatch(/<a href=\{site\.demoUrl\}>Try the demo<\/a>/i);
+  });
+
   it("offers the working demo after the final challenge dossier", async () => {
     const challenge = await readFile("site/shared/research-instincts-challenge.tsx", "utf8");
     const dossier = challenge.slice(challenge.indexOf("{dossierScore ?"), challenge.indexOf('className="challenge-reset"'));

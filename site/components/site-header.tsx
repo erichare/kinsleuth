@@ -5,6 +5,7 @@ import { navigation, site } from "@/lib/site";
 function NavigationLinks({ mobile = false }: { mobile?: boolean }) {
   return (
     <nav className={mobile ? "mobile-nav-links" : "desktop-nav"} aria-label={mobile ? "Mobile navigation" : "Main navigation"}>
+      <a href={site.demoUrl}>Demo</a>
       {navigation.map((item) => (
         <Link href={item.href} key={item.href}>
           {item.label}
