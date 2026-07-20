@@ -9,15 +9,24 @@ const child = spawn(process.execPath, ["--import", "tsx", "scripts/provision-arc
   stdio: "inherit"
 });
 
+let forwardedSignal = null;
 for (const signal of ["SIGINT", "SIGTERM"]) {
-  process.on(signal, () => child.kill(signal));
+  process.on(signal, () => {
+    forwardedSignal = signal;
+    child.kill(signal);
+  });
 }
 
-child.on("error", () => {
-  console.error("Unable to start the Kin Resolve archive provisioning command.");
+child.on("error", (error) => {
+  console.error(`Unable to start the Kin Resolve archive provisioning command: ${error.message}`);
   process.exitCode = 1;
 });
 
 child.on("exit", (code, signal) => {
+  // An operator-initiated Ctrl-C explains itself; any other fatal signal
+  // (external kill, OOM) would otherwise exit 1 with nothing on stderr.
+  if (signal && signal !== forwardedSignal) {
+    console.error(`Archive provisioning command terminated by ${signal}.`);
+  }
   process.exitCode = code ?? (signal ? 1 : 0);
 });
