@@ -42,14 +42,14 @@ jobs:
 
     steps:
       - name: Check out the trusted authorization gate from main
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: main
           fetch-depth: 1
           persist-credentials: false
 
       - name: Set up Node.js for the credential-free authorization gate
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
 
@@ -151,7 +151,7 @@ jobs:
 
       - name: Check out the immutable trusted cleanup implementation
         if: steps.discover.outputs.lease_present == 'true'
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
@@ -169,7 +169,7 @@ jobs:
 
       - name: Set up the pinned Node runtime
         if: steps.discover.outputs.lease_present == 'true'
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
 
@@ -271,7 +271,7 @@ jobs:
           echo "RECOVERY_CLEANUP_WORK=${work}" >> "${GITHUB_ENV}"
 
       - name: Check out the immutable trusted cleanup implementation
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
@@ -287,7 +287,7 @@ jobs:
           git merge-base --is-ancestor "${SOURCE_HEAD_SHA}" origin/main
 
       - name: Set up the pinned Node runtime
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
 

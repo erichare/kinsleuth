@@ -18,18 +18,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out full history
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
+      - name: Set up Node.js and install dependencies
+        uses: ./.github/actions/setup-node-npm
 
       - name: Lint workflow definitions
         run: |
@@ -87,18 +81,12 @@ jobs:
           --health-retries 5
     steps:
       - name: Check out full history
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
+      - name: Set up Node.js and install dependencies
+        uses: ./.github/actions/setup-node-npm
 
       - name: Run every database-backed test
         env:
@@ -124,18 +112,12 @@ jobs:
           --health-retries 5
     steps:
       - name: Check out full history
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
+      - name: Set up Node.js and install dependencies
+        uses: ./.github/actions/setup-node-npm
 
       - name: Rehearse the latest stable upgrade
         env:
@@ -161,18 +143,12 @@ jobs:
           --health-retries 5
     steps:
       - name: Check out full history
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
+      - name: Set up Node.js and install dependencies
+        uses: ./.github/actions/setup-node-npm
 
       - name: Prove the pinned legacy release is forward-only incompatible
         env:
@@ -198,18 +174,12 @@ jobs:
           --health-retries 5
     steps:
       - name: Check out full history
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
+      - name: Set up Node.js and install dependencies
+        uses: ./.github/actions/setup-node-npm
 
       - name: Run large import regression
         env:
@@ -235,18 +205,12 @@ jobs:
           --health-retries 5
     steps:
       - name: Check out full history
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
+      - name: Set up Node.js and install dependencies
+        uses: ./.github/actions/setup-node-npm
 
       - name: Run large hosted integration refresh
         env:
@@ -316,12 +280,12 @@ jobs:
       S3_SECRET_ACCESS_KEY: synthetic-minio-password
     steps:
       - name: Check out full history
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
       - name: Set up Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
           cache: npm
@@ -400,7 +364,7 @@ jobs:
 
       - name: Upload synthetic-only failure screenshot
         if: ${{ failure() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: browser-canary-failure-${{ github.run_id }}-${{ github.run_attempt }}
           path: output/playwright/browser-canary-*.png
@@ -409,7 +373,7 @@ jobs:
 
       - name: Upload the synthetic disposable app log on failure
         if: ${{ failure() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: browser-canary-app-log-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/browser-canary-app.log
@@ -475,12 +439,12 @@ jobs:
       NODE_ENV: production
     steps:
       - name: Check out full history
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
       - name: Set up Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
           cache: npm
@@ -556,12 +520,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out full history
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
           cache: npm
