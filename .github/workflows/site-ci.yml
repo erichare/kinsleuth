@@ -30,16 +30,18 @@ concurrency:
 
 jobs:
   verify:
-    name: Verify ${{ matrix.release-mode }} with ${{ matrix.application-mode }} intake
+    name: Verify ${{ matrix.release-mode }} with ${{ matrix.application-mode }} intake and ${{ matrix.demo-mode }} demo
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         release-mode: [prelaunch, application, api-launch]
         application-mode: [mailto, application]
+        demo-mode: [pending, live]
     env:
       KINRESOLVE_MARKETING_RELEASE_MODE: ${{ matrix.release-mode }}
       KINRESOLVE_MARKETING_BETA_APPLICATION_MODE: ${{ matrix.application-mode }}
+      KINRESOLVE_MARKETING_DEMO_MODE: ${{ matrix.demo-mode }}
     defaults:
       run:
         working-directory: site

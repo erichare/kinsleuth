@@ -5,6 +5,7 @@ const outputRoot = resolve("out");
 const marketingReleaseMode = parseMarketingReleaseMode(
   process.env.KINRESOLVE_MARKETING_RELEASE_MODE
 );
+const marketingDemoMode = parseMarketingDemoMode(process.env.KINRESOLVE_MARKETING_DEMO_MODE);
 
 function parseMarketingReleaseMode(value) {
   if (value === undefined || value === "prelaunch") return "prelaunch";
@@ -12,6 +13,12 @@ function parseMarketingReleaseMode(value) {
   throw new Error(
     "KINRESOLVE_MARKETING_RELEASE_MODE must be exactly prelaunch, application, or api-launch."
   );
+}
+
+function parseMarketingDemoMode(value) {
+  if (value === undefined || value === "pending") return "pending";
+  if (value === "live") return "live";
+  throw new Error("KINRESOLVE_MARKETING_DEMO_MODE must be exactly pending or live.");
 }
 
 if (!existsSync(outputRoot)) {
@@ -142,6 +149,40 @@ for (const [mode, claims] of Object.entries(releaseClaims)) {
   for (const claim of [claims.headline, claims.rollout, claims.productBoundary]) {
     if (htmlCorpus.includes(claim)) {
       problems.push(`Static export for ${marketingReleaseMode} contains ${mode} claim: ${claim}`);
+    }
+  }
+}
+
+const demoClaims = {
+  pending: {
+    heroCtaLabel: "Try Kin Resolve",
+    heroSourceNote: "Source available under AGPL-3.0-only."
+  },
+  live: {
+    heroCtaLabel: "Solve the passenger mystery",
+    heroCtaNote: "No signup · about 2 minutes · every record is fictional.",
+    heroStatusLine: "The public demo is live. The hosted workspace remains an invitation-only private beta."
+  }
+};
+if (marketingDemoMode === "live") {
+  for (const claim of [demoClaims.live.heroCtaLabel, demoClaims.live.heroCtaNote, demoClaims.live.heroStatusLine]) {
+    if (!home.includes(claim)) problems.push(`Homepage is missing the live demo claim: ${claim}`);
+  }
+  for (const [description, replaced] of [
+    ["pending hero CTA label", demoClaims.pending.heroCtaLabel],
+    ["pending hero source note", demoClaims.pending.heroSourceNote]
+  ]) {
+    if (home.includes(replaced)) {
+      problems.push(`Live-demo homepage still contains the ${description}: ${replaced}`);
+    }
+  }
+} else {
+  for (const claim of [demoClaims.pending.heroCtaLabel, demoClaims.pending.heroSourceNote]) {
+    if (!home.includes(claim)) problems.push(`Homepage is missing the pending demo copy: ${claim}`);
+  }
+  for (const claim of [demoClaims.live.heroCtaLabel, demoClaims.live.heroCtaNote, demoClaims.live.heroStatusLine]) {
+    if (htmlCorpus.includes(claim)) {
+      problems.push(`Static export for the ${marketingDemoMode} demo mode contains live-demo claim: ${claim}`);
     }
   }
 }

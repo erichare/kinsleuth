@@ -1343,13 +1343,17 @@ describe("marketing workflow release and intake modes", () => {
     };
     expect(ci).toContain("release-mode: [prelaunch, application, api-launch]");
     expect(ci).toContain("application-mode: [mailto, application]");
+    expect(ci).toContain("demo-mode: [pending, live]");
     expect(ci).toContain("KINRESOLVE_MARKETING_RELEASE_MODE: ${{ matrix.release-mode }}");
     expect(ci).toContain("KINRESOLVE_MARKETING_BETA_APPLICATION_MODE: ${{ matrix.application-mode }}");
+    expect(ci).toContain("KINRESOLVE_MARKETING_DEMO_MODE: ${{ matrix.demo-mode }}");
     expect(ci).toContain('scripts/launch-media-text.mjs');
     expect(deploy).toMatch(/beta_application_mode:[\s\S]*?default: mailto[\s\S]*?- mailto[\s\S]*?- application/);
+    expect(deploy).toMatch(/demo_mode:[\s\S]*?default: pending[\s\S]*?- pending[\s\S]*?- live/);
     expect(deploy).toContain(
       "KINRESOLVE_MARKETING_BETA_APPLICATION_MODE: ${{ inputs.beta_application_mode }}"
     );
+    expect(deploy).toContain("KINRESOLVE_MARKETING_DEMO_MODE: ${{ inputs.demo_mode }}");
     expect(deploy).toContain("KINRESOLVE_MARKETING_RELEASE_MODE: prelaunch");
     expect(deploy).toContain("if: inputs.production && inputs.beta_application_mode == 'application'");
     expect(deploy).toContain("Production application-mode activation requires the product release workflow evidence gate.");
