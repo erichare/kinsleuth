@@ -92,11 +92,11 @@ try {
     const { appendFile } = await import("node:fs/promises");
     await appendFile(
       process.env.GITHUB_STEP_SUMMARY,
-      "## Kin Resolve release safety queue\n\n- Prior failed release containment: resolved\n- Prior failed recovery cleanup: resolved\n- Prior failed holding auto-assignment repair: resolved\n- Prior failed staging demo closure: resolved\n- Prior failed public demo containment: resolved\n",
+      "## Kin Resolve release safety queue\n\n- Prior failed release containment: resolved\n- Prior failed recovery cleanup: resolved\n- Prior failed holding auto-assignment repair: resolved\n- Prior failed public demo containment: resolved\n",
       "utf8"
     );
   }
-  console.log("Verified that no prior release containment, recovery cleanup, holding repair, demo closure, or public demo containment is unresolved.");
+  console.log("Verified that no prior release containment, recovery cleanup, holding repair, or public demo containment is unresolved.");
 } catch (error) {
   console.error(error instanceof Error ? error.message : "Release safety queue validation failed.");
   process.exitCode = 1;
@@ -168,7 +168,7 @@ function repositoryName(value) {
 }
 
 function currentSourceName(value) {
-  if (!["release", "recovery", "holding", "demo", "public-demo"].includes(value)) {
+  if (!["release", "recovery", "holding", "public-demo"].includes(value)) {
     throw new Error("RELEASE_SAFETY_CURRENT_WORKFLOW is malformed.");
   }
   return value;
