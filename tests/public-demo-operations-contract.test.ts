@@ -41,18 +41,18 @@ describe("public demo operational boundary", () => {
 
     const authorization = stepBlock(
       productionBackupCleanup,
-      "Validate the exact failed production backup event without credentials",
+      "Authorize the exact failed production backup event without credentials",
       "Query the exact source run for its cleanup lease artifact"
     );
-    expect(authorization).toContain('run?.event !== "workflow_dispatch"');
-    expect(authorization).not.toContain('["schedule", "workflow_dispatch"]');
+    expect(authorization).toContain("ALLOWED_SOURCE_EVENTS: workflow_dispatch");
+    expect(authorization).not.toContain("schedule");
   });
 
   it.each([
     {
       label: "production backup",
       workflow: productionBackupCleanup,
-      stepName: "Validate the exact failed production backup event without credentials",
+      stepName: "Authorize the exact failed production backup event without credentials",
       nextStepName: "Query the exact source run for its cleanup lease artifact",
       sourcePath: ".github/workflows/production-backup.yml",
       workflowIdVariable: "PRODUCTION_BACKUP_WORKFLOW_ID"
@@ -60,7 +60,7 @@ describe("public demo operational boundary", () => {
     {
       label: "recovery evidence",
       workflow: recoveryCleanup,
-      stepName: "Validate the exact failed protected recovery event without credentials",
+      stepName: "Authorize the exact failed protected recovery event without credentials",
       nextStepName: "Query the exact source run for its cleanup lease artifact",
       sourcePath: ".github/workflows/recovery-evidence.yml",
       workflowIdVariable: "RECOVERY_EVIDENCE_WORKFLOW_ID"
@@ -69,13 +69,13 @@ describe("public demo operational boundary", () => {
     "authorizes $label cleanup by immutable workflow path and numeric ID, not display name",
     ({ workflow, stepName, nextStepName, sourcePath, workflowIdVariable }) => {
       const authorization = stepBlock(workflow, stepName, nextStepName);
-      expect(authorization).toContain(`run?.path !== "${sourcePath}"`);
+      expect(authorization).toContain("scripts/authorize-workflow-run-source.mjs");
+      expect(authorization).toContain(`EXPECTED_SOURCE_WORKFLOW_PATH: ${sourcePath}`);
       expect(workflow).toContain(
         `EXPECTED_SOURCE_WORKFLOW_ID: \${{ vars.${workflowIdVariable} }}`
       );
-      expect(authorization).toContain("run?.workflow_id");
-      expect(authorization).not.toContain("run?.name");
-      expect(authorization).not.toContain("display_title");
+      expect(authorization).not.toContain("EXPECTED_SOURCE_WORKFLOW_NAME");
+      expect(authorization).not.toContain("DISPLAY_TITLE_TEMPLATES");
     }
   );
 

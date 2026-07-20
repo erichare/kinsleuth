@@ -816,6 +816,70 @@ describe("authorize-workflow-run-source CLI", () => {
     expect(await readFile(outputPath, "utf8")).toBe("");
   });
 
+  it("exits nonzero when REQUIRE_EXPECTED_SOURCE_WORKFLOW_ID is true without a workflow id pin", async () => {
+    const directory = await scratchDirectory();
+    const eventPath = path.join(directory, "event.json");
+    const outputPath = path.join(directory, "output");
+    await Promise.all([
+      writeFile(eventPath, JSON.stringify(workflowRunEvent(recoveryRun())), "utf8"),
+      writeFile(outputPath, "", "utf8")
+    ]);
+
+    const result = runCli(eventPath, outputPath, {
+      EXPECTED_SOURCE_WORKFLOW_PATH: ".github/workflows/recovery-evidence.yml",
+      REQUIRE_EXPECTED_SOURCE_WORKFLOW_ID: "true"
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      "requires an expected source workflow ID but none was provided"
+    );
+    expect(result.stdout).toBe("");
+    expect(await readFile(outputPath, "utf8")).toBe("");
+  });
+
+  it("exits nonzero when REQUIRE_EXPECTED_SOURCE_WORKFLOW_ID is not exactly true or false", async () => {
+    const directory = await scratchDirectory();
+    const eventPath = path.join(directory, "event.json");
+    const outputPath = path.join(directory, "output");
+    await Promise.all([
+      writeFile(eventPath, JSON.stringify(workflowRunEvent(recoveryRun())), "utf8"),
+      writeFile(outputPath, "", "utf8")
+    ]);
+
+    const result = runCli(eventPath, outputPath, {
+      EXPECTED_SOURCE_WORKFLOW_PATH: ".github/workflows/recovery-evidence.yml",
+      EXPECTED_SOURCE_WORKFLOW_ID: "190000002",
+      REQUIRE_EXPECTED_SOURCE_WORKFLOW_ID: "yes"
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      "REQUIRE_EXPECTED_SOURCE_WORKFLOW_ID must be exactly true or false when set."
+    );
+    expect(result.stdout).toBe("");
+    expect(await readFile(outputPath, "utf8")).toBe("");
+  });
+
+  it("authorizes with the workflow id pin when REQUIRE_EXPECTED_SOURCE_WORKFLOW_ID is true", async () => {
+    const directory = await scratchDirectory();
+    const eventPath = path.join(directory, "event.json");
+    const outputPath = path.join(directory, "output");
+    await Promise.all([
+      writeFile(eventPath, JSON.stringify(workflowRunEvent(recoveryRun())), "utf8"),
+      writeFile(outputPath, "", "utf8")
+    ]);
+
+    const result = runCli(eventPath, outputPath, {
+      EXPECTED_SOURCE_WORKFLOW_PATH: ".github/workflows/recovery-evidence.yml",
+      EXPECTED_SOURCE_WORKFLOW_ID: "190000002",
+      REQUIRE_EXPECTED_SOURCE_WORKFLOW_ID: "true"
+    });
+
+    expect(result.status, String(result.stderr)).toBe(0);
+    expect(result.stdout).toContain("authorized=true");
+  });
+
   it("exits nonzero on the missing-repository-variable probe with a forged workflow id", async () => {
     const directory = await scratchDirectory();
     const eventPath = path.join(directory, "event.json");
