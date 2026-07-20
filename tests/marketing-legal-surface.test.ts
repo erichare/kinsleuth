@@ -171,6 +171,9 @@ describe("private-beta marketing and legal surface", () => {
     expect(demo).toContain("## Launch-day flip checklist");
     expect(demo).toContain("KINRESOLVE_MARKETING_DEMO_MODE=live");
     expect(demo).toContain("KINRESOLVE_MARKETING_DEMO_MODE=pending");
+    expect(demo).toContain("gh variable set KINRESOLVE_MARKETING_DEMO_MODE --body live");
+    expect(demo).toContain("gh variable set KINRESOLVE_MARKETING_DEMO_MODE --body pending");
+    expect(demo).toMatch(/silently\s+rebuild `kinresolve\.com` with the pending homepage copy/);
     expect(demo).toMatch(/invitation-only/);
     expect(demo).toMatch(/`contain` action/);
   });

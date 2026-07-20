@@ -1279,6 +1279,9 @@ describe("stable release workflow contract", () => {
     expect(marketing).toContain(
       "KINRESOLVE_MARKETING_RELEASE_MODE: ${{ inputs.release_mode }}"
     );
+    expect(marketing).toContain(
+      "KINRESOLVE_MARKETING_DEMO_MODE: ${{ vars.KINRESOLVE_MARKETING_DEMO_MODE || 'pending' }}"
+    );
     expect(marketing).toContain("BETA_INTAKE_PROVEN: ${{ needs.production.outputs.beta_intake_proven }}");
     expect(marketing).toContain(
       "STAGING_BETA_INTAKE_PROVEN: ${{ needs.production.outputs.staging_beta_intake_proven }}"
@@ -1289,8 +1292,11 @@ describe("stable release workflow contract", () => {
     expect(marketing).toContain("${{ inputs.beta_intake_enabled && 'application' || 'mailto' }}");
     expect(proofGate).toBeGreaterThan(0);
     expect(deploy).toBeGreaterThan(proofGate);
-    expect(marketing.indexOf("Prove the canonical marketing release and form modes")).toBeGreaterThan(deploy);
+    expect(marketing.indexOf("Prove the canonical marketing release, form, and demo modes")).toBeGreaterThan(deploy);
     expect(marketing).toContain("EXPECTED_MARKETING_RELEASE_MODE: ${{ inputs.release_mode }}");
+    expect(marketing).toContain(
+      "EXPECTED_MARKETING_DEMO_MODE: ${{ vars.KINRESOLVE_MARKETING_DEMO_MODE || 'pending' }}"
+    );
     expect(marketing).toContain('data-marketing-release-mode="${expectedReleaseMode}"');
     expect(job(contents, "publish-release")).toContain("needs: [production, marketing]");
   });
@@ -1408,6 +1414,27 @@ describe("marketing workflow release and intake modes", () => {
     }
     expect(marketing.indexOf("npm run launch:media:validate")).toBeLessThan(
       marketing.indexOf("Prove both static intake exports before loading deploy credentials")
+    );
+
+    const marketingExportProof = marketingStep(
+      "Prove both static intake exports before loading deploy credentials"
+    );
+    expect(marketingExportProof).toContain(
+      '[[ "$KINRESOLVE_MARKETING_DEMO_MODE" =~ ^(pending|live)$ ]]'
+    );
+    const marketingProbe = marketingStep("Prove the canonical marketing release, form, and demo modes");
+    expect(marketingProbe).toContain(
+      "EXPECTED_MARKETING_DEMO_MODE: ${{ vars.KINRESOLVE_MARKETING_DEMO_MODE || 'pending' }}"
+    );
+    expect(marketingProbe).toContain(
+      'https://kinresolve.com/ --output "$RUNNER_TEMP/marketing-home.html"'
+    );
+    expect(marketingProbe).toContain('const demoHeroCta = "Solve the passenger mystery"');
+    expect(marketingProbe).toContain(
+      'if ((expectedDemoMode === "live") !== home.includes(demoHeroCta)) process.exit(1);'
+    );
+    expect(marketingProbe).toContain(
+      'if (expectedDemoMode !== "pending" && expectedDemoMode !== "live") process.exit(1);'
     );
 
     expect(deployJob.slice(0, deployJob.indexOf("    steps:"))).not.toMatch(
