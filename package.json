@@ -52,8 +52,8 @@
     "site:verify": "npm run launch:media:validate && npm --prefix site run verify"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.1087.0",
-    "@aws-sdk/s3-presigned-post": "^3.1087.0",
+    "@aws-sdk/client-s3": "^3.1090.0",
+    "@aws-sdk/s3-presigned-post": "^3.1090.0",
     "@next/env": "^16.0.0",
     "@vercel/blob": "^2.6.1",
     "better-auth": "^1.6.23",
@@ -76,7 +76,7 @@
     "eslint-config-next": "^16.0.0",
     "mp4box": "2.4.1",
     "playwright": "^1.61.1",
-    "sharp": "0.34.5",
+    "sharp": "0.35.3",
     "tsx": "^4.23.1",
     "typescript": "^5.8.0",
     "vitest": "^3.0.0"
