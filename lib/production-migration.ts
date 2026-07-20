@@ -6,6 +6,7 @@ import {
   readDatabaseIdentity,
   validateConfiguredDatabaseIdentity
 } from "./database-attestation.ts";
+import { findConnectionFailureCode } from "./migration-failure.ts";
 
 export type ProductionMigrationEnvironment = {
   MIGRATION_DATABASE_URL?: string;
@@ -121,8 +122,8 @@ export async function runProductionMigrations<TPool extends ProductionMigrationP
 
   try {
     pool = options.createPool({ connectionString: target.connectionString, max: 2 });
-  } catch {
-    throw new Error("Production migration failed.");
+  } catch (error) {
+    throw wrapProductionMigrationFailure(error, "Production migration failed");
   }
 
   try {
@@ -133,13 +134,13 @@ export async function runProductionMigrations<TPool extends ProductionMigrationP
       options.environment.KINRESOLVE_DATABASE_IDENTITY!,
       parseEvidencedMigrationPrefix(options.environment)
     );
-  } catch {
+  } catch (error) {
     try {
       await pool.end();
     } catch {
       // Preserve the fixed, secret-free preflight failure below.
     }
-    throw new Error("Production migration preflight failed.");
+    throw wrapProductionMigrationFailure(error, "Production migration preflight failed");
   }
   options.log(
     `Verified production migration preflight: approved ledger prefix and expected archive identity.`
@@ -148,19 +149,19 @@ export async function runProductionMigrations<TPool extends ProductionMigrationP
   let result: ProductionMigrationResult;
   try {
     result = await options.migrate(pool);
-  } catch {
+  } catch (error) {
     try {
       await pool.end();
     } catch {
       // Preserve the fixed, secret-free migration failure below.
     }
-    throw new Error("Production migration failed.");
+    throw wrapProductionMigrationFailure(error, "Production migration failed");
   }
 
   try {
     await pool.end();
-  } catch {
-    throw new Error("Production migration failed.");
+  } catch (error) {
+    throw wrapProductionMigrationFailure(error, "Production migration failed");
   }
 
   for (const version of result.applied) {
@@ -215,8 +216,8 @@ export async function runProductionMigrationLedgerVerification<
   let pool: TPool;
   try {
     pool = options.createPool({ connectionString: target.connectionString, max: 2 });
-  } catch {
-    throw new Error("Production migration ledger verification failed.");
+  } catch (error) {
+    throw wrapProductionMigrationFailure(error, "Production migration ledger verification failed");
   }
 
   let rows: Array<{ version?: unknown }>;
@@ -233,13 +234,13 @@ export async function runProductionMigrationLedgerVerification<
       throw new Error("Invalid production migration ledger query result.");
     }
     rows = result.rows;
-  } catch {
+  } catch (error) {
     try {
       await pool.end();
     } catch {
       // Preserve the fixed, secret-free query failure below.
     }
-    throw new Error("Production migration ledger verification failed.");
+    throw wrapProductionMigrationFailure(error, "Production migration ledger verification failed");
   }
 
   let result: ProductionMigrationLedgerResult;
@@ -254,8 +255,8 @@ export async function runProductionMigrationLedgerVerification<
   } finally {
     try {
       await pool.end();
-    } catch {
-      throw new Error("Production migration ledger verification failed.");
+    } catch (error) {
+      throw wrapProductionMigrationFailure(error, "Production migration ledger verification failed");
     }
   }
 
@@ -263,6 +264,22 @@ export async function runProductionMigrationLedgerVerification<
     `Verified production migration ledger: ${result.migrationCount} expected migration(s) applied.`
   );
   return result;
+}
+
+// Replaces caught errors with fixed, secret-free messages. Connection-level
+// failures additionally name the syscall code — allowlisted by
+// findConnectionFailureCode, never upstream message text or the URL — and
+// carry it as `code` so describeMigrationFailure can render the redacted
+// cannot-reach line instead of an indistinguishable preflight failure.
+function wrapProductionMigrationFailure(error: unknown, failureSummary: string): Error {
+  const connectionCode = findConnectionFailureCode(error);
+  if (!connectionCode) {
+    return new Error(`${failureSummary}.`);
+  }
+  return Object.assign(
+    new Error(`${failureSummary}: cannot reach the configured database (${connectionCode}).`),
+    { code: connectionCode }
+  );
 }
 
 async function verifyProductionMigrationPreflight(

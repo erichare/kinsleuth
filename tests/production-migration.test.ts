@@ -272,6 +272,104 @@ describe("production migration safety", () => {
     expect(pool.end).toHaveBeenCalledOnce();
   });
 
+  it("surfaces only the allowlisted syscall code when the preflight cannot reach the database", async () => {
+    const secret = "connection-secret-never-log";
+    const refused = new AggregateError(
+      [Object.assign(new Error(`connect ECONNREFUSED 10.0.0.9:5432 ${secret}`), { code: "ECONNREFUSED" })],
+      ""
+    );
+    const pool = {
+      query: vi.fn(async () => { throw refused; }),
+      end: vi.fn(async () => undefined)
+    };
+    const migrate = vi.fn(async () => ({ applied: [], alreadyApplied: [] }));
+
+    const failure = await runProductionMigrations({
+      environment: environment(),
+      expectedVersions: ["001_initial"],
+      createPool: () => pool,
+      migrate,
+      log: vi.fn()
+    }).then(
+      () => { throw new Error("Expected the preflight to fail."); },
+      (error: unknown) => error
+    );
+
+    expect(failure).toBeInstanceOf(Error);
+    expect((failure as Error).message).toBe(
+      "Production migration preflight failed: cannot reach the configured database (ECONNREFUSED)."
+    );
+    expect((failure as Error & { code?: string }).code).toBe("ECONNREFUSED");
+    expect(String(failure)).not.toContain(secret);
+    expect(String(failure)).not.toContain("10.0.0.9");
+    expect(migrate).not.toHaveBeenCalled();
+    expect(pool.end).toHaveBeenCalledOnce();
+  });
+
+  it("labels a connection drop during migration execution with only the syscall code", async () => {
+    const pool = { query: queryFixture(), end: vi.fn(async () => undefined) };
+
+    await expect(runProductionMigrations({
+      environment: environment(),
+      expectedVersions: ["001_initial"],
+      createPool: () => pool,
+      migrate: async () => {
+        throw Object.assign(new Error("read ECONNRESET by 10.0.0.9"), { code: "ECONNRESET" });
+      },
+      log: vi.fn()
+    })).rejects.toMatchObject({
+      message: "Production migration failed: cannot reach the configured database (ECONNRESET).",
+      code: "ECONNRESET"
+    });
+    expect(pool.end).toHaveBeenCalledOnce();
+  });
+
+  it("keeps non-connection driver failures fully opaque", async () => {
+    const secret = "auth-secret-never-log";
+    const pool = {
+      query: vi.fn(async () => {
+        throw Object.assign(new Error(`password authentication failed ${secret}`), { code: "28P01" });
+      }),
+      end: vi.fn(async () => undefined)
+    };
+
+    const failure = await runProductionMigrations({
+      environment: environment(),
+      expectedVersions: ["001_initial"],
+      createPool: () => pool,
+      migrate: vi.fn(async () => ({ applied: [], alreadyApplied: [] })),
+      log: vi.fn()
+    }).then(
+      () => { throw new Error("Expected the preflight to fail."); },
+      (error: unknown) => error
+    );
+
+    expect(failure).toBeInstanceOf(Error);
+    expect((failure as Error).message).toBe("Production migration preflight failed.");
+    expect((failure as Error & { code?: string }).code).toBeUndefined();
+    expect(String(failure)).not.toContain(secret);
+  });
+
+  it("labels an unreachable database during ledger verification with only the syscall code", async () => {
+    const pool = {
+      query: vi.fn(async () => {
+        throw new AggregateError([Object.assign(new Error(""), { code: "ENOTFOUND" })], "");
+      }),
+      end: vi.fn(async () => undefined)
+    };
+
+    await expect(runProductionMigrationLedgerVerification({
+      environment: environment(),
+      expectedVersions: ["001_initial"],
+      createPool: () => pool,
+      log: vi.fn()
+    })).rejects.toMatchObject({
+      message: "Production migration ledger verification failed: cannot reach the configured database (ENOTFOUND).",
+      code: "ENOTFOUND"
+    });
+    expect(pool.end).toHaveBeenCalledOnce();
+  });
+
   it("attests the same cell before exact post-migration ledger verification", async () => {
     const query = queryFixture({ ledger: ["001_initial", "002_search_unaccent"] });
     const pool = { query, end: vi.fn(async () => undefined) };

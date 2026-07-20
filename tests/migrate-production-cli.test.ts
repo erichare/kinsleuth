@@ -77,11 +77,27 @@ describe("describeMigrationFailure for production migrations", () => {
   });
 
   it("passes the fixed production wrapper messages through unchanged", () => {
-    for (const message of ["Production migration preflight failed.", "Production migration failed."]) {
+    for (const message of [
+      "Production migration preflight failed.",
+      "Production migration failed.",
+      "Production migration ledger verification failed."
+    ]) {
       expect(describeMigrationFailure(new Error(message), migrationDatabaseUrl, "MIGRATION_DATABASE_URL")).toBe(
         message
       );
     }
+  });
+
+  it("renders the redacted cannot-reach line for connection-classified wrapper failures", () => {
+    const wrapped = Object.assign(
+      new Error("Production migration preflight failed: cannot reach the configured database (ECONNREFUSED)."),
+      { code: "ECONNREFUSED" }
+    );
+    const described = describeMigrationFailure(wrapped, migrationDatabaseUrl, "MIGRATION_DATABASE_URL");
+    expect(described).toContain(
+      "Cannot reach MIGRATION_DATABASE_URL at db.internal:5432/kinresolve (ECONNREFUSED)"
+    );
+    expect(described).not.toContain("do-not-print");
   });
 
   it("never returns a blank line for an empty-message failure", () => {
@@ -109,7 +125,7 @@ describe("db:migrate:production CLI", () => {
     expect(result.stderr).toContain("MIGRATION_DATABASE_URL is required for production migrations.");
   });
 
-  it("prints a non-blank, credential-free failure when the database is unreachable", async () => {
+  it("prints an actionable, credential-free failure when the database is unreachable", async () => {
     const port = await reserveClosedPort();
     const result = runProductionMigrate({
       MIGRATION_DATABASE_URL: `postgres://kinresolve:do-not-print@localhost:${port}/kinresolve`,
@@ -117,8 +133,11 @@ describe("db:migrate:production CLI", () => {
       KINRESOLVE_DATABASE_IDENTITY: "a".repeat(64)
     });
     expect(result.status).toBe(1);
-    expect(result.stderr.trim()).not.toBe("");
-    expect(result.stderr).toContain("Production migration preflight failed.");
+    expect(result.stderr).toContain(
+      `Cannot reach MIGRATION_DATABASE_URL at localhost:${port}/kinresolve (ECONNREFUSED)`
+    );
+    expect(result.stderr).toContain("fix MIGRATION_DATABASE_URL");
+    expect(result.stderr).not.toContain("Production migration preflight failed.");
     expect(result.stderr).not.toContain("do-not-print");
   });
 });

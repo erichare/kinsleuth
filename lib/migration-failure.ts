@@ -24,7 +24,7 @@ function readErrorCode(error: unknown): string | undefined {
   return typeof code === "string" ? code : undefined;
 }
 
-function findConnectionFailureCode(error: unknown, depth = 0): string | undefined {
+export function findConnectionFailureCode(error: unknown, depth = 0): string | undefined {
   if (depth > 2 || typeof error !== "object" || error === null) {
     return undefined;
   }
