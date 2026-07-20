@@ -3,6 +3,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import packageJson from "../package.json";
+import { betaOperationsRuntimeGrantContract } from "../lib/runtime-database-grants";
 
 async function workflow(name: string): Promise<string> {
   return readFile(path.join(process.cwd(), ".github", "workflows", name), "utf8");
@@ -1278,6 +1279,9 @@ describe("stable release workflow contract", () => {
     expect(marketing).toContain(
       "KINRESOLVE_MARKETING_RELEASE_MODE: ${{ inputs.release_mode }}"
     );
+    expect(marketing).toContain(
+      "KINRESOLVE_MARKETING_DEMO_MODE: ${{ vars.KINRESOLVE_MARKETING_DEMO_MODE || 'pending' }}"
+    );
     expect(marketing).toContain("BETA_INTAKE_PROVEN: ${{ needs.production.outputs.beta_intake_proven }}");
     expect(marketing).toContain(
       "STAGING_BETA_INTAKE_PROVEN: ${{ needs.production.outputs.staging_beta_intake_proven }}"
@@ -1288,27 +1292,45 @@ describe("stable release workflow contract", () => {
     expect(marketing).toContain("${{ inputs.beta_intake_enabled && 'application' || 'mailto' }}");
     expect(proofGate).toBeGreaterThan(0);
     expect(deploy).toBeGreaterThan(proofGate);
-    expect(marketing.indexOf("Prove the canonical marketing release and form modes")).toBeGreaterThan(deploy);
+    expect(marketing.indexOf("Prove the canonical marketing release, form, and demo modes")).toBeGreaterThan(deploy);
     expect(marketing).toContain("EXPECTED_MARKETING_RELEASE_MODE: ${{ inputs.release_mode }}");
+    expect(marketing).toContain(
+      "EXPECTED_MARKETING_DEMO_MODE: ${{ vars.KINRESOLVE_MARKETING_DEMO_MODE || 'pending' }}"
+    );
     expect(marketing).toContain('data-marketing-release-mode="${expectedReleaseMode}"');
     expect(job(contents, "publish-release")).toContain("needs: [production, marketing]");
   });
 
-  it("attests the exact seven-table runtime grant contract in release and recovery workflows", async () => {
-    const release = await workflow("vercel-release.yml");
-    const recovery = await workflow("recovery-evidence.yml");
-    const exactEntries = [
-      '{"table":"auth_rate_limit_buckets","select":true,"insert":true,"update":true,"delete":true}',
-      '{"table":"beta_applications","select":true,"insert":true,"update":true,"delete":true}',
-      '{"table":"beta_data_operations","select":true,"insert":true,"update":true,"delete":false}',
-      '{"table":"beta_worker_heartbeats","select":true,"insert":true,"update":true,"delete":false}',
-      '{"table":"api_tokens","select":true,"insert":true,"update":true,"delete":false}',
-      '{"table":"api_rate_limit_buckets","select":true,"insert":true,"update":true,"delete":true}',
-      '{"table":"security_events","select":false,"insert":true,"update":false,"delete":false}'
-    ];
-    for (const entry of exactEntries) {
-      expect(release.split(entry)).toHaveLength(3);
-      expect(recovery.split(entry)).toHaveLength(2);
+  it("attests the exact runtime grant contract derived from lib/runtime-database-grants.ts in release and recovery workflows", async () => {
+    const expectedEntries = betaOperationsRuntimeGrantContract.map(({ table, privileges }) => {
+      const has = (privilege: string) => (privileges as readonly string[]).includes(privilege);
+      return `{"table":"${table}","select":${has("SELECT")},"insert":${has("INSERT")},"update":${has("UPDATE")},"delete":${has("DELETE")}}`;
+    });
+    const attestedLists = (contents: string): string[][] => {
+      const blocks = [...contents.matchAll(
+        /\(\.managedTablePrivileges \| map\(\{table, select, insert, update, delete\}\)\) == \[\n([\s\S]*?)\n\s*\] and/g
+      )];
+      return blocks.map(([, body]) =>
+        body.split("\n").map((line) => line.trim().replace(/,$/, ""))
+      );
+    };
+    for (const [file, expectedBlocks] of [
+      ["vercel-release.yml", 2],
+      ["recovery-evidence.yml", 1]
+    ] as const) {
+      const lists = attestedLists(await workflow(file));
+      expect(
+        lists,
+        `${file} must attest the managed-table grant list once per grant step`
+      ).toHaveLength(expectedBlocks);
+      for (const list of lists) {
+        expect(
+          list,
+          `${file} pins a managed-table privilege list that drifted from `
+            + "betaOperationsRuntimeGrantContract in lib/runtime-database-grants.ts; "
+            + "update every workflow jq attestation to the full contract in contract order"
+        ).toEqual(expectedEntries);
+      }
     }
   });
 
@@ -1392,6 +1414,27 @@ describe("marketing workflow release and intake modes", () => {
     }
     expect(marketing.indexOf("npm run launch:media:validate")).toBeLessThan(
       marketing.indexOf("Prove both static intake exports before loading deploy credentials")
+    );
+
+    const marketingExportProof = marketingStep(
+      "Prove both static intake exports before loading deploy credentials"
+    );
+    expect(marketingExportProof).toContain(
+      '[[ "$KINRESOLVE_MARKETING_DEMO_MODE" =~ ^(pending|live)$ ]]'
+    );
+    const marketingProbe = marketingStep("Prove the canonical marketing release, form, and demo modes");
+    expect(marketingProbe).toContain(
+      "EXPECTED_MARKETING_DEMO_MODE: ${{ vars.KINRESOLVE_MARKETING_DEMO_MODE || 'pending' }}"
+    );
+    expect(marketingProbe).toContain(
+      'https://kinresolve.com/ --output "$RUNNER_TEMP/marketing-home.html"'
+    );
+    expect(marketingProbe).toContain('const demoHeroCta = "Solve the passenger mystery"');
+    expect(marketingProbe).toContain(
+      'if ((expectedDemoMode === "live") !== home.includes(demoHeroCta)) process.exit(1);'
+    );
+    expect(marketingProbe).toContain(
+      'if (expectedDemoMode !== "pending" && expectedDemoMode !== "live") process.exit(1);'
     );
 
     expect(deployJob.slice(0, deployJob.indexOf("    steps:"))).not.toMatch(
