@@ -17,8 +17,16 @@ function job(name: string, nextName?: string): string {
 }
 
 describe("failed holding auto-assignment safety workflow", () => {
-  it("emits an exact source-attempt receipt and accepts only failed marked holding events", () => {
+  it("authorizes only exact failed marked holding events through the trusted shared gate", () => {
     const authorize = job("authorize", "repair");
+    const trustedCheckout = authorize.indexOf("Check out the trusted authorization gate from main");
+    const nodeSetup = authorize.indexOf(
+      "Set up Node.js for the credential-free authorization gate"
+    );
+    const cli = authorize.indexOf("scripts/authorize-workflow-run-source.mjs");
+    const revisionCheckout = authorize.indexOf("Check out the exact failed holding revision");
+    const ancestry = authorize.indexOf("git merge-base --is-ancestor");
+
     expect(workflow).toContain("name: Repair failed Kin Resolve holding safety");
     expect(workflow).toContain(
       "run-name: Repair holding run ${{ github.event.workflow_run.id }} attempt ${{ github.event.workflow_run.run_attempt }}"
@@ -29,34 +37,41 @@ describe("failed holding auto-assignment safety workflow", () => {
     expect(authorize).toContain("github.event.workflow_run.conclusion == 'failure'");
     expect(authorize).toContain("github.event.workflow_run.conclusion == 'cancelled'");
     expect(authorize).toContain("github.event.workflow_run.conclusion == 'timed_out'");
-    expect(authorize).toContain('test "$EVENT_ACTION" = "completed"');
-    expect(authorize).toContain('test "$EVENT_REPOSITORY" = "$CURRENT_REPOSITORY"');
+    expect(trustedCheckout).toBeGreaterThan(0);
+    expect(nodeSetup).toBeGreaterThan(trustedCheckout);
+    expect(cli).toBeGreaterThan(nodeSetup);
+    expect(revisionCheckout).toBeGreaterThan(cli);
+    expect(ancestry).toBeGreaterThan(revisionCheckout);
+    const trustedGate = authorize.slice(trustedCheckout, cli);
+    expect(trustedGate).toContain("ref: main");
+    expect(trustedGate).toContain("fetch-depth: 1");
+    expect(trustedGate).toContain("persist-credentials: false");
     expect(authorize).toContain(
-      'test "$SOURCE_WORKFLOW_NAME" = "Deploy Kin Resolve static holding page"'
+      "run: node --experimental-strip-types scripts/authorize-workflow-run-source.mjs"
+    );
+    expect(authorize).toContain("ALLOWED_SOURCE_CONCLUSIONS: failure,cancelled,timed_out");
+    expect(authorize).toContain("ALLOWED_SOURCE_EVENTS: workflow_dispatch");
+    expect(authorize).toContain(
+      "EXPECTED_SOURCE_WORKFLOW_NAME: Deploy Kin Resolve static holding page"
     );
     expect(authorize).toContain(
-      'test "$SOURCE_WORKFLOW_NAME" = "$SOURCE_DISPLAY_TITLE"'
+      "EXPECTED_SOURCE_WORKFLOW_PATH: .github/workflows/vercel-holding.yml"
+    );
+    expect(authorize).toContain("REQUIRED_HEAD_BRANCH: main");
+    expect(authorize).toContain(
+      '[{"template":"Kin Resolve static holding beta-staging run {run_id} attempt {run_attempt}","outputs":{"target":"beta-staging","safety_environment":"beta-staging-containment"}},'
     );
     expect(authorize).toContain(
-      'test "$SOURCE_WORKFLOW_PATH" = ".github/workflows/vercel-holding.yml"'
-    );
-    expect(authorize).toContain('test "$SOURCE_EVENT" = "workflow_dispatch"');
-    expect(authorize).toContain('test "$SOURCE_HEAD_BRANCH" = "main"');
-    expect(authorize).toContain('test "$SOURCE_HEAD_REPOSITORY" = "$CURRENT_REPOSITORY"');
-    expect(authorize).toContain('test "$SOURCE_RUN_REPOSITORY" = "$CURRENT_REPOSITORY"');
-    expect(authorize).toContain(
-      '"Kin Resolve static holding beta-staging run $SOURCE_RUN_ID attempt $SOURCE_RUN_ATTEMPT"'
+      '{"template":"Kin Resolve static holding production run {run_id} attempt {run_attempt}","outputs":{"target":"production","safety_environment":"production-containment"}},'
     );
     expect(authorize).toContain(
-      '"Kin Resolve static holding production run $SOURCE_RUN_ID attempt $SOURCE_RUN_ATTEMPT"'
+      '{"template":"Kin Resolve static holding public-demo run {run_id} attempt {run_attempt}","outputs":{"target":"public-demo","safety_environment":"demo-containment"}}]'
     );
+    expect(authorize).toContain("authorized: ${{ steps.event.outputs.authorized }}");
     expect(authorize).toContain(
-      '"Kin Resolve static holding public-demo run $SOURCE_RUN_ID attempt $SOURCE_RUN_ATTEMPT"'
+      "safety_environment: ${{ steps.event.outputs.safety_environment }}"
     );
-    expect(authorize).toContain('safety_environment="beta-staging-containment"');
-    expect(authorize).toContain('safety_environment="production-containment"');
-    expect(authorize).toContain('safety_environment="demo-containment"');
-    expect(authorize).toContain("authorized=true");
+    expect(authorize).toContain("target: ${{ steps.event.outputs.target }}");
     expect(authorize).not.toContain("secrets.");
     expect(authorize).not.toMatch(/^    environment:/m);
     expect(authorize).toContain("Classify whether promotion could have changed the target");
@@ -74,10 +89,10 @@ describe("failed holding auto-assignment safety workflow", () => {
     const repair = job("repair", "emergency-pause");
     expect(workflow.split(
       "actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4"
-    )).toHaveLength(3);
+    )).toHaveLength(4);
     expect(workflow.split(
       "actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4"
-    )).toHaveLength(3);
+    )).toHaveLength(4);
     expect(workflow).not.toMatch(/uses:\s+actions\/(?:checkout|setup-node)@v\d/);
     expect(workflow.split("git merge-base --is-ancestor")).toHaveLength(3);
     expect(workflow.split("git fetch origin main:refs/remotes/origin/main --force --no-tags"))
