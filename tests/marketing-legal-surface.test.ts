@@ -144,11 +144,24 @@ describe("private-beta marketing and legal surface", () => {
     expect(privacy).toMatch(/Plausible is cookieless and EU-hosted, sets no browser identifier, and performs no cross-site tracking/);
     expect(privacy).toContain("No visitor analytics script loads in this release.");
     expect(privacy).toContain("Aggregate visitor analytics run on Plausible—cookieless, EU-hosted, and script-gated.");
+    // The outbound-links script variant auto-attaches the clicked destination
+    // URL to its outbound-click events; the disclosure must say so honestly.
+    expect(privacy).toContain(
+      "Outbound-link clicks record the destination address of the public link clicked—no personal data."
+    );
 
     expect(exportCheck).toContain("KINRESOLVE_MARKETING_ANALYTICS must be exactly off or plausible.");
     expect(exportCheck).toContain("plausible\\.io\\/js\\/script\\.outbound-links\\.js");
     expect(exportCheck).toContain("contains a plausible.io reference while analytics mode is off");
+    expect(exportCheck).toContain(
+      "Outbound-link clicks record the destination address of the public link clicked—no personal data."
+    );
 
+    // The CSP allowance below is static: site/vercel.json always lists
+    // plausible.io even for analytics-off builds, because Vercel headers are
+    // not templated per release. The enforced privacy gate is script
+    // inclusion — check-export fails an off-mode build that contains any
+    // plausible.io reference, so the static allowance alone loads nothing.
     const csp = (JSON.parse(siteVercel) as {
       headers: Array<{ headers: Array<{ key: string; value: string }> }>;
     }).headers[0].headers.find(({ key }) => key === "Content-Security-Policy")?.value ?? "";

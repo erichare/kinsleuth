@@ -378,6 +378,15 @@ for (const [mode, claim] of Object.entries(analyticsClaims)) {
   }
 }
 
+// The outbound-links Plausible variant auto-attaches the clicked destination
+// URL to its outbound-click events, so the disclosure must say so honestly in
+// every mode (the off-mode copy describes what an enabled release would load).
+const outboundLinkDisclosure =
+  "Outbound-link clicks record the destination address of the public link clicked—no personal data.";
+if (!privacy.includes(outboundLinkDisclosure)) {
+  problems.push("Privacy page is missing the outbound-link destination disclosure.");
+}
+
 const product = readFileSync(join(outputRoot, "product/index.html"), "utf8");
 if (!product.includes(expectedReleaseClaims.productBoundary)) {
   problems.push(`Product page is missing its ${marketingReleaseMode} hosted/API boundary.`);

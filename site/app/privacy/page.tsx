@@ -173,8 +173,8 @@ export default function PrivacyPage() {
           ? "Aggregate visitor analytics run on Plausible—cookieless, EU-hosted, and script-gated."
           : "No visitor analytics script loads in this release."}</strong>
         <p>{marketingAnalyticsMode === "plausible"
-          ? "This release loads Plausible Analytics to count page views and a few fixed events in aggregate. Plausible is cookieless and EU-hosted, sets no browser identifier, and performs no cross-site tracking. The analytics script loads only when the marketing analytics mode is explicitly enabled for a release."
-          : "The marketing analytics mode is off, so this release serves no analytics script at all. When a release enables it, the site loads Plausible Analytics—a cookieless, EU-hosted service with no cross-site tracking—to count page views and a few fixed events in aggregate."}</p>
+          ? "This release loads Plausible Analytics to count page views, a few fixed events, and outbound-link clicks in aggregate. Outbound-link clicks record the destination address of the public link clicked—no personal data. Plausible is cookieless and EU-hosted, sets no browser identifier, and performs no cross-site tracking. The analytics script loads only when the marketing analytics mode is explicitly enabled for a release."
+          : "The marketing analytics mode is off, so this release serves no analytics script at all. When a release enables it, the site loads Plausible Analytics—a cookieless, EU-hosted service with no cross-site tracking—to count page views, a few fixed events, and outbound-link clicks in aggregate. Outbound-link clicks record the destination address of the public link clicked—no personal data."}</p>
       </section>
 
       <section className="shell section practice-note">
