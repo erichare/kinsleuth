@@ -30,57 +30,29 @@ jobs:
       action: ${{ steps.event.outputs.action }}
       authorized: ${{ steps.event.outputs.authorized }}
     steps:
+      - name: Check out the trusted authorization gate from main
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: main
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up Node.js for the credential-free authorization gate
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+
       - name: Validate the exact failed public demo release event without protected credentials
         id: event
-        shell: bash
         env:
-          CURRENT_REPOSITORY: ${{ github.repository }}
-          EVENT_ACTION: ${{ github.event.action }}
-          EVENT_REPOSITORY: ${{ github.event.repository.full_name }}
-          SOURCE_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
-          SOURCE_DISPLAY_TITLE: ${{ github.event.workflow_run.display_title }}
-          SOURCE_EVENT: ${{ github.event.workflow_run.event }}
-          SOURCE_HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
-          SOURCE_HEAD_REPOSITORY: ${{ github.event.workflow_run.head_repository.full_name }}
-          SOURCE_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
-          SOURCE_RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
-          SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}
-          SOURCE_RUN_REPOSITORY: ${{ github.event.workflow_run.repository.full_name }}
-          SOURCE_WORKFLOW_NAME: ${{ github.event.workflow_run.name }}
-          SOURCE_WORKFLOW_PATH: ${{ github.event.workflow_run.path }}
-        run: |
-          set -euo pipefail
-          test "$EVENT_ACTION" = "completed"
-          test "$EVENT_REPOSITORY" = "$CURRENT_REPOSITORY"
-          test "$SOURCE_WORKFLOW_NAME" = "Release Kin Resolve public demo" || \
-            test "$SOURCE_WORKFLOW_NAME" = "$SOURCE_DISPLAY_TITLE"
-          test "$SOURCE_WORKFLOW_PATH" = ".github/workflows/public-demo-release.yml"
-          test "$SOURCE_EVENT" = "workflow_dispatch"
-          test "$SOURCE_HEAD_BRANCH" = "main"
-          test "$SOURCE_HEAD_REPOSITORY" = "$CURRENT_REPOSITORY"
-          test "$SOURCE_RUN_REPOSITORY" = "$CURRENT_REPOSITORY"
-          test "$SOURCE_CONCLUSION" = "failure" || \
-            test "$SOURCE_CONCLUSION" = "cancelled" || \
-            test "$SOURCE_CONCLUSION" = "timed_out"
-          [[ "$SOURCE_RUN_ID" =~ ^[1-9][0-9]{0,19}$ ]]
-          [[ "$SOURCE_RUN_ATTEMPT" =~ ^[1-9][0-9]{0,9}$ ]]
-          [[ "$SOURCE_HEAD_SHA" =~ ^[a-f0-9]{40}$ ]]
-          case "$SOURCE_DISPLAY_TITLE" in
-            "Public demo release $SOURCE_HEAD_SHA run $SOURCE_RUN_ID attempt $SOURCE_RUN_ATTEMPT")
-              action="release"
-              ;;
-            "Public demo rollback $SOURCE_HEAD_SHA run $SOURCE_RUN_ID attempt $SOURCE_RUN_ATTEMPT")
-              action="rollback"
-              ;;
-            "Public demo contain $SOURCE_HEAD_SHA run $SOURCE_RUN_ID attempt $SOURCE_RUN_ATTEMPT")
-              action="contain"
-              ;;
-            *) exit 1 ;;
-          esac
-          {
-            printf 'action=%s\n' "$action"
-            printf 'authorized=true\n'
-          } >> "$GITHUB_OUTPUT"
+          ALLOWED_SOURCE_CONCLUSIONS: failure,cancelled,timed_out
+          ALLOWED_SOURCE_EVENTS: workflow_dispatch
+          DISPLAY_TITLE_TEMPLATES: >-
+            [{"template":"Public demo {action} {head_sha} run {run_id} attempt {run_attempt}","captures":{"action":["release","rollback","contain"]}}]
+          EXPECTED_SOURCE_WORKFLOW_NAME: Release Kin Resolve public demo
+          EXPECTED_SOURCE_WORKFLOW_PATH: .github/workflows/public-demo-release.yml
+          REQUIRED_HEAD_BRANCH: main
+        run: node --experimental-strip-types scripts/authorize-workflow-run-source.mjs
 
       - name: Check out the exact failed public demo release revision
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4

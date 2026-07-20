@@ -22,16 +22,21 @@ describe("failed recovery target janitor", () => {
     expect(workflow).toContain("queue: max");
     expect(workflow).toContain("cancel-in-progress: false");
     expect(workflow).toContain("actions: read");
-    expect(workflow).toContain('run?.path !== ".github/workflows/recovery-evidence.yml"');
+    expect(workflow).toContain("scripts/authorize-workflow-run-source.mjs");
+    expect(workflow).toContain(
+      "EXPECTED_SOURCE_WORKFLOW_PATH: .github/workflows/recovery-evidence.yml"
+    );
     expect(workflow).toContain(
       "EXPECTED_SOURCE_WORKFLOW_ID: ${{ vars.RECOVERY_EVIDENCE_WORKFLOW_ID }}"
     );
-    expect(workflow).toContain("run?.workflow_id");
-    expect(workflow).not.toContain("run?.name");
-    expect(workflow).toContain('run?.event !== "workflow_dispatch"');
-    expect(workflow).toContain('run?.head_branch !== "main"');
-    expect(workflow).toContain("run?.run_attempt");
-    expect(workflow).toContain("run?.head_repository?.full_name !== process.env.GITHUB_REPOSITORY");
+    expect(workflow).toContain(
+      'REQUIRE_EXPECTED_SOURCE_WORKFLOW_ID: "true"'
+    );
+    expect(workflow).not.toContain("EXPECTED_SOURCE_WORKFLOW_NAME");
+    expect(workflow).not.toContain("DISPLAY_TITLE_TEMPLATES");
+    expect(workflow).toContain("ALLOWED_SOURCE_EVENTS: workflow_dispatch");
+    expect(workflow).toContain("ALLOWED_SOURCE_CONCLUSIONS: failure,cancelled,timed_out");
+    expect(workflow).toContain("REQUIRED_HEAD_BRANCH: main");
   });
 
   it("authorizes without protected credentials and fails closed if a published lease disappears", () => {
@@ -41,6 +46,20 @@ describe("failed recovery target janitor", () => {
     expect(authorize).not.toContain("environment:");
     expect(authorize).not.toContain("secrets.");
     expect(authorize).toContain("actions: read");
+    const trustedMainCheckout = authorize.indexOf(
+      "Check out the trusted authorization gate from main"
+    );
+    const authorization = authorize.indexOf("scripts/authorize-workflow-run-source.mjs");
+    const leaseDiscovery = authorize.indexOf(
+      "artifacts?name=${RECOVERY_CLEANUP_LEASE_ARTIFACT_NAME}&per_page=100"
+    );
+    expect(trustedMainCheckout).toBeGreaterThan(-1);
+    expect(trustedMainCheckout).toBeLessThan(authorization);
+    expect(authorization).toBeGreaterThan(-1);
+    expect(authorization).toBeLessThan(leaseDiscovery);
+    expect(authorize).toContain("ref: main");
+    expect(authorize).toContain("fetch-depth: 1");
+    expect(authorize).toContain("persist-credentials: false");
     expect(authorize).toContain("production-recovery-cleanup-lease-${{ github.event.workflow_run.run_attempt }}");
     expect(authorize).toContain("artifacts?name=${RECOVERY_CLEANUP_LEASE_ARTIFACT_NAME}&per_page=100");
     expect(authorize).toContain("response.total_count !== artifacts.length");

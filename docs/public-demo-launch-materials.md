@@ -188,16 +188,22 @@ Work the steps in order; stop at the first failure.
 
 1. [ ] The demo is promoted through **Release Kin Resolve public demo** (action
        `release`) and every external gate in the runbook has recorded evidence.
-2. [ ] The marketing site is redeployed through the site-deploy workflow with
+2. [ ] The repository variable `KINRESOLVE_MARKETING_DEMO_MODE` is set to `live`
+       (`gh variable set KINRESOLVE_MARKETING_DEMO_MODE --body live`). The product
+       release workflow’s marketing job reads this variable (defaulting to `pending`
+       when unset), so without this step a routine product release would silently
+       rebuild `kinresolve.com` with the pending homepage copy.
+3. [ ] The marketing site is redeployed through the site-deploy workflow with
        `KINRESOLVE_MARKETING_DEMO_MODE=live`.
-3. [ ] Production `kinresolve.com` is verified by hand: the hero primary action is
+4. [ ] Production `kinresolve.com` is verified by hand: the hero primary action is
        “Solve the passenger mystery,” the supporting line reads exactly “No signup ·
        about 2 minutes · every record is fictional.”, and the usage counter renders from
        the live stats endpoint.
-4. [ ] The Show HN post and prepared first comment are published, then each community
+5. [ ] The Show HN post and prepared first comment are published, then each community
        variant after its rules check passes.
-5. [ ] The demo link is added near the top of `README.md`.
-6. [ ] Rollback path stands ready: redeploy marketing with
-       `KINRESOLVE_MARKETING_DEMO_MODE=pending`, and if the demo itself must be
-       unpublished, dispatch the public-demo release workflow’s `contain` action per the
-       runbook.
+6. [ ] The demo link is added near the top of `README.md`.
+7. [ ] Rollback path stands ready: set the repository variable back with
+       `gh variable set KINRESOLVE_MARKETING_DEMO_MODE --body pending`, redeploy
+       marketing with `KINRESOLVE_MARKETING_DEMO_MODE=pending`, and if the demo itself
+       must be unpublished, dispatch the public-demo release workflow’s `contain` action
+       per the runbook.

@@ -39,6 +39,8 @@ TEST_RELEASE_UPGRADE_DATABASE_URL=postgres://... npm run test:release-upgrade
 hand-maintained file list. The large-import command uses the same disposable database
 guard. The upgrade rehearsal creates and drops child databases, so its control URL must
 be local, disposable, and distinct from both `TEST_DATABASE_URL` and `DATABASE_URL`.
+Migration machinery and rehearsal details are documented in
+[docs/development.md](docs/development.md).
 
 ## Ground rules
 

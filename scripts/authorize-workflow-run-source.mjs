@@ -12,12 +12,14 @@ try {
   const event = await readJson(required("GITHUB_EVENT_PATH"), "workflow_run event");
   const expectedSourceWorkflowName = optional("EXPECTED_SOURCE_WORKFLOW_NAME");
   const expectedSourceWorkflowId = optional("EXPECTED_SOURCE_WORKFLOW_ID");
+  const requiresExpectedSourceWorkflowId = booleanFlag("REQUIRE_EXPECTED_SOURCE_WORKFLOW_ID");
   const displayTitleTemplates = templates(optional("DISPLAY_TITLE_TEMPLATES"));
   const result = authorizeWorkflowRunSource(event, {
     currentRepository: required("GITHUB_REPOSITORY"),
     expectedSourceWorkflowPath: required("EXPECTED_SOURCE_WORKFLOW_PATH"),
     ...(expectedSourceWorkflowName === undefined ? {} : { expectedSourceWorkflowName }),
     ...(expectedSourceWorkflowId === undefined ? {} : { expectedSourceWorkflowId }),
+    ...(requiresExpectedSourceWorkflowId === undefined ? {} : { requiresExpectedSourceWorkflowId }),
     allowedSourceEvents: list(required("ALLOWED_SOURCE_EVENTS")),
     allowedSourceConclusions: list(required("ALLOWED_SOURCE_CONCLUSIONS")),
     requiredHeadBranch: required("REQUIRED_HEAD_BRANCH"),
@@ -85,4 +87,13 @@ function required(name) {
   const value = process.env[name]?.trim();
   if (!value) throw new Error(`${name} is required.`);
   return value;
+}
+
+function booleanFlag(name) {
+  const value = optional(name);
+  if (value === undefined) return undefined;
+  if (value !== "true" && value !== "false") {
+    throw new Error(`${name} must be exactly true or false when set.`);
+  }
+  return value === "true";
 }

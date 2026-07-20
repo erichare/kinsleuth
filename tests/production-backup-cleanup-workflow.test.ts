@@ -22,14 +22,21 @@ describe("independent production backup fence cleanup", () => {
     expect(cleanupWorkflow).toContain("github.event.workflow_run.conclusion == 'failure'");
     expect(cleanupWorkflow).toContain("github.event.workflow_run.conclusion == 'cancelled'");
     expect(cleanupWorkflow).toContain("github.event.workflow_run.conclusion == 'timed_out'");
-    expect(cleanupWorkflow).toContain('run?.path !== ".github/workflows/production-backup.yml"');
+    expect(cleanupWorkflow).toContain("scripts/authorize-workflow-run-source.mjs");
+    expect(cleanupWorkflow).toContain(
+      "EXPECTED_SOURCE_WORKFLOW_PATH: .github/workflows/production-backup.yml"
+    );
     expect(cleanupWorkflow).toContain(
       "EXPECTED_SOURCE_WORKFLOW_ID: ${{ vars.PRODUCTION_BACKUP_WORKFLOW_ID }}"
     );
-    expect(cleanupWorkflow).toContain("run?.workflow_id");
-    expect(cleanupWorkflow).not.toContain("run?.name");
-    expect(cleanupWorkflow).toContain('run?.event !== "workflow_dispatch"');
-    expect(cleanupWorkflow).toContain('run?.head_branch !== "main"');
+    expect(cleanupWorkflow).toContain(
+      'REQUIRE_EXPECTED_SOURCE_WORKFLOW_ID: "true"'
+    );
+    expect(cleanupWorkflow).not.toContain("EXPECTED_SOURCE_WORKFLOW_NAME");
+    expect(cleanupWorkflow).not.toContain("DISPLAY_TITLE_TEMPLATES");
+    expect(cleanupWorkflow).toContain("ALLOWED_SOURCE_EVENTS: workflow_dispatch");
+    expect(cleanupWorkflow).toContain("ALLOWED_SOURCE_CONCLUSIONS: failure,cancelled,timed_out");
+    expect(cleanupWorkflow).toContain("REQUIRED_HEAD_BRANCH: main");
   });
 
   it("publishes an immutable exact-attempt lease before the source can acquire a fence", () => {
@@ -50,6 +57,18 @@ describe("independent production backup fence cleanup", () => {
     const cleanupStart = cleanupWorkflow.indexOf("  cleanup:");
     const authorize = cleanupWorkflow.slice(authorizeStart, cleanupStart);
     expect(authorize).not.toContain("secrets.");
+    const trustedMainCheckout = authorize.indexOf(
+      "Check out the trusted authorization gate from main"
+    );
+    const authorization = authorize.indexOf("scripts/authorize-workflow-run-source.mjs");
+    const leaseDiscovery = authorize.indexOf("actions/runs/${SOURCE_RUN_ID}/artifacts");
+    expect(trustedMainCheckout).toBeGreaterThan(-1);
+    expect(trustedMainCheckout).toBeLessThan(authorization);
+    expect(authorization).toBeGreaterThan(-1);
+    expect(authorization).toBeLessThan(leaseDiscovery);
+    expect(authorize).toContain("ref: main");
+    expect(authorize).toContain("fetch-depth: 1");
+    expect(authorize).toContain("persist-credentials: false");
     expect(authorize).toContain("actions/runs/${SOURCE_RUN_ID}/artifacts");
     expect(authorize).toContain("attempts/${SOURCE_RUN_ATTEMPT}/jobs");
     expect(authorize).toContain(

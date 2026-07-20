@@ -630,6 +630,13 @@ jobs:
               {"table":"beta_worker_heartbeats","select":true,"insert":true,"update":true,"delete":false},
               {"table":"api_tokens","select":true,"insert":true,"update":true,"delete":false},
               {"table":"api_rate_limit_buckets","select":true,"insert":true,"update":true,"delete":true},
+              {"table":"public_demo_capacity","select":true,"insert":true,"update":true,"delete":false},
+              {"table":"public_demo_sessions","select":true,"insert":true,"update":true,"delete":true},
+              {"table":"public_demo_rate_limits","select":true,"insert":true,"update":true,"delete":true},
+              {"table":"public_demo_generations","select":true,"insert":true,"update":true,"delete":true},
+              {"table":"public_demo_ai_attempts","select":true,"insert":true,"update":true,"delete":true},
+              {"table":"public_demo_events","select":true,"insert":true,"update":false,"delete":true},
+              {"table":"public_demo_stats","select":true,"insert":false,"update":true,"delete":false},
               {"table":"security_events","select":false,"insert":true,"update":false,"delete":false}
             ] and
             all(.managedTablePrivileges[];
