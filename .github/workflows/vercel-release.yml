@@ -99,14 +99,14 @@ jobs:
       contents: read
     steps:
       - name: Check out the trusted safety gate from main
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: main
           fetch-depth: 1
           persist-credentials: false
 
       - name: Set up Node.js for the credential-free safety gate
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
 
@@ -203,7 +203,7 @@ jobs:
           esac
 
       - name: Check out the exact candidate revision
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.release_commit }}
           fetch-depth: 0
@@ -250,7 +250,7 @@ jobs:
             "$RUNNER_TEMP/verify-release-namespace.json" "${remote_tag_sha:-absent}"
 
       - name: Set up Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
           cache: npm
@@ -327,14 +327,14 @@ jobs:
       beta_intake_proven: ${{ steps.staging-beta-intake-smoke.outputs.proven }}
     steps:
       - name: Check out the verified candidate
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.release_commit }}
           fetch-depth: 0
           persist-credentials: false
 
       - name: Set up Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
           cache: npm
@@ -857,7 +857,7 @@ jobs:
 
       - name: Upload the pre-promotion staging baseline
         if: ${{ steps.staging-browser-baseline.outcome == 'success' }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: staging-browser-canary-baseline-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/staging-browser-canary-state.json
@@ -1032,7 +1032,7 @@ jobs:
 
       - name: Upload a synthetic-only staging failure screenshot
         if: ${{ failure() && steps.staging-browser-baseline.outcome == 'success' }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: staging-browser-canary-failure-${{ github.run_id }}-${{ github.run_attempt }}
           path: output/playwright/browser-canary-*.png
@@ -1060,14 +1060,14 @@ jobs:
       contents: read
     steps:
       - name: Check out the verified candidate for fresh-runner finalization
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.release_commit }}
           fetch-depth: 0
           persist-credentials: false
 
       - name: Set up Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
           cache: npm
@@ -1183,7 +1183,7 @@ jobs:
       - name: Download the pre-promotion staging baseline
         id: finalizer-download-browser-baseline
         if: ${{ always() && needs.staging.outputs.browser_baseline_prepared == 'true' }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: staging-browser-canary-baseline-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/staging-browser-canary-baseline
@@ -1255,7 +1255,7 @@ jobs:
         if: >-
           ${{ always() && inputs.release_target == 'staging-only' &&
               steps.create-staging-demo-evidence.outcome == 'success' }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: staging-demo-candidate-evidence-${{ github.run_attempt }}
           path: ${{ runner.temp }}/staging-demo-candidate-evidence.json
@@ -1321,7 +1321,7 @@ jobs:
       staging_beta_intake_proven: ${{ needs.staging.outputs.beta_intake_proven }}
     steps:
       - name: Check out the verified candidate
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.release_commit }}
           fetch-depth: 0
@@ -1350,7 +1350,7 @@ jobs:
           fi
 
       - name: Set up Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
           cache: npm
@@ -2338,7 +2338,7 @@ jobs:
 
       - name: Upload only the sanitized API launch release receipt
         if: inputs.release_mode == 'api-launch'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: production-api-launch-release-receipt-${{ github.run_attempt }}
           path: ${{ runner.temp }}/api-launch-release-receipt/kinresolve-api-launch-receipt.json
@@ -2799,7 +2799,7 @@ jobs:
         working-directory: site
     steps:
       - name: Check out the exact live candidate
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.release_commit }}
           fetch-depth: 0
@@ -2821,7 +2821,7 @@ jobs:
           fi
 
       - name: Set up the marketing Node.js runtime
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
           cache: npm
@@ -2959,14 +2959,14 @@ jobs:
       contents: write
     steps:
       - name: Check out the exact live candidate
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.release_commit }}
           fetch-depth: 0
           persist-credentials: false
 
       - name: Set up Node.js for the publication safety gate
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
 
@@ -2978,7 +2978,7 @@ jobs:
 
       - name: Download the sanitized API launch release receipt
         if: inputs.release_mode == 'api-launch'
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: production-api-launch-release-receipt-${{ needs.production.outputs.release_workflow_run_attempt }}
           path: ${{ runner.temp }}/api-launch-release-receipt

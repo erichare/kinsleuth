@@ -28,14 +28,14 @@ jobs:
       target: ${{ steps.event.outputs.target }}
     steps:
       - name: Check out the trusted authorization gate from main
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: main
           fetch-depth: 1
           persist-credentials: false
 
       - name: Set up Node.js for the credential-free authorization gate
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
 
@@ -54,7 +54,7 @@ jobs:
         run: node --experimental-strip-types scripts/authorize-workflow-run-source.mjs
 
       - name: Check out the exact failed holding revision
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 0
@@ -70,7 +70,7 @@ jobs:
           git merge-base --is-ancestor "$SOURCE_HEAD_SHA" origin/main
 
       - name: Set up the pinned Node.js runtime for credential-free classification
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
 
@@ -132,7 +132,7 @@ jobs:
       cancel-in-progress: false
     steps:
       - name: Check out the exact authorized holding revision again
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 0
@@ -148,7 +148,7 @@ jobs:
           git merge-base --is-ancestor "$SOURCE_HEAD_SHA" origin/main
 
       - name: Set up the pinned Node.js runtime
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
 
