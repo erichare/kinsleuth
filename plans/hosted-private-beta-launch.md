@@ -1,3 +1,5 @@
+> Status: In execution · Last updated: 2026-07-15
+
 # Kin Resolve hosted private beta launch blueprint
 
 - **Status:** Execution in progress; source integration, safe holding surfaces, and the staging demo-session control plane are complete, while owner, legal, runtime, provider, and recovery gates remain open

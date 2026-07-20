@@ -53,7 +53,7 @@ export default function OpenSourcePage() {
         </div>
       </section>
 
-      <div className="shell section"><CtaStrip eyebrow="Open development" title="Follow the hardening work in public." body="The repository shows what is available, what is being repaired, and what remains only a roadmap idea." /></div>
+      <div className="shell section"><CtaStrip body="The repository shows what is available, what is being repaired, and what remains only a roadmap idea." eyebrow="Open development" secondaryHref={site.github} secondaryLabel="View on GitHub" title="Follow the hardening work in public." /></div>
     </>
   );
 }

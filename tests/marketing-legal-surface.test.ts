@@ -38,7 +38,9 @@ describe("private-beta marketing and legal surface", () => {
     expect(status).toContain('phase: "hosted-private-beta-live"');
     expect(status).toContain('phase: "hosted-private-beta-api-live"');
     expect(status).toContain("Private beta applications are open.");
-    expect(status).toContain("Invitations have not started; hosted access begins only after the launch gates pass.");
+    expect(status).toContain('rollout: "Invitations have not started."');
+    expect(status).toContain('summary: "Private beta applications are open; invitations have not started."');
+    expect(status).not.toContain("hosted access begins only after the launch gates pass");
     expect(status).toContain("Hosted private beta is live.");
     expect(status).toContain("Access is invitation-only for approved participants; the hosted API is not available in this release.");
     expect(status).toContain("Hosted private beta and API v1 are live.");
@@ -54,10 +56,14 @@ describe("private-beta marketing and legal surface", () => {
     expect(() => parseMarketingReleaseMode("")).toThrow(/must be exactly prelaunch, application, or api-launch/);
     expect(() => parseMarketingReleaseMode("application ")).toThrow(/must be exactly prelaunch, application, or api-launch/);
     expect(publicCopy).not.toMatch(/Hosted access is rolling out in small invitation cohorts/i);
+    expect(publicCopy).not.toContain("hosted access begins only after the launch gates pass");
+    expect(publicCopy).toContain("Private beta applications are open. Invitations have not started.");
+    expect(publicCopy).toContain("Private beta applications are open; invitations have not started.");
 
     const exportCheck = await readFile(files.exportCheck, "utf8");
     expect(exportCheck).toContain("hosted access is rolling out");
-    expect(exportCheck).toContain("Invitations have not started; hosted access begins only after the launch gates pass.");
+    expect(exportCheck).toContain("hosted access begins only after the launch gates pass");
+    expect(exportCheck).toContain('rollout: "Invitations have not started."');
     expect(exportCheck).toContain('data-marketing-release-mode="${marketingReleaseMode}"');
   });
 
@@ -73,6 +79,8 @@ describe("private-beta marketing and legal surface", () => {
     expect(beta).toMatch(/30-day pilot is free.*no billing or payment-information step/i);
     expect(beta).toMatch(/one-business-day support acknowledgement target.*not an uptime or response-time SLA/i);
     expect(beta).toMatch(/Submitting consents only to beta communications.*does not accept participation terms/i);
+    expect(beta).toMatch(/does not accept participation terms, create an account, guarantee access, place you in a queue/i);
+    expect(beta.match(/guarantee access/gi)).toHaveLength(1);
     expect(beta).toContain('<Link href="/privacy">data-practices disclosure</Link>');
     expect(beta).toMatch(/The support and security routes must be delivery-tested before invitations begin/i);
     expect(beta).toMatch(/Do not email family records, GEDCOM files, screenshots of private research, credentials, API tokens, or genetic information/i);

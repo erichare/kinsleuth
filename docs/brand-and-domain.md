@@ -46,9 +46,13 @@ private-beta launch gates pass.
 
 ## Public claims contract
 
+Copy discipline: visitor-facing pages carry one status line each, sourced from the shared
+status modules; the full claims discipline lives in this document, not in repeated
+on-page qualifiers.
+
 Safe current claims must distinguish implemented source capabilities from hosted availability:
 
-- Private beta applications are open; invitations have not started, and hosted access begins only after the launch gates pass.
+- Private beta applications are open; invitations have not started.
 - The source product implements a private, single-archive genealogy research workspace.
 - The source product implements GEDCOM preview, reviewable refresh/apply/rollback, and GEDCOM 5.5.1 export.
 - The source product implements people/source search, research cases, evidence, hypotheses, tasks, deterministic checks, private object storage, and durable background jobs.

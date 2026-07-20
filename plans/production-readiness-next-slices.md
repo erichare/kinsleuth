@@ -1,3 +1,5 @@
+> Status: Reviewed execution blueprint · Last updated: 2026-07-13
+
 # Production readiness: next slices and public-site program
 
 Status: Reviewed execution blueprint<br>

@@ -20,13 +20,13 @@ export function SiteFooter() {
           <h2>Explore</h2>
           <nav aria-label="Footer navigation">
             <a href={site.demoUrl}>Try the demo</a>
-            {navigation.slice(0, 3).map((item) => <Link href={item.href} key={item.href}>{item.label}</Link>)}
+            {navigation.slice(0, 4).map((item) => <Link href={item.href} key={item.href}>{item.label}</Link>)}
           </nav>
         </div>
         <div>
           <h2>Project</h2>
           <nav aria-label="Project links">
-            {navigation.slice(3).map((item) => <Link href={item.href} key={item.href}>{item.label}</Link>)}
+            {navigation.slice(4).map((item) => <Link href={item.href} key={item.href}>{item.label}</Link>)}
             <a href={site.github}>GitHub <span aria-hidden="true">↗</span></a>
           </nav>
         </div>

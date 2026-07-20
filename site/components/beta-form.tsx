@@ -95,7 +95,7 @@ export function BetaForm() {
       </div>
       <p className="form-note">
         {applicationMode
-          ? "This no-JavaScript form sends only the fixed fields above to the Kin Resolve product endpoint. A receipt is sent to your email; applying does not create an account or guarantee access."
+          ? "This no-JavaScript form sends only the fixed fields above to the Kin Resolve product endpoint. A receipt is sent to your email."
           : `Submitting opens your email application with the form addressed to ${site.betaEmail}. The marketing site does not store it; sending still depends on your email provider.`}
       </p>
     </form>
