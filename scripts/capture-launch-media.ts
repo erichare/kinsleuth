@@ -167,7 +167,7 @@ async function main(): Promise<void> {
     }
     await page.reload({ waitUntil: "domcontentloaded" });
     await page.getByRole("status").filter({ hasText: "Changes are ready to review." }).waitFor();
-    await page.getByRole("button", { name: "Reopen review", exact: true }).click();
+    await page.getByRole("button", { name: "Open review", exact: true }).click();
     await page.getByRole("heading", { level: 2, name: "Proposed refresh changes" }).waitFor();
     await page.getByRole("region", { name: "Import report" }).waitFor();
     const changeGroups = page.locator(".sync-change-groups");

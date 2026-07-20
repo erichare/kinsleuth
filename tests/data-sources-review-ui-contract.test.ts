@@ -6,9 +6,12 @@ import { describe, expect, it } from "vitest";
 
 import {
   canApplyReviewedChanges,
+  canOpenReviewPanel,
   ChangeFieldComparison,
   ImportReport,
   isDataSourceWorkActive,
+  reviewOpenAfterResume,
+  runReviewDomId,
   supportsFieldLevelResolution
 } from "@/components/data-sources-workspace";
 
@@ -225,6 +228,43 @@ describe("Data Sources review workspace contract", () => {
     expect(source).toMatch(/Cancel refresh/i);
     expect(source).toContain('method: "DELETE"');
     expect(source).toMatch(/integrations\/\$\{[^}]+\}\/sync-runs/);
+  });
+
+  it("offers an Open review affordance on the source row whenever a review is ready", () => {
+    expect(canOpenReviewPanel({ phase: "review_ready", runId: "run-1" })).toBe(true);
+    expect(canOpenReviewPanel({ phase: "review_ready", runId: "run-1", reviewOpen: true })).toBe(true);
+    expect(canOpenReviewPanel({ phase: "review_ready", runId: "run-1", reviewOpen: false })).toBe(false);
+    expect(canOpenReviewPanel({ phase: "applied", runId: "run-1", reviewOpen: true })).toBe(false);
+    expect(canOpenReviewPanel({ phase: "review_ready" })).toBe(false);
+    expect(canOpenReviewPanel(undefined)).toBe(false);
+  });
+
+  it("scrolls the status-row review actions to a focusable per-run review panel", async () => {
+    const source = await readFile(
+      path.join(process.cwd(), "components", "data-sources-workspace.tsx"),
+      "utf8"
+    );
+
+    expect(runReviewDomId("run-1")).toBe("run-review-run-1");
+    expect(source).toMatch(/Open review/);
+    expect(source).toMatch(/id=\{runReviewDomId\(runId\)\}/);
+    expect(source).toMatch(/tabIndex=\{-1\}/);
+    expect(source).toMatch(/scrollIntoView/);
+    expect(source).toMatch(/prefers-reduced-motion/);
+    expect(source).toMatch(/focus\(\{ preventScroll: true \}\)/);
+  });
+
+  it("keeps a ready review's panel rendered after a full page reload", async () => {
+    expect(reviewOpenAfterResume("review_ready")).toBe(true);
+    expect(reviewOpenAfterResume("applied")).toBe(false);
+    expect(reviewOpenAfterResume("rolled_back")).toBe(false);
+
+    const source = await readFile(
+      path.join(process.cwd(), "components", "data-sources-workspace.tsx"),
+      "utf8"
+    );
+
+    expect(source).toMatch(/reviewOpen:\s*reviewOpenAfterResume\(phase\)/);
   });
 
   it("uses the new-source authority only for creation and preserves each remembered source on refresh", async () => {

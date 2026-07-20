@@ -53,7 +53,7 @@ describe("synthetic launch-media contract", () => {
     expect(capture).toContain("body.storage.configured !== true");
     expect(capture).toContain('getByText("Synthetic demo", { exact: true })');
     expect(capture).toContain('hasText: "Changes are ready to review."');
-    expect(capture).toContain('name: "Reopen review", exact: true');
+    expect(capture).toContain('name: "Open review", exact: true');
     expect(capture).toContain('locator(".sync-change-groups")');
     expect(capture).toContain("scrollBelowStickyHeader(page, queuedStatus)");
     expect(capture).toContain("scrollBelowStickyHeader(page, changeGroups)");

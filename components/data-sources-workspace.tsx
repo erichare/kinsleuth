@@ -73,6 +73,24 @@ export function supportsFieldLevelResolution(entityType: string): boolean {
   return entityType === "person" || entityType === "source";
 }
 
+export function runReviewDomId(runId: string): string {
+  return `run-review-${runId}`;
+}
+
+export function canOpenReviewPanel(state?: {
+  phase?: ImportPhase;
+  runId?: string;
+  reviewOpen?: boolean;
+}): boolean {
+  return Boolean(state?.runId && state.phase === "review_ready" && state.reviewOpen !== false);
+}
+
+// A still-open review must survive a full page reload; only finished runs
+// wait behind the explicit "Reopen review" action.
+export function reviewOpenAfterResume(phase: ImportPhase): boolean {
+  return phase === "review_ready";
+}
+
 type BrowserRun = {
   id: string;
   connectionId: string;
@@ -224,6 +242,7 @@ export function DataSourcesWorkspace({
       ?? (plainGedcomOnly ? "another_genealogy_app" : "ancestry")
   );
   const [states, setStates] = useState<Record<string, ImportState>>({});
+  const [pendingReviewFocus, setPendingReviewFocus] = useState<string>();
   const resumeChecked = useRef(new Set<string>());
 
   const pollRun = useCallback(async (connectionId: string, runId: string) => {
@@ -388,7 +407,7 @@ export function DataSourcesWorkspace({
               runId: run.id,
               artifactId: run.artifactId,
               report,
-              reviewOpen: false,
+              reviewOpen: reviewOpenAfterResume(phase),
               backupAvailable: run.backupAvailable
             }
           }));
@@ -406,6 +425,15 @@ export function DataSourcesWorkspace({
       })();
     }
   }, [connections, pollRun]);
+
+  useEffect(() => {
+    if (!pendingReviewFocus) return;
+    const panel = document.getElementById(runReviewDomId(pendingReviewFocus));
+    if (!panel) return;
+    panel.scrollIntoView({ behavior: prefersReducedMotion() ? "auto" : "smooth", block: "start" });
+    panel.focus({ preventScroll: true });
+    setPendingReviewFocus(undefined);
+  }, [pendingReviewFocus, states]);
 
   async function importPackage(
     provider: Provider,
@@ -654,10 +682,15 @@ export function DataSourcesWorkspace({
             onImport={(file, connectionId, mediaRightsAcknowledged, displayName) => (
               importPackage(card.provider, file, connectionId, mediaRightsAcknowledged, displayName)
             )}
-            onReopen={(connectionId) => setStates((current) => ({
-              ...current,
-              [connectionId]: { ...current[connectionId], reviewOpen: true }
-            }))}
+            onOpenReview={(runId) => setPendingReviewFocus(runId)}
+            onReopen={(connectionId) => {
+              setStates((current) => ({
+                ...current,
+                [connectionId]: { ...current[connectionId], reviewOpen: true }
+              }));
+              const runId = states[connectionId]?.runId;
+              if (runId) setPendingReviewFocus(runId);
+            }}
           />
         ))}
       </section>
@@ -949,7 +982,12 @@ function RunReview({
   }
 
   return (
-    <section className="app-card sync-review" aria-labelledby={`review-${runId}`}>
+    <section
+      aria-labelledby={`review-${runId}`}
+      className="app-card sync-review"
+      id={runReviewDomId(runId)}
+      tabIndex={-1}
+    >
       <div className="sync-review-heading">
         <div>
           <span className="eyebrow">Review before apply</span>
@@ -1442,6 +1480,7 @@ function SourceCard({
   onCancel,
   onDisconnect,
   onImport,
+  onOpenReview,
   onReopen
 }: {
   card: (typeof sourceCards)[number];
@@ -1458,6 +1497,7 @@ function SourceCard({
     mediaRightsAcknowledged?: boolean,
     displayName?: string
   ) => void;
+  onOpenReview: (runId: string) => void;
   onReopen: (connectionId: string) => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -1560,6 +1600,15 @@ function SourceCard({
                   ) : null}
                 </div>
                 <div className="remembered-source-actions">
+                  {canOpenReviewPanel(importState) && importState?.runId ? (
+                    <button
+                      className="button-secondary"
+                      onClick={() => onOpenReview(importState.runId as string)}
+                      type="button"
+                    >
+                      Open review
+                    </button>
+                  ) : null}
                   {canReopen ? (
                     <button className="button-secondary" onClick={() => onReopen(connection.id)} type="button">
                       Reopen review
@@ -2063,6 +2112,10 @@ function lastRefreshedLabel(provider: Provider, value?: string | null): string {
     ? "unknown"
     : date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
   return `${prefix}: ${formatted}`;
+}
+
+function prefersReducedMotion(): boolean {
+  return window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
 }
 
 function errorMessage(error: unknown): string {
