@@ -419,6 +419,7 @@ describe.skipIf(!releaseDatabaseUrl)("v0.17.4 release upgrade", () => {
       "017_beta_applications",
       "018_public_demo",
       "019_public_demo_stats",
+      "020_core_rls_policies",
       "021_public_demo_notice_versions"
     ]);
     for (const table of archiveScopedTables) {
@@ -499,6 +500,7 @@ describe.skipIf(!releaseDatabaseUrl)("v0.17.4 release upgrade", () => {
       "017_beta_applications",
       "018_public_demo",
       "019_public_demo_stats",
+      "020_core_rls_policies",
       "021_public_demo_notice_versions"
     ]);
     await exerciseCompositeKeyWriters(pool);
