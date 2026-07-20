@@ -30,7 +30,7 @@ describe("operator archive provisioning documentation", () => {
     const compose = await readFile("docker-compose.yml", "utf8");
     const provisioner = serviceSection(compose, "provision");
 
-    expect(provisioner).toMatch(/command:\s*npm run archive:provision -- --mode demo/);
+    expect(provisioner).toMatch(/command:\s*sh -c "npm run db:migrate && npm run archive:provision -- --mode demo"/);
     expect(provisioner).toMatch(/KINRESOLVE_DEPLOYMENT_MODE:\s*self-hosted/);
     expect(provisioner).toMatch(/KINRESOLVE_DATASET_MODE:\s*demo/);
     expect(provisioner).toMatch(/KINSLEUTH_ARCHIVE_ID:\s*archive-default/);
