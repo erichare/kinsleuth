@@ -10,6 +10,20 @@ const marketingAnalyticsMode = parseMarketingAnalyticsMode(
 );
 const marketingDemoMode = parseMarketingDemoMode(process.env.KINRESOLVE_MARKETING_DEMO_MODE);
 
+function htmlContainsUrlHost(html, expectedHost) {
+  const urlAttributePattern = /\b(?:href|src|action)\s*=\s*(["'])(.*?)\1/gi;
+  for (const match of html.matchAll(urlAttributePattern)) {
+    const candidate = match[2];
+    try {
+      const parsed = new URL(candidate, "https://example.invalid");
+      if (parsed.hostname === expectedHost) return true;
+    } catch {
+      // Ignore malformed URLs/attribute values.
+    }
+  }
+  return false;
+}
+
 function parseMarketingReleaseMode(value) {
   if (value === undefined || value === "prelaunch") return "prelaunch";
   if (value === "application" || value === "api-launch") return value;
@@ -505,7 +519,7 @@ if (applicationMode) {
     problems.push("The Turnstile token input must be widget-injected, never prerendered.");
   }
 } else {
-  if (beta.includes("challenges.cloudflare.com") || beta.includes("cf-turnstile")) {
+  if (htmlContainsUrlHost(beta, "challenges.cloudflare.com") || beta.includes("cf-turnstile")) {
     problems.push("Beta mail fallback must not load the Turnstile challenge widget.");
   }
   if (!beta.includes(`action="mailto:beta@kinresolve.com`)) {
