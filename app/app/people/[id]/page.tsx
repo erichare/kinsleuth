@@ -10,7 +10,9 @@ import { isDnaResearchCase, projectResearchCaseForDnaCapability } from "@/lib/ca
 import { projectDemoSeededAnalysisRun } from "@/lib/demo-ai-runs";
 import { resolveHostedCapabilities } from "@/lib/hosted-capabilities";
 import { getSessionContext, workspaceOptionsForSession } from "@/lib/auth-session";
+import { buildPersonMiniTree } from "@/lib/person-mini-tree";
 import { buildPersonProfile } from "@/lib/person-profile";
+import { workspaceFamilyEdges } from "@/lib/person-relationships";
 import { readWorkspace } from "@/lib/workspace-store";
 
 export const dynamic = "force-dynamic";
@@ -37,9 +39,14 @@ export default async function AppPersonPage({ params }: { params: Promise<{ id: 
     if (seededRun) return [seededRun];
     return capabilities.dna ? [run] : [];
   });
+  // GEDCOM FAM structures already live in the workspace read above; typed
+  // relationship labels and the mini tree both derive from these edges.
+  const familyEdges = workspaceFamilyEdges(workspace);
+  const miniTree = buildPersonMiniTree(person, workspace.people, familyEdges);
   const profile = buildPersonProfile(person, {
     ...workspace,
     cases: visibleCases,
+    families: familyEdges,
     // Saved answers can contain DNA details even when their structured context
     // is incomplete. When DNA is disabled, admit only the exact repository-owned
     // fictional fixture analyses; arbitrary saved answers remain server-hidden.
@@ -97,7 +104,7 @@ export default async function AppPersonPage({ params }: { params: Promise<{ id: 
         </div>
       </section>
 
-      <PersonProfileTabs personName={person.displayName} profile={profile} />
+      <PersonProfileTabs miniTree={miniTree} personName={person.displayName} profile={profile} />
     </AppShell>
   );
 }

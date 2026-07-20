@@ -4,7 +4,11 @@ import { describe, expect, it } from "vitest";
 
 import { PersonProfileTabs, personProfileTabAfterKey } from "@/components/person-profile-tabs";
 import { demoPeople } from "@/lib/demo-data";
+import type { PersonSummary } from "@/lib/models";
+import { buildPersonMiniTree } from "@/lib/person-mini-tree";
 import { buildPersonProfile } from "@/lib/person-profile";
+import { demoFamilyTreeEdges, familyEdgesFromGedcomRecords } from "@/lib/person-relationships";
+import { parseGedcom } from "@/lib/gedcom/parser";
 import { createDemoWorkspace } from "@/lib/workspace-store";
 
 const now = new Date("2026-07-16T00:00:00.000Z");
@@ -43,6 +47,50 @@ describe("person profile tabs", () => {
       "p-tobias-mercer": "Son",
       "p-iris-mercer": "Daughter",
       "p-peter-mercer": "Son"
+    });
+  });
+
+  it("derives typed relationships from imported GEDCOM FAM structures", () => {
+    // Synthetic Hartwell–Mercer style fictional GEDCOM fixture.
+    const parsed = parseGedcom([
+      "0 @F1@ FAM",
+      "1 HUSB @I1@",
+      "1 WIFE @I2@",
+      "1 CHIL @I3@",
+      "1 CHIL @I4@"
+    ].join("\n"));
+    const families = familyEdgesFromGedcomRecords(parsed.records);
+    const people: PersonSummary[] = [
+      importedPerson("@I1@", "Fictional Alder Wexbrook", "M", ["@I2@", "@I3@", "@I4@"]),
+      importedPerson("@I2@", "Fictional Sylvie Wexbrook", "F", ["@I1@", "@I3@", "@I4@"]),
+      importedPerson("@I3@", "Fictional Colm Wexbrook", "M", ["@I1@", "@I2@", "@I4@"]),
+      importedPerson("@I4@", "Fictional Petra Wexbrook", "F", ["@I1@", "@I2@", "@I3@"]),
+      importedPerson("@I9@", "Fictional Unlinked Cousin", "U", [])
+    ];
+    const wife = people[1];
+    const profile = buildPersonProfile(
+      { ...wife, relatives: [...wife.relatives, "@I9@"] },
+      { people, families }
+    );
+    const labels = Object.fromEntries(
+      profile.relationships.map((relationship) => [relationship.id, relationship.relationship])
+    );
+
+    expect(labels).toEqual({
+      "@I1@": "Husband",
+      "@I3@": "Son",
+      "@I4@": "Daughter",
+      "@I9@": "Linked relative"
+    });
+
+    const childLabels = Object.fromEntries(
+      buildPersonProfile(people[2], { people, families }).relationships
+        .map((relationship) => [relationship.id, relationship.relationship])
+    );
+    expect(childLabels).toEqual({
+      "@I1@": "Father",
+      "@I2@": "Mother",
+      "@I4@": "Sister"
     });
   });
 
@@ -153,6 +201,47 @@ describe("person profile tabs", () => {
     expect(html).toMatch(/Open connected case/);
     expect(html).toMatch(/Seeded demo analysis/);
     expect(html).toMatch(/prewritten fictional examples/);
+  });
+
+  it("renders the interactive mini tree inside the relationships panel", () => {
+    const workspace = createDemoWorkspace(now);
+    const nora = requiredPerson("p-nora-hartwell");
+    const profile = buildPersonProfile(nora, workspace);
+    const miniTree = buildPersonMiniTree(nora, workspace.people, demoFamilyTreeEdges);
+    const html = renderToStaticMarkup(createElement(PersonProfileTabs, {
+      personName: nora.displayName,
+      profile,
+      miniTree
+    }));
+
+    expect(miniTree).toBeDefined();
+    expect(html).toContain("Immediate family tree centered on");
+    expect(html).toContain(`data-mini-tree-person="p-samuel-mercer"`);
+    expect(html).toContain(`href="/app/people/p-samuel-mercer"`);
+    expect(html).toContain(`aria-current="true"`);
+    expect(html).toContain("Grandparents");
+    expect(html.match(/data-mini-tree-person=/g)?.length).toBe(miniTree?.people.length);
+    expect(html).toMatch(/person-mini-tree-partners/);
+  });
+
+  it("renders no mini tree section without tree data or without linked relatives", () => {
+    const workspace = createDemoWorkspace(now);
+    const nora = requiredPerson("p-nora-hartwell");
+    const withoutTree = renderToStaticMarkup(createElement(PersonProfileTabs, {
+      personName: nora.displayName,
+      profile: buildPersonProfile(nora, workspace)
+    }));
+    expect(withoutTree).not.toContain("person-mini-tree-viewport");
+
+    const isolated = { ...nora, relatives: [] };
+    const miniTree = buildPersonMiniTree(isolated, workspace.people, demoFamilyTreeEdges);
+    const withoutRelatives = renderToStaticMarkup(createElement(PersonProfileTabs, {
+      personName: isolated.displayName,
+      profile: buildPersonProfile(isolated, workspace),
+      miniTree
+    }));
+    expect(withoutRelatives).not.toContain("person-mini-tree-viewport");
+    expect(withoutRelatives).toContain("No linked relatives yet");
   });
 
   it("shows only analyses scoped to the person or one of their linked cases", () => {
@@ -324,4 +413,24 @@ function requiredPerson(id: string) {
   const person = demoPeople.find((candidate) => candidate.id === id);
   if (!person) throw new Error(`Missing demo person ${id}`);
   return person;
+}
+
+function importedPerson(
+  id: string,
+  displayName: string,
+  sex: PersonSummary["sex"],
+  relatives: string[]
+): PersonSummary {
+  return {
+    id,
+    slug: displayName.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+    displayName,
+    sex,
+    livingStatus: "deceased",
+    privacy: "private",
+    published: false,
+    facts: [],
+    relatives,
+    notes: "Private imported profile"
+  };
 }

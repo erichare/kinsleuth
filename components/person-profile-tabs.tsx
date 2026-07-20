@@ -5,7 +5,9 @@ import { useState, type KeyboardEvent } from "react";
 
 import { EvidenceRecordDetails, EvidenceScan } from "@/components/evidence-scan";
 import { Icons } from "@/components/icons";
+import { PersonMiniTreeView } from "@/components/person-mini-tree";
 import { Confidence, EmptyState, PersonMonogram, Status, TableScroll } from "@/components/ui";
+import type { PersonMiniTree } from "@/lib/person-mini-tree";
 import type { PersonProfileSource, PersonProfileView } from "@/lib/person-profile";
 
 const tabs = [
@@ -33,10 +35,12 @@ export function personProfileTabAfterKey(
 
 export function PersonProfileTabs({
   personName,
-  profile
+  profile,
+  miniTree
 }: {
   personName: string;
   profile: PersonProfileView;
+  miniTree?: PersonMiniTree;
 }) {
   const [activeTab, setActiveTab] = useState<PersonProfileTabId>("facts");
   const eventFacts = profile.facts.filter((fact) => fact.type.trim().toUpperCase() !== "NAME");
@@ -286,6 +290,9 @@ export function PersonProfileTabs({
         role="tabpanel"
         tabIndex={0}
       >
+        {miniTree && profile.relationships.length > 0 ? (
+          <PersonMiniTreeView miniTree={miniTree} personName={personName} />
+        ) : null}
         <div className="person-relationship-grid">
           {profile.relationships.map((relationship) => (
             <Link

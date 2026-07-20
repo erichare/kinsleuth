@@ -1,5 +1,9 @@
 import { demoFictionNotice } from "./demo-data";
-import { demoFamilyTree } from "./demo-family-tree";
+import {
+  demoFamilyTreeEdges,
+  deriveRelationshipLabel,
+  type FamilyEdge
+} from "./person-relationships";
 import {
   demoArchiveMediaForEvidence,
   demoArchiveMediaForRecord,
@@ -105,6 +109,10 @@ type PersonProfileContext = {
   sources?: SourceDocument[];
   cases?: ResearchCase[];
   aiRuns?: AIAnalysisRun[];
+  // Family edges used to type each linked relative (see
+  // lib/person-relationships.ts). Callers with imported GEDCOM data pass
+  // workspaceFamilyEdges(workspace); the fictional demo tree is the default.
+  families?: readonly FamilyEdge[];
   includeProviderMetadata?: boolean;
   includeDemoMedia?: boolean;
 };
@@ -166,13 +174,14 @@ export function buildPersonProfile(
     ...(demoContent?.notes ?? [])
   ];
   const peopleById = new Map(context.people.map((candidate) => [candidate.id, candidate]));
+  const familyEdges = context.families ?? demoFamilyTreeEdges;
   const relationships = person.relatives.flatMap((relativeId) => {
     const relative = peopleById.get(relativeId);
     if (!relative) return [];
     return [{
       id: relative.id,
       displayName: relative.displayName,
-      relationship: describeDemoRelationship(person.id, relative),
+      relationship: deriveRelationshipLabel(person.id, relative, familyEdges),
       lifeSummary: lifeSummary(relative),
       birthPlace: relative.birthPlace
     }];
@@ -230,23 +239,6 @@ export function factTypeLabel(type: string): string {
     NAME: "Recorded name"
   };
   return labels[normalized] ?? type;
-}
-
-export function describeDemoRelationship(subjectId: string, relative: PersonSummary): string {
-  for (const family of demoFamilyTree.families) {
-    const partnerIds: readonly string[] = family.partnerIds;
-    const childIds: readonly string[] = family.childIds;
-    const subjectIsPartner = partnerIds.includes(subjectId);
-    const relativeIsPartner = partnerIds.includes(relative.id);
-    const subjectIsChild = childIds.includes(subjectId);
-    const relativeIsChild = childIds.includes(relative.id);
-
-    if (subjectIsPartner && relativeIsPartner) return "Spouse";
-    if (subjectIsPartner && relativeIsChild) return genderedRelationship(relative.sex, "Son", "Daughter", "Child");
-    if (subjectIsChild && relativeIsPartner) return genderedRelationship(relative.sex, "Father", "Mother", "Parent");
-    if (subjectIsChild && relativeIsChild) return genderedRelationship(relative.sex, "Brother", "Sister", "Sibling");
-  }
-  return "Linked relative";
 }
 
 function buildPersonSources(
@@ -525,15 +517,6 @@ function lifeSummary(person: PersonSummary): string {
   const birth = person.birthDate ?? "Unknown birth";
   const death = person.deathDate ?? (person.livingStatus === "deceased" ? "Unknown death" : "Living");
   return `${birth} – ${death}`;
-}
-
-function genderedRelationship(
-  sex: PersonSummary["sex"],
-  male: string,
-  female: string,
-  unknown: string
-): string {
-  return sex === "M" ? male : sex === "F" ? female : unknown;
 }
 
 function average(values: number[]): number {
