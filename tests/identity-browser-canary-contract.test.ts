@@ -12,6 +12,7 @@ import {
   resolveIdentityBrowserCanaryConfiguration,
   type DisposableIdentityCounts
 } from "@/scripts/identity-browser-canary-contract";
+import { pinnedAction } from "./helpers/action-pins";
 
 const releaseSha = "a".repeat(40);
 const baseEnvironment = {
@@ -201,8 +202,8 @@ describe("identity canary artifact boundary", () => {
     expect(job).toContain("--tmpfs /var/lib/postgresql/data");
     expect(job).toContain("docker rm --force kinresolve-identity-canary-postgres");
     expect(job).toContain("if: ${{ always() }}");
-    expect(job).toContain("actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5");
-    expect(job).toContain("actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020");
+    expect(job).toContain(pinnedAction("checkout"));
+    expect(job).toContain(pinnedAction("setupNode"));
     expect(job).not.toMatch(/RESEND_API_KEY|OPENAI_API_KEY|VERCEL_AUTOMATION_BYPASS_SECRET/);
     expect(job).not.toMatch(/upload-artifact|screenshot|\.tracing\.|trace:\s|video:\s/);
     expect(job.indexOf("Start the disposable identity database")).toBeLessThan(job.indexOf("npm run build"));

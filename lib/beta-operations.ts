@@ -1,6 +1,10 @@
 import { createHmac, randomUUID } from "node:crypto";
 
 import { query, type DatabaseOptions } from "./db";
+// Imported from ./db-rls directly so unit tests that mock "@/lib/db" keep the
+// real scope helper. Heartbeat and data-operation writes target rows keyed by
+// options.archiveId, so each write pins that archive for the RLS policies.
+import { withRlsArchiveScope } from "./db-rls";
 import type { OperationalWorkerKind } from "./observability";
 
 export type WorkerOutcome = "failed" | "running" | "succeeded";
@@ -66,7 +70,7 @@ export async function recordWorkerStarted(
          last_failure_code = NULL,
          updated_at = EXCLUDED.updated_at`,
     [options.archiveId, workerKind, requestId],
-    options
+    withRlsArchiveScope(options, options.archiveId)
   );
 }
 
@@ -86,7 +90,7 @@ export async function recordWorkerSucceeded(
        AND worker_kind = $2
        AND last_request_id = $3::uuid`,
     [options.archiveId, workerKind, requestId],
-    options
+    withRlsArchiveScope(options, options.archiveId)
   );
   return result.rowCount === 1;
 }
@@ -109,7 +113,7 @@ export async function recordWorkerFailed(
        AND worker_kind = $2
        AND last_request_id = $3::uuid`,
     [options.archiveId, workerKind, requestId, failureCode],
-    options
+    withRlsArchiveScope(options, options.archiveId)
   );
   return result.rowCount === 1;
 }
@@ -254,7 +258,7 @@ export async function beginDataOperation(
      VALUES ($1::uuid, $2, $3, 'requested', $4, $5::uuid)
      RETURNING id::text, state`,
     [id, options.archiveId, input.operationType, actorDigest, input.requestId],
-    options
+    withRlsArchiveScope(options, options.archiveId)
   );
   return result.rows[0];
 }
@@ -281,7 +285,7 @@ export async function completeDataOperation(
        AND actor_digest = $4
        AND state IN ('requested', 'processing')`,
     [input.id, options.archiveId, input.operationType, actorDigest, input.manifestDigest],
-    options
+    withRlsArchiveScope(options, options.archiveId)
   );
   if (result.rowCount !== 1) throw new Error("Data operation could not be completed.");
 }
@@ -308,7 +312,7 @@ export async function failDataOperation(
        AND actor_digest = $4
        AND state IN ('requested', 'processing')`,
     [input.id, options.archiveId, input.operationType, actorDigest, input.failureCode],
-    options
+    withRlsArchiveScope(options, options.archiveId)
   );
   if (result.rowCount !== 1) throw new Error("Data operation could not be failed.");
 }

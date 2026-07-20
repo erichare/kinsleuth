@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 
+import { recordPlausibleEvent } from "@/lib/plausible-client";
 import {
   publicDemoGuidedStartPath,
   publicDemoNoticeVersion
@@ -51,6 +52,7 @@ export function DemoStartForm() {
         return;
       }
 
+      recordPlausibleEvent("demo_session_started");
       window.location.assign(payload.workspaceUrl || payload.url || publicDemoGuidedStartPath);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "The demo could not start. Please try again.");

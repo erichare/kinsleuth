@@ -41,7 +41,7 @@ const productAreas = [
     number: "04",
     eyebrow: "DNA as a clue",
     title: "Triage matches without turning a score into a fact.",
-    body: `The source product can import match CSVs, rank useful leads, record shared-match context, and connect promising matches to a research case. Hosted DNA is excluded from ${betaStatus.hostedLive ? "the first hosted cohort" : "the proposed first cohort"}.`,
+    body: "The source product can import match CSVs, rank useful leads, record shared-match context, and connect promising matches to a research case. Hosted DNA is excluded from cohort one.",
     points: ["CSV import and match scoring", "Surname and place clues", "Shared-match context", "Case evidence links"],
     example: { label: "DNA lead", title: "M. Alder (fictional)", rows: [["Shared DNA", "86 cM"], ["Tree", "Partial"], ["Estimate", "3C or 3C1R"]] }
   },
@@ -49,7 +49,7 @@ const productAreas = [
     number: "05",
     eyebrow: "Optional analysis",
     title: "Use AI as an analyst, not an authority.",
-    body: `Deterministic structural checks work without an AI key and ${betaStatus.hostedLive ? "are included in cohort one" : "are proposed for cohort one"}. The source product can connect an OpenAI-compatible provider, but external AI is excluded from ${betaStatus.hostedLive ? "the hosted cohort" : "the proposed hosted cohort"}.`,
+    body: "Deterministic structural checks work without an AI key and are part of cohort one. The source product can connect an OpenAI-compatible provider, but external AI is excluded from cohort one.",
     points: ["No-key structural checks", "Operator-selected provider", "Referenced workspace context", "Saved runs and staged suggestions"],
     example: { label: "Analysis run", title: "Mercer–March identity check", rows: [["Context records", "3"], ["Identifiers", "2 independent"], ["Confidence", "Moderate"]] }
   },
@@ -57,7 +57,7 @@ const productAreas = [
     number: "06",
     eyebrow: "Deliberate publishing",
     title: "Review before sharing.",
-    body: `The source product combines manual person publication with living-person and privacy gates. Publication-readiness checks ${betaStatus.hostedLive ? "are included in cohort one" : "are proposed for cohort one"}, while real-data public publishing remains disabled.`,
+    body: "The source product combines manual person publication with living-person and privacy gates. Publication-readiness checks are part of cohort one, while real-data public publishing remains disabled.",
     points: ["Manual person publication", "Living and privacy gates", "Readiness blockers", "Anonymous public profiles"],
     example: { label: "Publishing review", title: "Nora Elise Hartwell", rows: [["Privacy", "Public"], ["Living status", "Deceased"], ["Public facts", "4"]] }
   }

@@ -32,6 +32,8 @@ describe("public demo operating runbook", () => {
       "demo-production",
       "demo-containment",
       "demo-monitoring",
+      "KINRESOLVE_PUBLIC_DEMO_ANALYTICS=plausible",
+      "plausible_ignore",
       "holding -> candidate -> public -> rollback -> holding -> same-SHA re-promotion",
       "Five unfamiliar testers",
       "attributable tester quotes",

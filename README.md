@@ -217,7 +217,7 @@ Releases are candidate-first: an operator runs the manual release workflow, whic
 
 ## Status & known limitations
 
-Kin Resolve is a working vertical slice suited to local/self-hosted beta use — not yet a production genealogy platform.
+Kin Resolve is a working vertical slice suited to local/self-hosted beta use — not yet a production genealogy platform. The public roadmap in [ROADMAP.md](ROADMAP.md) separates shipped source capability from gated, queued, and exploratory work.
 
 - Data-source artifacts have an archive-namespaced private-storage contract; legacy general source-file attachments still target local disk and need the same backend before production use.
 - ANSEL-encoded GEDCOM files are decoded on a best-effort basis (UTF-8, UTF-16, and Windows-1252 are handled properly).

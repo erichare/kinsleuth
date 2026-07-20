@@ -335,6 +335,7 @@ jobs:
             KINRESOLVE_PACKAGE_MEDIA_ENABLED: "false",
             KINRESOLVE_PLAIN_GEDCOM_ENABLED: "false",
             KINRESOLVE_PUBLIC_ARCHIVE_ENABLED: "true",
+            KINRESOLVE_PUBLIC_DEMO_ANALYTICS: "plausible",
             KINRESOLVE_PUBLIC_DEMO_ENABLED: "true",
             KINRESOLVE_PUBLIC_DEMO_ORIGIN: "https://demo.kinresolve.com",
             KINRESOLVE_PUBLIC_PUBLISHING_ENABLED: "false",

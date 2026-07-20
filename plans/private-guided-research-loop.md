@@ -1,3 +1,5 @@
+> Status: Implemented in source · Last updated: 2026-07-14
+
 # Private Guided Research Loop
 
 ## Objective

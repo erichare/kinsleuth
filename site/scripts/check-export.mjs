@@ -5,6 +5,9 @@ const outputRoot = resolve("out");
 const marketingReleaseMode = parseMarketingReleaseMode(
   process.env.KINRESOLVE_MARKETING_RELEASE_MODE
 );
+const marketingAnalyticsMode = parseMarketingAnalyticsMode(
+  process.env.KINRESOLVE_MARKETING_ANALYTICS
+);
 const marketingDemoMode = parseMarketingDemoMode(process.env.KINRESOLVE_MARKETING_DEMO_MODE);
 
 function parseMarketingReleaseMode(value) {
@@ -13,6 +16,12 @@ function parseMarketingReleaseMode(value) {
   throw new Error(
     "KINRESOLVE_MARKETING_RELEASE_MODE must be exactly prelaunch, application, or api-launch."
   );
+}
+
+function parseMarketingAnalyticsMode(value) {
+  if (value === undefined || value === "off") return "off";
+  if (value === "plausible") return "plausible";
+  throw new Error("KINRESOLVE_MARKETING_ANALYTICS must be exactly off or plausible.");
 }
 
 function parseMarketingDemoMode(value) {
@@ -65,7 +74,8 @@ for (const file of htmlFiles) {
     "a working beta",
     "available in the current beta",
     "private beta in development",
-    "hosted access is rolling out"
+    "hosted access is rolling out",
+    "hosted access begins only after the launch gates pass"
   ]) {
     if (html.toLowerCase().includes(forbiddenClaim)) {
       problems.push(`${file}: contains stale hosted-beta claim ${forbiddenClaim}`);
@@ -73,7 +83,28 @@ for (const file of htmlFiles) {
   }
 }
 
-const requiredRoutes = ["index.html", "product/index.html", "method/index.html", "developers/index.html", "privacy/index.html", "open-source/index.html", "about/index.html", "beta/index.html", "beta/thanks/index.html", "challenge/index.html", "openapi/kinresolve-v1.yaml", "icon.png", "manifest.webmanifest", "robots.txt", "sitemap.xml"];
+const plausibleScriptPattern =
+  /<script[^>]*src="https:\/\/plausible\.io\/js\/script\.outbound-links\.js"[^>]*><\/script>/;
+for (const file of htmlFiles) {
+  const html = readFileSync(file, "utf8");
+  if (marketingAnalyticsMode === "plausible") {
+    const scriptTag = html.match(plausibleScriptPattern)?.[0];
+    if (!scriptTag) {
+      problems.push(`${file}: is missing the Plausible analytics script for plausible mode.`);
+      continue;
+    }
+    if (!scriptTag.includes('data-domain="kinresolve.com"')) {
+      problems.push(`${file}: Plausible script is missing data-domain="kinresolve.com".`);
+    }
+    if (!/\bdefer(?:=""|\b)/.test(scriptTag)) {
+      problems.push(`${file}: Plausible script must load with defer.`);
+    }
+  } else if (html.includes("plausible.io")) {
+    problems.push(`${file}: contains a plausible.io reference while analytics mode is off.`);
+  }
+}
+
+const requiredRoutes = ["index.html", "product/index.html", "method/index.html", "pricing/index.html", "roadmap/index.html", "developers/index.html", "privacy/index.html", "open-source/index.html", "about/index.html", "beta/index.html", "beta/thanks/index.html", "challenge/index.html", "openapi/kinresolve-v1.yaml", "icon.png", "manifest.webmanifest", "robots.txt", "sitemap.xml"];
 for (const route of requiredRoutes) {
   if (!existsSync(join(outputRoot, route))) problems.push(`Missing required export: ${route}`);
 }
@@ -86,14 +117,17 @@ for (const metadata of ["og:image", "twitter:image", "canonical", "rel=\"icon\""
 const releaseClaims = {
   prelaunch: {
     headline: "Private beta applications are open.",
-    rollout: "Invitations have not started; hosted access begins only after the launch gates pass.",
+    rollout: "Invitations have not started.",
     productBoundary: "Hosted invitations have not started, and the API preview is not yet available.",
     privacyApi: "The hosted API remains unavailable until its release, edge-limit, canary, and revocation gates pass.",
     privacyLegal: "The approved participation terms, privacy notice, and cohort boundary have not been published.",
     developerBoundary: "The contract is implemented in source. Hosted access stays disabled until the SHA-bound staging, edge-rate-limit, production, and revocation gates pass",
-    methodBoundary: "Hosted access remains a proposed, gated cohort.",
+    methodBoundary: "Invitations have not started.",
     cohortContract: "Proposed cohort-one contract",
-    mediaBoundary: "This is proof of the source product—not a claim that hosted invitations or the API are already live."
+    mediaBoundary: "This is proof of the source product—not a claim that hosted invitations or the API are already live.",
+    pricingBetaPrice: "Proposed: free during the beta",
+    pricingBetaClause: "the proposed invitation-only hosted beta is intended to be free once invitations begin",
+    pricingBillingIntent: "still pending sign-off, so read these as stated intent rather than commitments"
   },
   application: {
     headline: "Hosted private beta is live.",
@@ -102,9 +136,12 @@ const releaseClaims = {
     privacyApi: "The hosted API is not available in this release.",
     privacyLegal: "The approved participation terms, privacy notice, and cohort boundary are published as exact versioned documents",
     developerBoundary: "The hosted private beta is live for approved participants, but API v1 is not available in this release.",
-    methodBoundary: "Hosted access is live only for approved private-beta participants.",
+    methodBoundary: "Access is invitation-only for approved participants; the hosted API is not available in this release.",
     cohortContract: "Hosted cohort-one contract",
-    mediaBoundary: "Hosted availability is limited to approved private-beta participants, and the API is not available in this release."
+    mediaBoundary: "Hosted availability is limited to approved private-beta participants, and the API is not available in this release.",
+    pricingBetaPrice: "Free during the beta",
+    pricingBetaClause: "the invitation-only hosted beta is free for approved participants",
+    pricingBillingIntent: "Two stated intentions—not yet signed billing commitments—hold in the meantime"
   },
   "api-launch": {
     headline: "Hosted private beta and API v1 are live.",
@@ -113,9 +150,12 @@ const releaseClaims = {
     privacyApi: "API v1 is available only to approved private-beta participants for archives they own",
     privacyLegal: "The approved participation terms, privacy notice, and cohort boundary are published as exact versioned documents",
     developerBoundary: "API v1 is available only to approved private-beta participants for archives they own.",
-    methodBoundary: "Hosted access is live only for approved private-beta participants.",
+    methodBoundary: "Access remains invitation-only; API v1 is available only to approved participants for archives they own.",
     cohortContract: "Hosted cohort-one contract",
-    mediaBoundary: "Hosted private-beta and API access are limited to approved participants and archives they own."
+    mediaBoundary: "Hosted private-beta and API access are limited to approved participants and archives they own.",
+    pricingBetaPrice: "Free during the beta",
+    pricingBetaClause: "the invitation-only hosted beta is free for approved participants",
+    pricingBillingIntent: "Two stated intentions—not yet signed billing commitments—hold in the meantime"
   }
 };
 const expectedReleaseClaims = releaseClaims[marketingReleaseMode];
@@ -156,16 +196,38 @@ for (const [mode, claims] of Object.entries(releaseClaims)) {
 const demoClaims = {
   pending: {
     heroCtaLabel: "Try Kin Resolve",
-    heroSourceNote: "Source available under AGPL-3.0-only."
+    heroSourceNote: "Source available under AGPL-3.0-only.",
+    betaDemoCardStatus: 'data-demo-card-status="pending"',
+    betaTryAnswer: "staged behind its own launch checks",
+    betaEvaluateEyebrow: "What you can evaluate today",
+    betaDemoCardAction: "Follow the demo launch",
+    betaDemoCardPill: "Launch pending",
+    pricingDemoStatus: 'data-pricing-demo-status="pending"',
+    pricingDemoClause: "the synthetic public demo will be free once its launch checks pass"
   },
   live: {
     heroCtaLabel: "Solve the passenger mystery",
     heroCtaNote: "No signup · about 2 minutes · every record is fictional.",
-    heroStatusLine: "The public demo is live. The hosted workspace remains an invitation-only private beta."
+    heroStatusLine: "The public demo is live. The hosted workspace remains an invitation-only private beta.",
+    editorialDemoLink: "Work this mystery in the demo",
+    betaDemoCardStatus: 'data-demo-card-status="live"',
+    betaTryAnswer: "Yes—today, without applying.",
+    betaEvaluateEyebrow: "What you can use today",
+    betaFamilyLink: 'href="https://demo.kinresolve.com/family"',
+    betaDemoCardAction: "Open the demo",
+    pricingDemoStatus: 'data-pricing-demo-status="live"',
+    pricingDemoClause: "the synthetic public demo is open now and free"
   }
 };
+const betaDemoSurface = readFileSync(join(outputRoot, "beta/index.html"), "utf8");
+const pricingDemoSurface = readFileSync(join(outputRoot, "pricing/index.html"), "utf8");
 if (marketingDemoMode === "live") {
-  for (const claim of [demoClaims.live.heroCtaLabel, demoClaims.live.heroCtaNote, demoClaims.live.heroStatusLine]) {
+  for (const claim of [
+    demoClaims.live.heroCtaLabel,
+    demoClaims.live.heroCtaNote,
+    demoClaims.live.heroStatusLine,
+    demoClaims.live.editorialDemoLink
+  ]) {
     if (!home.includes(claim)) problems.push(`Homepage is missing the live demo claim: ${claim}`);
   }
   for (const [description, replaced] of [
@@ -176,14 +238,98 @@ if (marketingDemoMode === "live") {
       problems.push(`Live-demo homepage still contains the ${description}: ${replaced}`);
     }
   }
+  for (const [description, claim] of [
+    ["live demo-card status", demoClaims.live.betaDemoCardStatus],
+    ["live try-it answer", demoClaims.live.betaTryAnswer],
+    ["live evaluate eyebrow", demoClaims.live.betaEvaluateEyebrow],
+    ["live demo-card action", demoClaims.live.betaDemoCardAction],
+    ["read-only family archive link", demoClaims.live.betaFamilyLink]
+  ]) {
+    if (!betaDemoSurface.includes(claim)) {
+      problems.push(`Beta page is missing the ${description}: ${claim}`);
+    }
+  }
+  for (const [description, claim] of [
+    ["live pricing demo status", demoClaims.live.pricingDemoStatus],
+    ["live pricing demo clause", demoClaims.live.pricingDemoClause]
+  ]) {
+    if (!pricingDemoSurface.includes(claim)) {
+      problems.push(`Pricing page is missing the ${description}: ${claim}`);
+    }
+  }
+  for (const [description, replaced] of [
+    ["pending demo-card status", demoClaims.pending.betaDemoCardStatus],
+    ["pending try-it answer", demoClaims.pending.betaTryAnswer],
+    ["pending evaluate eyebrow", demoClaims.pending.betaEvaluateEyebrow],
+    ["pending demo-card action", demoClaims.pending.betaDemoCardAction],
+    ["pending demo-card pill", demoClaims.pending.betaDemoCardPill],
+    ["pending pricing demo status", demoClaims.pending.pricingDemoStatus],
+    ["pending pricing demo clause", demoClaims.pending.pricingDemoClause]
+  ]) {
+    if (htmlCorpus.includes(replaced)) {
+      problems.push(`Live-demo export still contains the ${description}: ${replaced}`);
+    }
+  }
 } else {
   for (const claim of [demoClaims.pending.heroCtaLabel, demoClaims.pending.heroSourceNote]) {
     if (!home.includes(claim)) problems.push(`Homepage is missing the pending demo copy: ${claim}`);
   }
-  for (const claim of [demoClaims.live.heroCtaLabel, demoClaims.live.heroCtaNote, demoClaims.live.heroStatusLine]) {
+  for (const [description, claim] of [
+    ["pending demo-card status", demoClaims.pending.betaDemoCardStatus],
+    ["pending try-it answer", demoClaims.pending.betaTryAnswer],
+    ["pending evaluate eyebrow", demoClaims.pending.betaEvaluateEyebrow],
+    ["pending demo-card action", demoClaims.pending.betaDemoCardAction],
+    ["pending demo-card pill", demoClaims.pending.betaDemoCardPill]
+  ]) {
+    if (!betaDemoSurface.includes(claim)) {
+      problems.push(`Beta page is missing the ${description}: ${claim}`);
+    }
+  }
+  for (const [description, claim] of [
+    ["pending pricing demo status", demoClaims.pending.pricingDemoStatus],
+    ["pending pricing demo clause", demoClaims.pending.pricingDemoClause]
+  ]) {
+    if (!pricingDemoSurface.includes(claim)) {
+      problems.push(`Pricing page is missing the ${description}: ${claim}`);
+    }
+  }
+  for (const claim of [
+    demoClaims.live.heroCtaLabel,
+    demoClaims.live.heroCtaNote,
+    demoClaims.live.heroStatusLine,
+    demoClaims.live.editorialDemoLink,
+    demoClaims.live.betaDemoCardStatus,
+    demoClaims.live.betaTryAnswer,
+    demoClaims.live.betaEvaluateEyebrow,
+    demoClaims.live.betaDemoCardAction,
+    demoClaims.live.betaFamilyLink,
+    demoClaims.live.pricingDemoStatus,
+    demoClaims.live.pricingDemoClause
+  ]) {
     if (htmlCorpus.includes(claim)) {
       problems.push(`Static export for the ${marketingDemoMode} demo mode contains live-demo claim: ${claim}`);
     }
+  }
+  if (htmlCorpus.includes("data-social-proof-surface")) {
+    problems.push("Social-proof strip must never render while the demo launch is pending.");
+  }
+}
+
+for (const [description, claim] of [
+  ["pricing-intent strip link", 'href="/pricing/"'],
+  ["pricing-intent strip label", "Read the pricing intent"],
+  ["roadmap status link", 'href="/roadmap/"'],
+  ["repository status link", "Browse the source"]
+]) {
+  if (!home.includes(claim)) problems.push(`Homepage is missing its ${description}: ${claim}`);
+}
+for (const [description, claim] of [
+  ["no-invitation evaluation framing", "need an invitation to evaluate Kin Resolve"],
+  ["research-instincts challenge link", 'href="/challenge/"'],
+  ["pricing FAQ link", 'href="/pricing/"']
+]) {
+  if (!betaDemoSurface.includes(claim)) {
+    problems.push(`Beta page is missing its ${description}: ${claim}`);
   }
 }
 
@@ -195,8 +341,10 @@ const pageUrls = new Map([
   ["developers/index.html", "https://kinresolve.com/developers/"],
   ["method/index.html", "https://kinresolve.com/method/"],
   ["open-source/index.html", "https://kinresolve.com/open-source/"],
+  ["pricing/index.html", "https://kinresolve.com/pricing/"],
   ["privacy/index.html", "https://kinresolve.com/privacy/"],
-  ["product/index.html", "https://kinresolve.com/product/"]
+  ["product/index.html", "https://kinresolve.com/product/"],
+  ["roadmap/index.html", "https://kinresolve.com/roadmap/"]
 ]);
 for (const [page, expectedUrl] of pageUrls) {
   const html = readFileSync(join(outputRoot, page), "utf8");
@@ -271,9 +419,20 @@ for (const [description, pattern] of [
   ["real-data publishing exclusion", /real-data public publishing[\s\S]*disabled for cohort one/i],
   ["support posture", /one-business-day support acknowledgement target[\s\S]*not an uptime or response-time SLA/i],
   ["communications-only consent", /consents only to beta communications[\s\S]*does not accept participation terms/i],
+  ["consolidated application boundary", /does not accept participation terms, create an account, guarantee access, place you in a queue/i],
   ["synthetic-first boundary", /Start synthetic[\s\S]*Real family data remains prohibited until every real-data gate/i]
 ]) {
   if (!pattern.test(beta)) problems.push(`Beta page is missing its ${description}.`);
+}
+for (const retiredHedge of [
+  "Applying does not guarantee access",
+  "place you in an automatic queue",
+  "An application is not an invitation",
+  "Applying is not acceptance of beta participation terms"
+]) {
+  if (beta.includes(retiredHedge)) {
+    problems.push(`Beta page repeats a hedge outside its single application boundary: ${retiredHedge}`);
+  }
 }
 const applicationMode = process.env.KINRESOLVE_MARKETING_BETA_APPLICATION_MODE === "application";
 if (applicationMode) {
@@ -334,6 +493,29 @@ for (const [description, claim] of [
   }
 }
 
+const analyticsClaims = {
+  off: "No visitor analytics script loads in this release.",
+  plausible: "Aggregate visitor analytics run on Plausible—cookieless, EU-hosted, and script-gated."
+};
+if (!privacy.includes(analyticsClaims[marketingAnalyticsMode])) {
+  problems.push(`Privacy page is missing its ${marketingAnalyticsMode} analytics disclosure.`);
+}
+for (const [mode, claim] of Object.entries(analyticsClaims)) {
+  if (mode === marketingAnalyticsMode) continue;
+  if (privacy.includes(claim)) {
+    problems.push(`Privacy page for ${marketingAnalyticsMode} analytics contains the ${mode} disclosure.`);
+  }
+}
+
+// The outbound-links Plausible variant auto-attaches the clicked destination
+// URL to its outbound-click events, so the disclosure must say so honestly in
+// every mode (the off-mode copy describes what an enabled release would load).
+const outboundLinkDisclosure =
+  "Outbound-link clicks record the destination address of the public link clicked—no personal data.";
+if (!privacy.includes(outboundLinkDisclosure)) {
+  problems.push("Privacy page is missing the outbound-link destination disclosure.");
+}
+
 const product = readFileSync(join(outputRoot, "product/index.html"), "utf8");
 if (!product.includes(expectedReleaseClaims.productBoundary)) {
   problems.push(`Product page is missing its ${marketingReleaseMode} hosted/API boundary.`);
@@ -344,6 +526,60 @@ if (!product.includes(expectedReleaseClaims.mediaBoundary)) {
 const method = readFileSync(join(outputRoot, "method/index.html"), "utf8");
 if (!method.includes(expectedReleaseClaims.methodBoundary)) {
   problems.push(`Method page is missing its ${marketingReleaseMode} hosted-access boundary.`);
+}
+
+const pricing = readFileSync(join(outputRoot, "pricing/index.html"), "utf8");
+for (const [description, claim] of [
+  ["hosted-beta cost boundary", expectedReleaseClaims.pricingBetaPrice],
+  ["hosted-beta availability clause", expectedReleaseClaims.pricingBetaClause],
+  ["billing intent framing", expectedReleaseClaims.pricingBillingIntent],
+  ["pre-billing notice intent", "announce hosted plans before anything costs money"],
+  ["beta-participant notice intent", "give beta participants clear notice first"],
+  ["self-hosted license commitment", "AGPL-3.0-only"],
+  ["demo expiry disclosure", "expires after 24 hours"],
+  ["no-payment-step disclosure", "no billing or payment-information step"]
+]) {
+  if (!pricing.includes(claim)) problems.push(`Pricing page is missing its ${description}: ${claim}`);
+}
+if (marketingReleaseMode === "prelaunch") {
+  for (const [description, claim] of [
+    ["live hosted-beta cost boundary", releaseClaims.application.pricingBetaPrice],
+    ["live hosted-beta availability clause", releaseClaims.application.pricingBetaClause],
+    ["live billing intent framing", releaseClaims.application.pricingBillingIntent]
+  ]) {
+    if (pricing.includes(claim)) {
+      problems.push(`Prelaunch pricing page contains a ${description}: ${claim}`);
+    }
+  }
+} else {
+  for (const [description, claim] of [
+    ["proposed hosted-beta cost boundary", releaseClaims.prelaunch.pricingBetaPrice],
+    ["proposed hosted-beta availability clause", releaseClaims.prelaunch.pricingBetaClause],
+    ["pending billing intent framing", releaseClaims.prelaunch.pricingBillingIntent]
+  ]) {
+    if (pricing.includes(claim)) {
+      problems.push(`${marketingReleaseMode} pricing page still contains a ${description}: ${claim}`);
+    }
+  }
+}
+const pricingVisibleMarkup = pricing.replace(/<script[\s\S]*?<\/script>/g, "");
+if (/[$€£]\s?\d/.test(pricingVisibleMarkup) || /\d+\s?(?:\/|per\s+)(?:month|mo\b|year|yr\b|user|seat)/i.test(pricingVisibleMarkup)) {
+  problems.push("Pricing page must not contain a price before hosted pricing is announced.");
+}
+
+const roadmap = readFileSync(join(outputRoot, "roadmap/index.html"), "utf8");
+for (const [description, claim] of [
+  ["trust-model framing", "The roadmap is part of the trust model."],
+  ["availability discipline line", "In progress is not the same as available"],
+  ["canonical repository roadmap link", `href="https://github.com/erichare/kinresolve/blob/main/ROADMAP.md"`],
+  ["plans directory link", `href="https://github.com/erichare/kinresolve/tree/main/plans"`]
+]) {
+  if (!roadmap.includes(claim)) problems.push(`Roadmap page is missing its ${description}: ${claim}`);
+}
+for (const sectionLabel of ["Shipped", "In progress", "Next", "Exploring", "Not planned yet"]) {
+  if (!roadmap.includes(sectionLabel)) {
+    problems.push(`Roadmap page is missing its ${sectionLabel} section.`);
+  }
 }
 const manifest = readFileSync(join(outputRoot, "manifest.webmanifest"), "utf8");
 if (!manifest.includes('"src":"/icon.png"')) problems.push("Manifest is missing the generated favicon.");

@@ -21,11 +21,11 @@ describe("public demo SQL read generation snapshot", () => {
       readTransaction,
       "Add a shared SQL-read seam that owns the transaction used by both generation validation and every archive query."
     ).not.toBe("");
-    expect(readTransaction).toContain("withTransaction(options");
+    expect(readTransaction).toContain("withTransaction(withRlsArchiveScope(options, archiveId)");
     expect(readTransaction).toContain("requireProvisionedArchiveRow(client, archiveId, options)");
     expect(readTransaction).toMatch(/action\(client,\s*archiveId\)/);
 
-    const transaction = readTransaction.indexOf("withTransaction(options");
+    const transaction = readTransaction.indexOf("withTransaction(withRlsArchiveScope(options, archiveId)");
     const fence = readTransaction.indexOf("requireProvisionedArchiveRow(client, archiveId, options)");
     const queryCallback = readTransaction.search(/action\(client,\s*archiveId\)/);
     expect(transaction).toBeGreaterThan(-1);

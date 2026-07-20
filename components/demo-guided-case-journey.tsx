@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 import type { ResearchCase } from "@/lib/models";
+import { recordPlausibleEvent } from "@/lib/plausible-client";
 
 type FixedOutcome = "found" | "not_found" | "inconclusive";
 type CuratedQuestion = "case_next_steps" | "evidence_gaps" | "dna_cluster_summary";
@@ -89,6 +90,7 @@ export function DemoGuidedCaseJourney({ initialCase }: { initialCase: ResearchCa
         `/api/demo/cases/${encodeURIComponent(initialCase.id)}/guide`,
         { command: "record_outcome", outcome }
       );
+      recordPlausibleEvent("mystery_outcome_recorded");
       setOutcomeCompleted(true);
       setNextAssignment({
         title: response.nextAssignment?.title ?? defaultNextAssignment.title,
@@ -236,6 +238,7 @@ export function DemoGuidedCaseJourney({ initialCase }: { initialCase: ResearchCa
 }
 
 function trackBetaCta(): void {
+  recordPlausibleEvent("beta_cta_clicked");
   void fetch("/api/demo/events", {
     method: "POST",
     credentials: "same-origin",

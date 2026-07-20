@@ -2,6 +2,10 @@ import { randomUUID } from "node:crypto";
 import type { PoolClient, QueryResultRow } from "pg";
 
 import { query, withTransaction, type DatabaseOptions } from "../db";
+// Imported from ../db-rls directly so unit tests that mock "@/lib/db" keep
+// the real scope helper. Every durable job is archive-scoped, so each
+// statement pins the job's archive for the RLS mutation policies.
+import { withRlsArchiveScope } from "../db-rls";
 
 export type DurableJobState = "queued" | "running" | "completed" | "failed" | "cancelled";
 
@@ -129,7 +133,7 @@ export async function enqueueJob(
      ON CONFLICT (archive_id, idempotency_key) DO NOTHING
      RETURNING *`,
     [archiveId, id, kind, payload, idempotencyKey, maximumAttempts, availableAt, now],
-    options
+    withRlsArchiveScope(options, archiveId)
   );
 
   if (inserted.rows[0]) {
@@ -141,7 +145,7 @@ export async function enqueueJob(
      FROM durable_jobs
      WHERE archive_id = $1 AND idempotency_key = $2`,
     [archiveId, idempotencyKey],
-    options
+    withRlsArchiveScope(options, archiveId)
   );
   if (!existing.rows[0]) {
     throw new Error("Unable to resolve the idempotent job enqueue request");
@@ -164,7 +168,7 @@ export async function leaseNextJob(
   }
   const kinds = input.kinds?.map((kind) => requiredText(kind, "kind")) ?? null;
 
-  return withTransaction(options, async (client) => {
+  return withTransaction(withRlsArchiveScope(options, archiveId), async (client) => {
     await expireExhaustedLeases(client, archiveId, now);
 
     const leased = await client.query<JobRow>(
@@ -235,7 +239,7 @@ export async function completeJob(
        AND lease_expires_at > $5
      RETURNING *`,
     [archiveId, jobId, leaseToken, resultJson, completedAt],
-    options
+    withRlsArchiveScope(options, archiveId)
   );
 
   if (!updated.rows[0]) {
@@ -264,7 +268,7 @@ export async function renewJobLease(
        AND lease_expires_at > $5
      RETURNING *`,
     [archiveId, jobId, leaseToken, leaseExpiresAt, renewedAt],
-    options
+    withRlsArchiveScope(options, archiveId)
   );
   if (!updated.rows[0]) throw await invalidTransitionError(jobId, options);
   return mapLeasedJob(updated.rows[0]);
@@ -285,7 +289,7 @@ export async function failJob(
   // URLs. They are deliberately never persisted in this status-facing table.
   void input.error;
 
-  return withTransaction(options, async (client) => {
+  return withTransaction(withRlsArchiveScope(options, archiveId), async (client) => {
     const selected = await client.query<JobRow>(
       `SELECT *
        FROM durable_jobs
@@ -352,7 +356,7 @@ export async function cancelJob(
        AND state IN ('queued', 'running')
      RETURNING *`,
     [archiveId, jobId, cancelledAt],
-    options
+    withRlsArchiveScope(options, archiveId)
   );
   if (updated.rows[0]) {
     return mapJob(updated.rows[0]);
@@ -376,7 +380,7 @@ export async function getJob(
      FROM durable_jobs
      WHERE archive_id = $1 AND id = $2`,
     [archiveId, normalizedJobId],
-    options
+    withRlsArchiveScope(options, archiveId)
   );
 
   return result.rows[0] ? mapJob(result.rows[0]) : null;

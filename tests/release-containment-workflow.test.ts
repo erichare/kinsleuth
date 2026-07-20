@@ -2,6 +2,8 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
+import { pinnedAction, pinnedActionWithComment } from "./helpers/action-pins";
+
 async function workflow(name = "release-containment.yml"): Promise<string> {
   return readFile(path.join(process.cwd(), ".github", "workflows", name), "utf8");
 }
@@ -35,7 +37,7 @@ describe("failed release containment workflow", () => {
     const validation = classify.indexOf(
       "Validate the failed protected release event before classifier checkout"
     );
-    const checkout = classify.indexOf("actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5");
+    const checkout = classify.indexOf(pinnedAction("checkout"));
     const defaultContain = classify.indexOf("should_contain=true");
     const inspection = classify.indexOf("filter=all&per_page=100");
 
@@ -123,9 +125,7 @@ describe("failed release containment workflow", () => {
     const eventValidation = staging.indexOf(
       "Revalidate the exact failed release event before staging credentials"
     );
-    const checkout = staging.indexOf(
-      "actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5"
-    );
+    const checkout = staging.indexOf(pinnedAction("checkout"));
     const ancestry = staging.indexOf("git merge-base --is-ancestor");
     const firstSecret = staging.indexOf("secrets.");
     const targetBinding = staging.indexOf("Validate and link the exact isolated staging project");
@@ -203,7 +203,7 @@ describe("failed release containment workflow", () => {
   it("revalidates provenance before the privileged containment checkout or protected credentials", async () => {
     const contain = job(await workflow(), "contain");
     const validation = contain.indexOf("Validate the failed protected release event before checkout");
-    const checkout = contain.indexOf("actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5");
+    const checkout = contain.indexOf(pinnedAction("checkout"));
     const databaseSecret = contain.indexOf("secrets.MIGRATION_DATABASE_URL");
     expect(validation).toBeGreaterThan(0);
     expect(checkout).toBeGreaterThan(validation);
@@ -305,8 +305,8 @@ describe("failed release containment workflow", () => {
 
   it("pins privileged checkout and setup actions to full commits", async () => {
     const contents = await workflow();
-    expect(contents).toContain("actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4");
-    expect(contents).toContain("actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4");
+    expect(contents).toContain(pinnedActionWithComment("checkout"));
+    expect(contents).toContain(pinnedActionWithComment("setupNode"));
     expect(contents).not.toMatch(/uses:\s+actions\/(?:checkout|setup-node)@v\d/);
   });
 });

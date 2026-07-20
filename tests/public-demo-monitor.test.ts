@@ -97,7 +97,7 @@ describe("public demo monitor", () => {
     const firstEnded = requests[12]?.init;
     const secondEnded = requests[13]?.init;
     expect(start?.body).toBe(JSON.stringify({
-      noticeVersion: "public-demo-2026-07-16"
+      noticeVersion: "public-demo-2026-07-20"
     }));
     expect(secondStart?.body).toBe(start?.body);
     expect(firstGuide?.body).toBe(JSON.stringify({

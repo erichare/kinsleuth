@@ -1,13 +1,27 @@
 import { Pool, type PoolClient, type QueryResult, type QueryResultRow } from "pg";
 
 import { getDatabaseConnectionString } from "./connection-string";
+import { validateTransactionGucEntry } from "./db-rls";
 import { runPendingMigrations } from "./migrations";
 import { captureOperationalError } from "./observability";
 
 export { getDatabaseConnectionString, isDatabaseTransportVerified } from "./connection-string";
+export {
+  rlsArchiveScopeGuc,
+  rlsMaintenanceModeGuc,
+  withRlsArchiveScope,
+  withRlsMaintenanceMode
+} from "./db-rls";
 
 export type DatabaseOptions = {
   databaseUrl?: string;
+  /**
+   * Transaction-local configuration applied right after BEGIN through
+   * set_config(name, value, true). Migration 020's row-level-security
+   * policies key on kinresolve.archive_id / kinresolve.rls_mode; build these
+   * with withRlsArchiveScope or withRlsMaintenanceMode from ./db-rls.
+   */
+  transactionGucs?: Readonly<Record<string, string>>;
 };
 
 const pools = new Map<string, Pool>();
@@ -95,6 +109,11 @@ export async function query<T extends QueryResultRow = QueryResultRow>(
   values: unknown[] = [],
   options: DatabaseOptions = {}
 ): Promise<QueryResult<T>> {
+  // Transaction-local settings only exist inside a transaction, so a one-shot
+  // statement that carries them is promoted to a single-statement transaction.
+  if (options.transactionGucs && Object.keys(options.transactionGucs).length > 0) {
+    return withTransaction(options, (client) => client.query<T>(text, values));
+  }
   await ensureDatabaseSchema(options);
   return getPool(options).query<T>(text, values);
 }
@@ -114,6 +133,7 @@ export async function withTransaction<T>(options: DatabaseOptions, callback: (cl
   return withClient(options, async (client) => {
     await client.query("BEGIN");
     try {
+      await applyTransactionGucs(client, options.transactionGucs);
       const result = await callback(client);
       await client.query("COMMIT");
       return result;
@@ -122,6 +142,18 @@ export async function withTransaction<T>(options: DatabaseOptions, callback: (cl
       throw error;
     }
   });
+}
+
+async function applyTransactionGucs(
+  client: PoolClient,
+  transactionGucs: DatabaseOptions["transactionGucs"]
+): Promise<void> {
+  for (const [name, value] of Object.entries(transactionGucs ?? {})) {
+    validateTransactionGucEntry(name, value);
+    // set_config's third argument keeps the setting transaction-local, so a
+    // pooled connection returns to the pool with no residual scope.
+    await client.query("SELECT pg_catalog.set_config($1, $2, true)", [name, value]);
+  }
 }
 
 export async function closeDatabasePools(): Promise<void> {

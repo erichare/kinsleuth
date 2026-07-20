@@ -19,7 +19,9 @@
     "016_beta_api_tokens.sql": "5dcef9457a54e83ac677d5cd19652e3f946c8ca46096e97e8d311c24ec7b5b0f",
     "017_beta_applications.sql": "0c879f0c5c321dc99487d4559045119152cb2ce572a35cc7d1639fa26d91c082",
     "018_public_demo.sql": "6569df1039864d3009c669d0fba34df2933e93c744cb4306fba56869e0843d26",
-    "019_public_demo_stats.sql": "f72cfa0f99db27cf548ef4558a5167086e69502862ea7a4097458353f8b4d664"
+    "019_public_demo_stats.sql": "f72cfa0f99db27cf548ef4558a5167086e69502862ea7a4097458353f8b4d664",
+    "020_core_rls_policies.sql": "c6f37b0c5df8869cef1ec51c1d9930e7f3745fa8add11bed6d9568d4e50b77e9",
+    "021_public_demo_notice_versions.sql": "7d6c0a40cd72dc9c4850b6b619736336a755d90d9516967722764b31dfa135a0"
   },
   "releaseAnchors": {
     "v0.17.4": {

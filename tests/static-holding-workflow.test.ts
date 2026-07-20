@@ -3,6 +3,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import packageJson from "../package.json";
+import { pinnedActionWithComment } from "./helpers/action-pins";
 
 const exactProductionPromotionAcknowledgement =
   "PROMOTE KIN RESOLVE STATIC HOLDING TO APP.KINRESOLVE.COM";
@@ -95,12 +96,8 @@ describe("protected static holding deployment workflow", () => {
 
     expect(contents).not.toContain("actions/checkout@v4");
     expect(contents).not.toContain("actions/setup-node@v4");
-    expect(contents).toContain(
-      "actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4"
-    );
-    expect(contents).toContain(
-      "actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4"
-    );
+    expect(contents).toContain(pinnedActionWithComment("checkout"));
+    expect(contents).toContain(pinnedActionWithComment("setupNode"));
   });
 
   it("builds and verifies only the checked-in static artifact before credentials are introduced", async () => {

@@ -22,6 +22,12 @@ import { cleanupExpiredAuthRateLimitsInTransaction } from "./durable-auth-rate-l
 import { cleanupExpiredApiRateLimitsInTransaction } from "./durable-api-rate-limit";
 import { cleanupExpiredBetaApplicationsInTransaction } from "./beta-applications";
 import { query, withTransaction, type DatabaseOptions } from "./db";
+// RLS maintenance mode (imported from ./db-rls so unit tests that mock
+// "@/lib/db" keep the real helper): invitation, verification, terms, and
+// audit writes are operator/identity-plane flows that span archives — audit
+// events may carry no archive at all — so they cannot be pinned to one
+// request archive. They are never reachable from guest demo traffic.
+import { withRlsMaintenanceMode } from "./db-rls";
 import type { Role } from "./models";
 import type { VerifiedOperatorRequest } from "./operator-signature";
 import {
@@ -142,7 +148,7 @@ export async function issueBetaInvitation(
 
   let issued: { expiresAt: Date };
   try {
-    issued = await withTransaction(options, async (client) => {
+    issued = await withTransaction(withRlsMaintenanceMode(options), async (client) => {
       await consumeOperatorNonce(client, input.operator, context.secret);
       await requireActiveInvitationControl(client);
       await closeExpiredInvitations(client, {
@@ -246,7 +252,7 @@ export async function inspectBetaInvitation(
   const tokenDigest = validateAndDigestToken(input.token, "INVITATION_UNAVAILABLE");
 
   try {
-    const outcome = await withTransaction(options, async (client) => {
+    const outcome = await withTransaction(withRlsMaintenanceMode(options), async (client) => {
       await requireActiveInvitationControl(client);
       const result = await client.query<InvitationRow & { archive_name: string }>(
         `SELECT invitation.*, archive.name AS archive_name
@@ -346,7 +352,7 @@ export async function acceptBetaInvitation(
   };
   let accepted: Accepted | null;
   try {
-    accepted = await withTransaction(options, async (client) => {
+    accepted = await withTransaction(withRlsMaintenanceMode(options), async (client) => {
       await requireActiveInvitationControl(client);
       const result = await client.query<InvitationRow>(
         `SELECT invitation.*
@@ -528,7 +534,7 @@ export async function verifyBetaEmail(
   validateRequestId(input.requestId);
 
   try {
-    const verified = await withTransaction(options, async (client) => {
+    const verified = await withTransaction(withRlsMaintenanceMode(options), async (client) => {
       await requireActiveInvitationControl(client);
       const result = await client.query<VerificationRow & { email: string }>(
         `SELECT verification.*, user_record.email
@@ -611,7 +617,7 @@ export async function reissueBetaEmailVerification(
     invitationId: string;
   };
   try {
-    issued = await withTransaction(options, async (client) => {
+    issued = await withTransaction(withRlsMaintenanceMode(options), async (client) => {
       await requireActiveInvitationControl(client);
       const eligible = await client.query<{
         email: string;
@@ -720,7 +726,7 @@ export async function revokeBetaInvitation(
   validateIdentifier(input.invitationId);
   validateOperator(input.operator);
   try {
-    return await withTransaction(options, async (client) => {
+    return await withTransaction(withRlsMaintenanceMode(options), async (client) => {
       await consumeOperatorNonce(client, input.operator, context.secret);
       const revoked = await client.query<{ id: string }>(
         `UPDATE public.beta_invitations
@@ -753,7 +759,7 @@ export async function revokeAllPendingBetaInvitations(
   const context = serviceContext(options, false);
   validateOperator(input.operator);
   try {
-    return await withTransaction(options, async (client) => {
+    return await withTransaction(withRlsMaintenanceMode(options), async (client) => {
       await consumeOperatorNonce(client, input.operator, context.secret);
       const revoked = await client.query<{ id: string }>(
         `UPDATE public.beta_invitations
@@ -803,7 +809,7 @@ export async function setBetaInvitationControl(
   validateOperator(input.operator);
   validateControlInput(input);
   try {
-    return await withTransaction(options, async (client) => {
+    return await withTransaction(withRlsMaintenanceMode(options), async (client) => {
       await consumeOperatorNonce(client, input.operator, context.secret);
       const current = await client.query<{
         generation: string;
@@ -866,7 +872,7 @@ export async function cleanupBetaInvitationState(
   const limit = input.limit ?? 500;
   validateCleanupLimit(limit);
   try {
-    return await withTransaction(options, async (client) => {
+    return await withTransaction(withRlsMaintenanceMode(options), async (client) => {
       await consumeOperatorNonce(client, input.operator, context.secret);
       const expiredInvitations = await closeExpiredInvitations(client, {
         archiveId: options.archiveId,
@@ -904,7 +910,7 @@ export async function consumeBetaOperatorRequest(
   const context = serviceContext(options, false);
   validateOperator(operator);
   try {
-    await withTransaction(options, (client) => consumeOperatorNonce(client, operator, context.secret));
+    await withTransaction(withRlsMaintenanceMode(options), (client) => consumeOperatorNonce(client, operator, context.secret));
   } catch (error) {
     throw safeServiceError(error);
   }
@@ -926,7 +932,7 @@ export async function cleanupExpiredBetaStateForSystem(
   const limit = input.limit ?? 500;
   validateCleanupLimit(limit);
   try {
-    return await withTransaction(options, async (client) => {
+    return await withTransaction(withRlsMaintenanceMode(options), async (client) => {
       const expiredInvitations = await closeExpiredInvitations(client, {
         archiveId: options.archiveId,
         limit,
@@ -983,7 +989,7 @@ export async function recordBetaSecurityAuditEvent(
     throw new BetaInvitationError("INVALID_INPUT");
   }
   try {
-    await withTransaction(options, (client) => appendAudit(client, {
+    await withTransaction(withRlsMaintenanceMode(options), (client) => appendAudit(client, {
       archiveId: options.archiveId,
       eventType: input.eventType,
       actorKind: input.actorKind,
@@ -1170,7 +1176,7 @@ async function recordInvitationDelivery(
   options: BetaInvitationServiceOptions,
   eventType: "invitation-delivered" | "invitation-delivery-failed"
 ): Promise<void> {
-  await withTransaction(options, async (client) => {
+  await withTransaction(withRlsMaintenanceMode(options), async (client) => {
     if (eventType === "invitation-delivery-failed") {
       const revoked = await client.query<{ archive_id: string }>(
         `UPDATE public.beta_invitations
@@ -1211,7 +1217,7 @@ async function recordVerificationDelivery(
   options: BetaInvitationServiceOptions,
   eventType: "email-verification-delivered" | "email-verification-delivery-failed"
 ): Promise<void> {
-  await withTransaction(options, async (client) => {
+  await withTransaction(withRlsMaintenanceMode(options), async (client) => {
     if (eventType === "email-verification-delivery-failed") {
       const revoked = await client.query<VerificationRow>(
         `UPDATE public.beta_email_verification_tokens

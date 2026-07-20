@@ -302,6 +302,12 @@ async function createContext(browserInstance, configuration, options) {
   });
   context.setDefaultTimeout(timeoutMs);
   context.setDefaultNavigationTimeout(timeoutMs);
+  // Canary exclusion: keep synthetic canary traffic out of the aggregate
+  // Plausible KPI counts before any navigation. The database event funnel is
+  // already excluded through the canary header and the is_canary session flag.
+  await context.addInitScript(() => {
+    window.localStorage.setItem("plausible_ignore", "true");
+  });
   await installProtectedCandidateRoute(context, configuration);
   return context;
 }

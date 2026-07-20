@@ -11,9 +11,11 @@ This document is the compact product, data, support, API, and public-claims cont
 
 ## Current public status
 
-Use this wording consistently until the production launch gates pass:
+Use this wording consistently until the production launch gates pass. The canonical
+per-release-mode status lines are generated from `site/lib/beta-status.ts`; the
+prelaunch line is:
 
-> Private beta applications are open. Invitations have not started; hosted access begins only after the launch gates pass.
+> Private beta applications are open. Invitations have not started.
 
 Applying records interest. It does not create an account, guarantee access, or authorize an applicant to send family records, GEDCOM files, DNA data, source images, credentials, or private details.
 
@@ -158,7 +160,7 @@ marketing page, or email summary as a substitute for the approved documents.
 ### Safe before hosted launch
 
 - Private beta applications are open.
-- Invitations have not started; hosted access begins only after the launch gates pass.
+- Invitations have not started.
 - Kin Resolve's source product implements a single-archive research workspace, reviewable GEDCOM workflows, cases, deterministic checks, and export.
 - The public challenge and marketing media use synthetic Hartwell–Mercer records.
 - Source is available under AGPL-3.0-only.

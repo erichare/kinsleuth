@@ -2,6 +2,9 @@ import { createHash, randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 
 import { query, withTransaction, type DatabaseOptions } from "../db";
+// Imported from ../db-rls directly so unit tests that mock "@/lib/db" keep
+// the real scope helper.
+import { withRlsArchiveScope } from "../db-rls";
 import type { PreparedGedcomImport } from "../gedcom/apply";
 import {
   applyPreparedGedcomImportInTransaction,
@@ -301,7 +304,7 @@ export async function createIntegrationConnection(
       input.remoteAccountId?.trim() || null,
       input.remoteTreeId?.trim() || null
     ],
-    options
+    withRlsArchiveScope(options, archiveId)
   );
   return mapConnection(result.rows[0]);
 }
@@ -312,7 +315,7 @@ export async function disconnectIntegrationConnection(
 ): Promise<IntegrationConnection> {
   const archiveId = requireArchiveId(options);
   const normalizedConnectionId = requireValue(connectionId, "connection id");
-  return withTransaction(options, async (client) => {
+  return withTransaction(withRlsArchiveScope(options, archiveId), async (client) => {
     await requireConnectionRow(client, archiveId, normalizedConnectionId, true);
     const applying = await client.query<{ id: string }>(
       `SELECT id FROM sync_runs
@@ -366,7 +369,7 @@ export async function createIntegrationSnapshot(
   const artifactKey = requireValue(input.artifactKey, "artifact key");
   const parserVersion = requireValue(input.parserVersion, "parser version");
 
-  return withTransaction(options, async (client) => {
+  return withTransaction(withRlsArchiveScope(options, archiveId), async (client) => {
     await requireConnectionRow(client, archiveId, connectionId);
     const inserted = await client.query<SnapshotRow>(
       `INSERT INTO integration_snapshots (
@@ -427,7 +430,7 @@ export async function upsertExternalEntityRef(
   const externalId = requireValue(input.externalId, "external id");
   const localEntityId = requireValue(input.localEntityId, "local entity id");
 
-  return withTransaction(options, async (client) => {
+  return withTransaction(withRlsArchiveScope(options, archiveId), async (client) => {
     await requireConnectionRow(client, archiveId, connectionId);
     await requireSnapshotRow(client, archiveId, connectionId, snapshotId);
     const existing = await client.query<ExternalRefRow>(
@@ -507,7 +510,7 @@ export async function startSyncRun(
   }
 
   try {
-    return await withTransaction(options, async (client) => {
+    return await withTransaction(withRlsArchiveScope(options, archiveId), async (client) => {
       const connection = await requireConnectionRow(client, archiveId, connectionId, true);
       if (connection.status !== "active") {
         throw integrationError("CONNECTION_INACTIVE", "data source is not active");
@@ -674,7 +677,7 @@ export async function getLatestSyncRunForConnection(
 export async function cancelSyncRun(runId: string, options: IntegrationStoreOptions): Promise<SyncRun> {
   const archiveId = requireArchiveId(options);
   const normalizedRunId = requireValue(runId, "sync run id");
-  return withTransaction(options, async (client) => {
+  return withTransaction(withRlsArchiveScope(options, archiveId), async (client) => {
     const existing = await requireSyncRunRow(client, archiveId, normalizedRunId, true);
     if (existing.status === "cancelled") {
       return mapSyncRun(existing);
@@ -711,7 +714,7 @@ export async function markSyncRunParsing(
      WHERE archive_id = $1 AND id = $2 AND status = 'queued'
      RETURNING *`,
     [archiveId, requireValue(runId, "sync run id")],
-    options
+    withRlsArchiveScope(options, archiveId)
   );
   if (!result.rows[0]) {
     const existing = await getSyncRun(runId, options);
@@ -729,7 +732,7 @@ export async function completeSyncRunPreparation(
   const archiveId = requireArchiveId(options);
   const normalizedRunId = requireValue(runId, "sync run id");
   const normalizedSnapshotId = requireValue(incomingSnapshotId, "incoming snapshot id");
-  return withTransaction(options, async (client) => {
+  return withTransaction(withRlsArchiveScope(options, archiveId), async (client) => {
     const run = await requireSyncRunRow(client, archiveId, normalizedRunId, true);
     if (!["queued", "parsing", "review_ready"].includes(run.status)) {
       throw integrationError("RUN_STATE", "sync run could not be prepared");
@@ -761,7 +764,7 @@ export async function failSyncRunPreparation(
        AND status IN ('queued', 'parsing', 'cancel_requested')
      RETURNING *`,
     [archiveId, requireValue(runId, "sync run id"), errorCode, errorMessage],
-    options
+    withRlsArchiveScope(options, archiveId)
   );
   if (!result.rows[0]) return getSyncRun(runId, options);
   return mapSyncRun(result.rows[0]);
@@ -774,7 +777,7 @@ export async function addSyncChanges(
 ): Promise<SyncChange[]> {
   const archiveId = requireArchiveId(options);
   const normalizedRunId = requireValue(runId, "sync run id");
-  return withTransaction(options, async (client) => {
+  return withTransaction(withRlsArchiveScope(options, archiveId), async (client) => {
     await requireSyncRunRow(client, archiveId, normalizedRunId, true);
     const sortResult = await client.query<{ next_sort: number }>(
       `SELECT COALESCE(max(sort_order), -1)::integer + 1 AS next_sort
@@ -947,7 +950,7 @@ export async function applySyncRun(
     resolutions: normalizedResolutions
   });
 
-  return withTransaction(options, async (client) => {
+  return withTransaction(withRlsArchiveScope(options, archiveId), async (client) => {
     const currentArchiveUpdatedAt = await lockArchiveRow(client, archiveId);
     const existing = await requireSyncRunRow(client, archiveId, normalizedRunId, true);
     if (existing.apply_idempotency_key) {
@@ -1238,7 +1241,7 @@ export async function rollbackSyncRun(
   const actorId = input.actorId?.trim() || null;
   const requestHash = hashJson({ actorId, restoreBackup: input.restoreBackup === true });
 
-  return withTransaction(options, async (client) => {
+  return withTransaction(withRlsArchiveScope(options, archiveId), async (client) => {
     await lockArchiveRow(client, archiveId);
     const existing = await requireSyncRunRow(client, archiveId, normalizedRunId, true);
     if (existing.rollback_idempotency_key) {

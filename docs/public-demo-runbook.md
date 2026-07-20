@@ -86,7 +86,9 @@ authentication, migration, Vercel deployment, object-storage, or email credentia
 The Vercel Production environment for `kinresolve-demo` must match the exact hosted-demo
 contract validated in `.github/workflows/public-demo-release.yml`, including the dedicated
 database identity, `datasetMode=demo`, public-demo origin, disabled API v1/uploads/accounts,
-and the server-only AI, cookie, privacy-HMAC, cron, canary, and health-probe secrets.
+the aggregate analytics mode (`KINRESOLVE_PUBLIC_DEMO_ANALYTICS=plausible`; cookieless
+Plausible page and fixed-event counts, no identifier or record content), and the
+server-only AI, cookie, privacy-HMAC, cron, canary, and health-probe secrets.
 
 ## First holding cutover
 
@@ -212,7 +214,8 @@ On failure:
 3. verify canonical holding bytes and health `404`, or confirm the dedicated project is
    paused;
 4. preserve fixed-schema aggregate events only; never collect IP, user agent, search,
-   prompt/output, arbitrary feedback, or third-party identifiers; and
+   prompt/output, arbitrary feedback, or third-party identifiers—the optional Plausible
+   counts stay cookieless and identifier-free; and
 5. apply the incident procedure in `docs/incident-response.md` before restoring traffic.
 
 ## External launch checklist
@@ -231,7 +234,10 @@ On failure:
 - [ ] Full release/rollback/holding/same-SHA rehearsal and 30-minute rebuild exercise passed.
 - [ ] Chromium, WebKit, Firefox core, 390-pixel mobile, keyboard-only, and WCAG 2.2 AA gates
       passed with zero serious/critical automated findings.
-- [ ] Twenty-session KPI instrumentation review confirms canaries are excluded.
+- [ ] Twenty-session KPI instrumentation review confirms canaries are excluded from both
+      the database funnel (the canary header and `is_canary` session flag) and Plausible
+      (the browser canary sets the `plausible_ignore` localStorage flag before any
+      navigation).
 - [ ] Five unfamiliar testers each complete the research outcome without assistance in
       under two minutes.
 - [ ] Two or three attributable tester quotes are captured during the five-tester gate,

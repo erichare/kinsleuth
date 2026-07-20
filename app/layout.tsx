@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Inter, Newsreader } from "next/font/google";
+import { publicDemoAnalyticsScriptEnabled } from "@/lib/public-demo-analytics";
 import { publicArchiveEnabled } from "@/lib/public-surface";
 import "./globals.css";
 
@@ -40,6 +41,9 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           Skip to main content
         </a>
         {children}
+        {publicDemoAnalyticsScriptEnabled() ? (
+          <script data-domain="demo.kinresolve.com" defer src="https://plausible.io/js/script.js" />
+        ) : null}
       </body>
     </html>
   );

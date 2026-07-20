@@ -1,12 +1,17 @@
 import Link from "next/link";
+import { demoLive, demoStatus } from "@/lib/demo-status";
 import { site } from "@/lib/site";
+
+const defaultPrimary = demoLive
+  ? { label: demoStatus.ctaLabel, href: demoStatus.ctaHref }
+  : { label: "Apply for the private beta", href: "/beta" };
 
 export function PageHero({
   eyebrow,
   title,
   lead,
-  primary = "Apply for the private beta",
-  primaryHref = "/beta",
+  primary = defaultPrimary.label,
+  primaryHref = defaultPrimary.href,
   showGithub = false,
   note
 }: {

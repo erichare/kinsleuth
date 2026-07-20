@@ -180,6 +180,20 @@
       "risk": "low",
       "compatibility": "expansion-compatible",
       "notes": "Adds a server-only singleton public-demo usage counter with explicit API-role denial; existing application tables and writers remain structurally valid."
+    },
+    {
+      "file": "020_core_rls_policies.sql",
+      "sha256": "c6f37b0c5df8869cef1ec51c1d9930e7f3745fa8add11bed6d9568d4e50b77e9",
+      "risk": "moderate",
+      "compatibility": "expansion-compatible",
+      "notes": "Adds archive-scoped mutation and maintenance RLS policies keyed on transaction-local settings, permissive SELECT policies, and server policies for remaining policy-less RLS tables; inert for the BYPASSRLS runtime role and owner."
+    },
+    {
+      "file": "021_public_demo_notice_versions.sql",
+      "sha256": "7d6c0a40cd72dc9c4850b6b619736336a755d90d9516967722764b31dfa135a0",
+      "risk": "low",
+      "compatibility": "expansion-compatible",
+      "notes": "Widens the public-demo session notice-version CHECK to accept both the 2026-07-16 and 2026-07-20 notices so existing rows stay valid while new sessions record the Plausible-naming notice; no other tables or writers change."
     }
   ]
 }

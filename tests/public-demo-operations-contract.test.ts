@@ -155,6 +155,7 @@ describe("public demo operational boundary", () => {
       'AI_BASE_URL: "https://ai-gateway.vercel.sh/v1"'
     );
     expect(publicDemoRelease).toContain('AI_CHAT_MODEL: "openai/gpt-5-mini"');
+    expect(publicDemoRelease).toContain('KINRESOLVE_PUBLIC_DEMO_ANALYTICS: "plausible"');
     expect(publicDemoRelease).not.toContain('if (!process.env[name]?.trim())');
   });
 

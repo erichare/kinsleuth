@@ -3,8 +3,9 @@ import Link from "next/link";
 import { CtaStrip } from "@/components/cta-strip";
 import { EvidenceBoard } from "@/components/evidence-board";
 import { betaStatus } from "@/lib/beta-status";
-import { demoStatus } from "@/lib/demo-status";
+import { demoLive, demoStatus } from "@/lib/demo-status";
 import { site } from "@/lib/site";
+import { testimonials } from "@/lib/testimonials";
 
 const workflow = [
   {
@@ -33,9 +34,9 @@ const capabilities = [
   ["GEDCOM integrity", "Preview imports, review re-import changes, preserve raw records, and export the archive again."],
   ["Research cases", "Keep evidence, hypotheses, confidence, and next actions attached to the question they support."],
   ["Source workspace", "Search source records and transcripts alongside the people and cases that depend on them."],
-  ["DNA match triage in source", `The source product can score and review CSV-imported matches as research leads. Hosted DNA is excluded from ${betaStatus.hostedLive ? "the first hosted cohort" : "the proposed first cohort"}.`],
+  ["DNA match triage in source", "The source product can score and review CSV-imported matches as research leads. Hosted DNA is excluded from cohort one."],
   ["Quality checks", "Surface date conflicts, privacy risks, source gaps, and profiles that are not ready to share."],
-  ["Optional analysis in source", `Use deterministic checks alone in ${betaStatus.hostedLive ? "the hosted cohort" : "the proposed hosted cohort"}. Operator-configured external AI exists in source but is excluded from cohort one.`]
+  ["Optional analysis in source", "Deterministic checks run without an AI provider. Operator-configured external AI exists in source but is excluded from cohort one."]
 ] as const;
 
 export default function HomePage() {
@@ -46,11 +47,11 @@ export default function HomePage() {
           <span className="eyebrow">Evidence-led genealogy research</span>
           <h1>Resolve the questions your family tree can’t answer.</h1>
           <p className="hero-lead">
-            A family tree captures conclusions. Kin Resolve keeps the evidence trail—records, sources, research cases, DNA clues, and careful analysis—in one private workspace.
+            A family tree shows one date, even when two records disagree. Kin Resolve keeps the evidence trail—records, sources, research cases, DNA clues, and careful analysis—in one private workspace, where the conflict stays visible until the evidence earns a conclusion.
           </p>
           <div className="hero-actions">
             <a className="button" href={demoStatus.ctaHref}>{demoStatus.ctaLabel} <span aria-hidden="true">↗</span></a>
-            <Link className="button button-secondary" href="/beta">Apply for the private beta</Link>
+            <Link className={demoLive ? "button button-secondary hero-secondary-demoted" : "button button-secondary"} href="/beta">Apply for the private beta</Link>
           </div>
           <p className="cta-note">{demoStatus.ctaNote} {demoStatus.statusLine}</p>
         </div>
@@ -60,6 +61,28 @@ export default function HomePage() {
       <div className="shell fiction-disclosure" role="note">
         <strong>Fictional demo universe.</strong> Every Hartwell–Mercer name, date, place, record, photograph, story, and DNA match shown on this site is invented. No real family data is used.
       </div>
+
+      {demoLive && testimonials.length > 0 && (
+        <section className="section surface-section" aria-label="What early testers say" data-social-proof-surface="home">
+          <div className="shell">
+            <div className="section-heading centered-heading">
+              <span className="eyebrow">From early testers</span>
+              <h2>What researchers say after working the mystery.</h2>
+            </div>
+            <div className="testimonial-grid">
+              {testimonials.map((testimonial) => (
+                <figure className="testimonial-card" key={testimonial.quote}>
+                  <blockquote>“{testimonial.quote}”</blockquote>
+                  <figcaption>
+                    {testimonial.attribution}
+                    {testimonial.context ? <span> · {testimonial.context}</span> : null}
+                  </figcaption>
+                </figure>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
       <section className="shell challenge-invite" aria-labelledby="challenge-invite-title">
         <div>
@@ -124,15 +147,17 @@ export default function HomePage() {
           <span className="image-caption">Fictional Hartwell–Mercer archive · no real family data</span>
         </div>
         <div className="editorial-copy">
-          <span className="eyebrow">Follow the trail</span>
-          <h2>Keep the question, the clue, and the conclusion together.</h2>
-          <p>Nora Hartwell’s 1922 journal calls the box “Amalia’s tin,” while an older family story credits Samuel. Inside are the passenger notice and harbor photograph he brought from Northstar Cove in 1907. Elsewhere in the archive, the 1907 passenger-declaration and 1909 marriage-ledger signatures can be tested against Maeve Mercer’s independent 1906 letter. Which claim survives the evidence?</p>
+          <span className="eyebrow">Inside the workspace</span>
+          <h2>How the tin-box mystery becomes a research case.</h2>
+          <p>Nora Hartwell’s 1922 journal calls the box “Amalia’s tin,” while an older family story credits Samuel. In the workspace, that disagreement is a case, not a footnote: the 1907 passenger declaration and the 1909 marriage-ledger signature sit beside Maeve Mercer’s independent 1906 letter, each claim stays linked to the record that carries it, and both explanations hold their place until one earns the conclusion.</p>
           <ul className="check-list">
             <li>Separate what a source says from what you infer.</li>
             <li>Record the conflict instead of quietly choosing a favorite.</li>
             <li>Show confidence without presenting a hypothesis as proof.</li>
           </ul>
-          <Link className="arrow-link" href="/method">See the method <span aria-hidden="true">→</span></Link>
+          {demoLive
+            ? <a className="arrow-link" href={demoStatus.ctaHref}>Work this mystery in the demo <span aria-hidden="true">↗</span></a>
+            : <Link className="arrow-link" href="/method">See the method <span aria-hidden="true">→</span></Link>}
         </div>
       </section>
 
@@ -141,7 +166,7 @@ export default function HomePage() {
           <div className="section-heading centered-heading" data-beta-status-surface="home">
             <span className="eyebrow">{betaStatus.badge}</span>
             <h2>Built for the work behind the tree.</h2>
-            <p>{betaStatus.headline} {betaStatus.rollout} The source product already contains the research tools below; the hosted cohort {betaStatus.hostedLive ? "operates" : "will start"} with a narrower, explicit boundary.</p>
+            <p>{betaStatus.headline} {betaStatus.rollout} The source product already contains the research tools below; cohort one runs with a narrower, explicit boundary.</p>
           </div>
           <div className="capability-grid">
             {capabilities.map(([title, body], index) => (
@@ -189,7 +214,7 @@ export default function HomePage() {
             <article className="face-card face-private">
               <span className="face-kicker">Private workspace</span>
               <h3>Keep the unfinished work private.</h3>
-              <p>The source product keeps imported people, sources, DNA matches, cases, notes, and analysis runs behind authenticated workspace access. {betaStatus.hostedLive ? "The hosted cohort" : "The proposed hosted cohort"} excludes DNA and external AI.</p>
+              <p>The source product keeps imported people, sources, DNA matches, cases, notes, and analysis runs behind authenticated workspace access. Cohort one excludes DNA and external AI.</p>
               <ul><li>Research cases and hypotheses</li><li>DNA match triage</li><li>Source transcripts and notes</li></ul>
             </article>
             <article className="face-card face-public">
@@ -202,10 +227,22 @@ export default function HomePage() {
         </div>
       </section>
 
+      <section className="shell section pricing-intent" aria-label="Pricing intent">
+        <div className="pricing-intent-lines">
+          <p><strong>Free to evaluate.</strong> The demo, the challenge, and the private-beta pilot cost nothing.</p>
+          <p><strong>Priced later, with notice.</strong> Hosted plans will be announced before anything costs money.</p>
+          <p><strong>Never locked in.</strong> Self-hosting stays free under the AGPL, and full GEDCOM export keeps every archive portable.</p>
+        </div>
+        <Link className="arrow-link" href="/pricing">Read the pricing intent <span aria-hidden="true">→</span></Link>
+      </section>
+
       <section className="shell section status-section">
         <div className="section-heading heading-row">
-          <div><span className="eyebrow">Build in public</span><h2>{betaStatus.headline}</h2><p>{betaStatus.rollout}</p></div>
-          <a className="arrow-link" href={site.github}>Follow the roadmap <span aria-hidden="true">↗</span></a>
+          <div><span className="eyebrow">Build in public</span><h2>Where the work stands.</h2><p>Implemented source capabilities and the cohort-one boundary, tracked in the open.</p></div>
+          <div className="status-links">
+            <Link className="arrow-link" href="/roadmap">Follow the roadmap <span aria-hidden="true">→</span></Link>
+            <a className="arrow-link" href={site.github}>Browse the source <span aria-hidden="true">↗</span></a>
+          </div>
         </div>
         <div className="status-grid">
           <article>

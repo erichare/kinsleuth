@@ -148,6 +148,20 @@ const expectedMigrations = [
     risk: "low",
     compatibility: "expansion-compatible",
     notes: "Adds a server-only singleton public-demo usage counter with explicit API-role denial; existing application tables and writers remain structurally valid."
+  },
+  {
+    file: "020_core_rls_policies.sql",
+    sha256: "c6f37b0c5df8869cef1ec51c1d9930e7f3745fa8add11bed6d9568d4e50b77e9",
+    risk: "moderate",
+    compatibility: "expansion-compatible",
+    notes: "Adds archive-scoped mutation and maintenance RLS policies keyed on transaction-local settings, permissive SELECT policies, and server policies for remaining policy-less RLS tables; inert for the BYPASSRLS runtime role and owner."
+  },
+  {
+    file: "021_public_demo_notice_versions.sql",
+    sha256: "7d6c0a40cd72dc9c4850b6b619736336a755d90d9516967722764b31dfa135a0",
+    risk: "low",
+    compatibility: "expansion-compatible",
+    notes: "Widens the public-demo session notice-version CHECK to accept both the 2026-07-16 and 2026-07-20 notices so existing rows stay valid while new sessions record the Plausible-naming notice; no other tables or writers change."
   }
 ] as const;
 
@@ -258,7 +272,7 @@ describe("forward-only first-cutover release policy", () => {
   it("proves a filename bijection and exact checksum equality with checksums.json", () => {
     const missing = policyFixture();
     (missing.migrations as unknown[]).pop();
-    expect(() => validateReleasePolicy(validationInput(missing))).toThrow(/missing.*019_public_demo_stats\.sql/i);
+    expect(() => validateReleasePolicy(validationInput(missing))).toThrow(/missing.*021_public_demo_notice_versions\.sql/i);
 
     const duplicate = policyFixture();
     (duplicate.migrations as unknown[]).push(structuredClone((duplicate.migrations as unknown[])[0]));
@@ -266,13 +280,13 @@ describe("forward-only first-cutover release policy", () => {
 
     const extra = policyFixture();
     (extra.migrations as unknown[]).push({
-      file: "019_unreviewed.sql",
+      file: "022_unreviewed.sql",
       sha256: "b".repeat(64),
       risk: "low",
       compatibility: "expansion-compatible",
       notes: "This unreviewed entry must not be accepted without a checksum manifest entry."
     });
-    expect(() => validateReleasePolicy(validationInput(extra))).toThrow(/not recorded.*019_unreviewed\.sql/i);
+    expect(() => validateReleasePolicy(validationInput(extra))).toThrow(/not recorded.*022_unreviewed\.sql/i);
 
     const mismatch = policyFixture();
     ((mismatch.migrations as Array<Record<string, unknown>>)[4]).sha256 = "c".repeat(64);
@@ -362,7 +376,7 @@ describe("forward-only first-cutover release policy", () => {
     });
 
     expect(result.status, result.stderr).toBe(0);
-    expect(result.stdout).toMatch(/verified 19 migration.*v0\.17\.4.*forward-only/i);
+    expect(result.stdout).toMatch(/verified 21 migration.*v0\.17\.4.*forward-only/i);
     expect(result.stdout).toMatch(/owner erichare.*2026-07-15T04:30:00Z/i);
     expect(result.stdout).not.toContain(FIRST_CUTOVER_ACKNOWLEDGEMENT);
     expect(result.stderr).not.toContain(FIRST_CUTOVER_ACKNOWLEDGEMENT);

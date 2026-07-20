@@ -2,6 +2,8 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
+import { pinnedActionWithComment } from "./helpers/action-pins";
+
 const workflow = readFileSync(
   path.join(process.cwd(), ".github", "workflows", "holding-safety.yml"),
   "utf8"
@@ -87,12 +89,8 @@ describe("failed holding auto-assignment safety workflow", () => {
 
   it("pins trusted actions, proves exact main provenance twice, and queues by target resource", () => {
     const repair = job("repair", "emergency-pause");
-    expect(workflow.split(
-      "actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4"
-    )).toHaveLength(4);
-    expect(workflow.split(
-      "actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4"
-    )).toHaveLength(4);
+    expect(workflow.split(pinnedActionWithComment("checkout"))).toHaveLength(4);
+    expect(workflow.split(pinnedActionWithComment("setupNode"))).toHaveLength(4);
     expect(workflow).not.toMatch(/uses:\s+actions\/(?:checkout|setup-node)@v\d/);
     expect(workflow.split("git merge-base --is-ancestor")).toHaveLength(3);
     expect(workflow.split("git fetch origin main:refs/remotes/origin/main --force --no-tags"))

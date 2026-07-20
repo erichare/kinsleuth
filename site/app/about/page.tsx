@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { CtaStrip } from "@/components/cta-strip";
 import { PageHero } from "@/components/page-hero";
 import { pageMetadata } from "@/lib/metadata";
@@ -21,7 +22,16 @@ export default function AboutPage() {
 
       <section className="shell section origin-section">
         <div className="origin-marker" aria-hidden="true"><span>KR</span><small>2026</small></div>
-        <div><span className="eyebrow">Why this project exists</span><h2>The research deserves a first-class workspace.</h2><p className="prose-large">Most genealogy software centers the tree. Kin Resolve starts from a different premise: the tree is one output of an ongoing investigation. The source trail, competing explanations, confidence, and privacy decisions deserve to remain visible too.</p><p>The project is being built in public by Eric Hare, with synthetic fixtures in the repository and a roadmap that separates working capability from aspiration.</p></div>
+        <div>
+          <span className="eyebrow">Why this project exists</span>
+          <h2>The research deserves a first-class workspace.</h2>
+          <p className="prose-large">Most genealogy software centers the tree. Kin Resolve starts from a different premise: the tree is one output of an ongoing investigation. The source trail, competing explanations, confidence, and privacy decisions deserve to remain visible too.</p>
+          <p>The project is being built in public by Eric Hare—one person writing the source, tests, migrations, and planning documents in the same open repository, under AGPL-3.0-only. That discipline is deliberate: every claim the site makes about the product can be checked against the code that makes it.</p>
+          <p>The same caution shapes the demo data. The Hartwell–Mercer records are synthetic fixtures, invented so the product can be evaluated honestly—conflicts, dead ends, and all—before any real family is asked to trust it with theirs.</p>
+          {/* Founder-bio enrichment (personal research history, photo, longer origin story) is
+              drafted separately and awaits owner sign-off. Until then this section states only
+              repo-verifiable facts. */}
+        </div>
       </section>
 
       <section className="section principles-band">
@@ -30,10 +40,10 @@ export default function AboutPage() {
 
       <section className="shell section public-roadmap">
         <div><span className="eyebrow">Build in public</span><h2>The roadmap is part of the trust model.</h2></div>
-        <div><p>Security, storage portability, tenancy, privacy controls, and evidence grounding are not invisible chores. They determine whether the product deserves real family data.</p><p>Design notes, implementation, tests, and production-readiness work live alongside the source so the gap between a claim and the current code can be examined.</p><a className="button button-secondary" href={site.github}>Explore the repository <span aria-hidden="true">↗</span></a></div>
+        <div><p>Security, storage portability, tenancy, privacy controls, and evidence grounding are not invisible chores. They determine whether the product deserves real family data.</p><p>Design notes, implementation, tests, and production-readiness work live alongside the source—summarized on the <Link href="/roadmap">public roadmap</Link>—so the gap between a claim and the current code can be examined.</p><Link className="button button-secondary" href="/roadmap">Follow the roadmap</Link></div>
       </section>
 
-      <div className="shell section"><CtaStrip eyebrow="Shape the next chapter" title="Bring your research process to the private beta." /></div>
+      <div className="shell section"><CtaStrip eyebrow="Shape the next chapter" primaryHref="/beta" primaryLabel="Apply for the private beta" secondaryHref={site.github} secondaryLabel="View on GitHub" title="Bring your research process to the private beta." /></div>
     </>
   );
 }

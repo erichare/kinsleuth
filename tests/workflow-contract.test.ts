@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import packageJson from "../package.json";
 import { betaOperationsRuntimeGrantContract } from "../lib/runtime-database-grants";
+import { pinnedAction, pinnedActionWithComment } from "./helpers/action-pins";
 
 async function workflow(name: string): Promise<string> {
   return readFile(path.join(process.cwd(), ".github", "workflows", name), "utf8");
@@ -226,10 +227,10 @@ describe("stable release workflow contract", () => {
     expect(contents).not.toContain("actions/checkout@v4");
     expect(contents).not.toContain("actions/setup-node@v4");
     expect(
-      contents.match(/actions\/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4/g)
+      contents.match(new RegExp(pinnedActionWithComment("checkout"), "g"))
     ).toHaveLength(7);
     expect(
-      contents.match(/actions\/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4/g)
+      contents.match(new RegExp(pinnedActionWithComment("setupNode"), "g"))
     ).toHaveLength(7);
   });
 
@@ -376,7 +377,7 @@ describe("stable release workflow contract", () => {
 
     expect(finalizer).toContain("timeout-minutes: 20");
     expect(finalizer).toContain("if: ${{ always() && needs.staging.result != 'skipped' }}");
-    expect(finalizer).toContain("actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093");
+    expect(finalizer).toContain(pinnedAction("downloadArtifact"));
     expect(finalizer).toContain("needs.staging.outputs.browser_baseline_prepared == 'true'");
     expect(finalizer).not.toContain("STAGING_BROWSER_CANARY_EMAIL");
     expect(finalizer).not.toContain("STAGING_BROWSER_CANARY_PASSWORD");
@@ -1388,6 +1389,8 @@ describe("marketing workflow release and intake modes", () => {
     expect(ci).toContain("KINRESOLVE_MARKETING_RELEASE_MODE: ${{ matrix.release-mode }}");
     expect(ci).toContain("KINRESOLVE_MARKETING_BETA_APPLICATION_MODE: ${{ matrix.application-mode }}");
     expect(ci).toContain("KINRESOLVE_MARKETING_DEMO_MODE: ${{ matrix.demo-mode }}");
+    expect(ci).toContain("KINRESOLVE_MARKETING_ANALYTICS: ${{ matrix.analytics-mode || 'off' }}");
+    expect(ci).toContain("analytics-mode: plausible");
     expect(ci).toContain('scripts/launch-media-text.mjs');
     expect(deploy).toMatch(/beta_application_mode:[\s\S]*?default: mailto[\s\S]*?- mailto[\s\S]*?- application/);
     expect(deploy).toMatch(/demo_mode:[\s\S]*?default: pending[\s\S]*?- pending[\s\S]*?- live/);

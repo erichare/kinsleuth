@@ -32,12 +32,22 @@ function validatedBuildReleaseCommitSha(): string | undefined {
 
 function securityHeaders(): Array<{ key: string; value: string }> {
   const development = process.env.NODE_ENV !== "production";
-  const scriptSources = ["'self'", "'unsafe-inline'", ...(development ? ["'unsafe-eval'"] : [])];
+  // Cookieless Plausible analytics are allowed only for hosted builds whose
+  // analytics mode is explicitly plausible; self-hosted builds keep the
+  // strict Content Security Policy.
+  const plausibleAnalytics = plausibleAnalyticsBuild() && hostedBuild();
+  const scriptSources = [
+    "'self'",
+    "'unsafe-inline'",
+    ...(development ? ["'unsafe-eval'"] : []),
+    ...(plausibleAnalytics ? ["https://plausible.io"] : [])
+  ];
   const connectSources = [
     "'self'",
     "https://vercel.com",
     "https://*.blob.vercel-storage.com",
-    ...(development ? ["ws:"] : [])
+    ...(development ? ["ws:"] : []),
+    ...(plausibleAnalytics ? ["https://plausible.io"] : [])
   ];
   const storageOrigin = configuredStorageOrigin();
   if (storageOrigin) {
@@ -92,6 +102,13 @@ function configuredStorageOrigin(): string | undefined {
 
 function privateHostedBuild(): boolean {
   return hostedBuild() && process.env.KINRESOLVE_PUBLIC_ARCHIVE_ENABLED?.trim().toLowerCase() !== "true";
+}
+
+function plausibleAnalyticsBuild(): boolean {
+  const mode = process.env.KINRESOLVE_PUBLIC_DEMO_ANALYTICS;
+  if (mode === undefined || mode === "off") return false;
+  if (mode === "plausible") return true;
+  throw new Error("KINRESOLVE_PUBLIC_DEMO_ANALYTICS must be exactly off or plausible.");
 }
 
 function hostedBuild(): boolean {

@@ -1,4 +1,7 @@
 import { withTransaction, type DatabaseOptions } from "./db";
+// Imported from ./db-rls directly so unit tests that mock "@/lib/db" keep the
+// real scope helper.
+import { withRlsArchiveScope } from "./db-rls";
 import { prepareGedcomImport } from "./gedcom/apply";
 import {
   applyPreparedGedcomImport,
@@ -126,7 +129,7 @@ export async function runPublicDemoSampleImport(
     throw new Error("The bundled sample has not been applied in this sandbox");
   }
 
-  await withTransaction(options, async (client) => {
+  await withTransaction(withRlsArchiveScope(options, options.archiveId), async (client) => {
     const locked = await client.query(
       "UPDATE archives SET updated_at = now() WHERE id = $1 RETURNING id",
       [options.archiveId]

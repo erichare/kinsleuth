@@ -55,6 +55,12 @@ export async function purgeDemoDatabaseTransaction(
     await client.query("BEGIN");
     await client.query("SET LOCAL lock_timeout = '5s'");
     await client.query("SET LOCAL statement_timeout = '5min'");
+    // RLS maintenance mode: this operator-only purge deletes the demo cell's
+    // product rows and unfiltered mutable-global capability rows across the
+    // whole classified schema, so a single archive scope cannot describe it.
+    // The purge normally runs with the owner/migration credential, but it must
+    // stay valid if ever pointed at a non-owner, NOBYPASSRLS session.
+    await client.query("SELECT pg_catalog.set_config('kinresolve.rls_mode', 'maintenance', true)");
     const lockedTables = [
       ...demoPurgeProductTables,
       ...demoPurgeMutableGlobalTables,

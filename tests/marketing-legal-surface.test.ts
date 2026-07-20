@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
+import { parseMarketingAnalyticsMode } from "../site/lib/analytics";
 import { parseMarketingReleaseMode } from "../site/lib/marketing-release-mode";
 
 const files = {
@@ -38,7 +39,9 @@ describe("private-beta marketing and legal surface", () => {
     expect(status).toContain('phase: "hosted-private-beta-live"');
     expect(status).toContain('phase: "hosted-private-beta-api-live"');
     expect(status).toContain("Private beta applications are open.");
-    expect(status).toContain("Invitations have not started; hosted access begins only after the launch gates pass.");
+    expect(status).toContain('rollout: "Invitations have not started."');
+    expect(status).toContain('summary: "Private beta applications are open; invitations have not started."');
+    expect(status).not.toContain("hosted access begins only after the launch gates pass");
     expect(status).toContain("Hosted private beta is live.");
     expect(status).toContain("Access is invitation-only for approved participants; the hosted API is not available in this release.");
     expect(status).toContain("Hosted private beta and API v1 are live.");
@@ -54,10 +57,14 @@ describe("private-beta marketing and legal surface", () => {
     expect(() => parseMarketingReleaseMode("")).toThrow(/must be exactly prelaunch, application, or api-launch/);
     expect(() => parseMarketingReleaseMode("application ")).toThrow(/must be exactly prelaunch, application, or api-launch/);
     expect(publicCopy).not.toMatch(/Hosted access is rolling out in small invitation cohorts/i);
+    expect(publicCopy).not.toContain("hosted access begins only after the launch gates pass");
+    expect(publicCopy).toContain("Private beta applications are open. Invitations have not started.");
+    expect(publicCopy).toContain("Private beta applications are open; invitations have not started.");
 
     const exportCheck = await readFile(files.exportCheck, "utf8");
     expect(exportCheck).toContain("hosted access is rolling out");
-    expect(exportCheck).toContain("Invitations have not started; hosted access begins only after the launch gates pass.");
+    expect(exportCheck).toContain("hosted access begins only after the launch gates pass");
+    expect(exportCheck).toContain('rollout: "Invitations have not started."');
     expect(exportCheck).toContain('data-marketing-release-mode="${marketingReleaseMode}"');
   });
 
@@ -73,6 +80,8 @@ describe("private-beta marketing and legal surface", () => {
     expect(beta).toMatch(/30-day pilot is free.*no billing or payment-information step/i);
     expect(beta).toMatch(/one-business-day support acknowledgement target.*not an uptime or response-time SLA/i);
     expect(beta).toMatch(/Submitting consents only to beta communications.*does not accept participation terms/i);
+    expect(beta).toMatch(/does not accept participation terms, create an account, guarantee access, place you in a queue/i);
+    expect(beta.match(/guarantee access/gi)).toHaveLength(1);
     expect(beta).toContain('<Link href="/privacy">data-practices disclosure</Link>');
     expect(beta).toMatch(/The support and security routes must be delivery-tested before invitations begin/i);
     expect(beta).toMatch(/Do not email family records, GEDCOM files, screenshots of private research, credentials, API tokens, or genetic information/i);
@@ -112,6 +121,60 @@ describe("private-beta marketing and legal surface", () => {
     expect(handoff).toMatch(/hash the raw response bytes with SHA-256/i);
     expect(handoff).toMatch(/Existing acceptance evidence is immutable/i);
     expect(handoff).toMatch(/\| Product owner \| All three \| — \| — \| Pending \|/);
+  });
+
+  it("gates Plausible analytics behind an explicit mode and discloses the posture on the privacy page", async () => {
+    const [analytics, layout, betaForm, submitEvent, privacy, exportCheck, siteVercel] = await Promise.all([
+      readFile("site/lib/analytics.ts", "utf8"),
+      readFile("site/app/layout.tsx", "utf8"),
+      readFile("site/components/beta-form.tsx", "utf8"),
+      readFile("site/components/beta-form-submit-event.tsx", "utf8"),
+      readFile(files.privacy, "utf8"),
+      readFile(files.exportCheck, "utf8"),
+      readFile("site/vercel.json", "utf8")
+    ]);
+
+    expect(analytics).toContain("KINRESOLVE_MARKETING_ANALYTICS must be exactly off or plausible.");
+    expect(parseMarketingAnalyticsMode(undefined)).toBe("off");
+    expect(parseMarketingAnalyticsMode("off")).toBe("off");
+    expect(parseMarketingAnalyticsMode("plausible")).toBe("plausible");
+    expect(() => parseMarketingAnalyticsMode("")).toThrow(/must be exactly off or plausible/);
+    expect(() => parseMarketingAnalyticsMode("plausible ")).toThrow(/must be exactly off or plausible/);
+
+    expect(layout).toContain('marketingAnalyticsMode === "plausible"');
+    expect(layout).toContain('src="https://plausible.io/js/script.outbound-links.js"');
+    expect(layout).toContain('data-domain="kinresolve.com"');
+
+    expect(betaForm).toContain('marketingAnalyticsMode === "plausible"');
+    expect(betaForm).toContain('<BetaFormSubmitEvent formId="beta-interest-form" />');
+    expect(submitEvent).toContain('window.plausible?.("beta_application_submitted")');
+
+    expect(privacy).toMatch(/Plausible is cookieless and EU-hosted, sets no browser identifier, and performs no cross-site tracking/);
+    expect(privacy).toContain("No visitor analytics script loads in this release.");
+    expect(privacy).toContain("Aggregate visitor analytics run on Plausible—cookieless, EU-hosted, and script-gated.");
+    // The outbound-links script variant auto-attaches the clicked destination
+    // URL to its outbound-click events; the disclosure must say so honestly.
+    expect(privacy).toContain(
+      "Outbound-link clicks record the destination address of the public link clicked—no personal data."
+    );
+
+    expect(exportCheck).toContain("KINRESOLVE_MARKETING_ANALYTICS must be exactly off or plausible.");
+    expect(exportCheck).toContain("plausible\\.io\\/js\\/script\\.outbound-links\\.js");
+    expect(exportCheck).toContain("contains a plausible.io reference while analytics mode is off");
+    expect(exportCheck).toContain(
+      "Outbound-link clicks record the destination address of the public link clicked—no personal data."
+    );
+
+    // The CSP allowance below is static: site/vercel.json always lists
+    // plausible.io even for analytics-off builds, because Vercel headers are
+    // not templated per release. The enforced privacy gate is script
+    // inclusion — check-export fails an off-mode build that contains any
+    // plausible.io reference, so the static allowance alone loads nothing.
+    const csp = (JSON.parse(siteVercel) as {
+      headers: Array<{ headers: Array<{ key: string; value: string }> }>;
+    }).headers[0].headers.find(({ key }) => key === "Content-Security-Policy")?.value ?? "";
+    expect(csp).toMatch(/script-src [^;]*https:\/\/plausible\.io/);
+    expect(csp).toMatch(/connect-src [^;]*https:\/\/plausible\.io/);
   });
 
   it("provides separate prelaunch, launch-only, maintenance, and end-of-pilot material", async () => {

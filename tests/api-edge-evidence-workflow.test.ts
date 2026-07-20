@@ -2,6 +2,8 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
+import { pinnedActionWithComment } from "./helpers/action-pins";
+
 const workflow = readFileSync(
   path.join(process.cwd(), ".github", "workflows", "api-edge-evidence.yml"),
   "utf8"
@@ -86,10 +88,10 @@ describe("protected API edge evidence workflow", () => {
   });
 
   it("attests and uploads exactly one JSON artifact using pinned actions", () => {
-    expect(workflow).toContain("uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4");
-    expect(workflow).toContain("uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4");
-    expect(workflow).toContain("uses: actions/attest@a1948c3f048ba23858d222213b7c278aabede763 # v4");
-    const uploadAction = "uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4";
+    expect(workflow).toContain(`uses: ${pinnedActionWithComment("checkout")}`);
+    expect(workflow).toContain(`uses: ${pinnedActionWithComment("setupNode")}`);
+    expect(workflow).toContain(`uses: ${pinnedActionWithComment("attest")}`);
+    const uploadAction = `uses: ${pinnedActionWithComment("uploadArtifact")}`;
     expect(workflow.split(uploadAction)).toHaveLength(2);
     expect(workflow).toContain("name: production-api-edge-evidence-${{ github.run_attempt }}");
     expect(workflow.indexOf("scripts/validate-api-edge-evidence.mjs"))

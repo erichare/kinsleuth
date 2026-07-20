@@ -6,7 +6,7 @@ function DesktopNavigation() {
   return (
     <nav className="desktop-nav" aria-label="Main navigation">
       <a href={site.demoUrl}>Demo</a>
-      {navigation.slice(0, 2).map((item) => (
+      {navigation.slice(0, 3).map((item) => (
         <Link href={item.href} key={item.href}>
           {item.label}
         </Link>
@@ -14,7 +14,7 @@ function DesktopNavigation() {
       <details className="desktop-nav-more">
         <summary>More <span aria-hidden="true">⌄</span></summary>
         <div aria-label="More links" className="desktop-nav-more-menu" role="group">
-          {navigation.slice(2).map((item) => (
+          {navigation.slice(3).map((item) => (
             <Link href={item.href} key={item.href}>
               {item.label}
             </Link>

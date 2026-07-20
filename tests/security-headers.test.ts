@@ -21,6 +21,7 @@ describe("application security headers", () => {
     expect(headers["Content-Security-Policy"]).not.toContain("'unsafe-eval'");
     expect(headers["Content-Security-Policy"]).toContain("connect-src 'self'");
     expect(headers["Content-Security-Policy"]).toContain("https://*.blob.vercel-storage.com");
+    expect(headers["Content-Security-Policy"]).not.toContain("plausible.io");
     expect(headers["Strict-Transport-Security"]).toBe("max-age=31536000; includeSubDomains");
     expect(headers["X-Content-Type-Options"]).toBe("nosniff");
     expect(headers["X-Frame-Options"]).toBe("DENY");
@@ -35,6 +36,7 @@ describe("application security headers", () => {
     vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("KINRESOLVE_DEPLOYMENT_MODE", "self-hosted");
     vi.stubEnv("S3_PUBLIC_ENDPOINT", "https://storage.family.example:9443/uploads");
+    vi.stubEnv("KINRESOLVE_PUBLIC_DEMO_ANALYTICS", "plausible");
 
     const rules = await nextConfig.headers?.();
     const headers = Object.fromEntries((rules?.[0]?.headers ?? []).map(({ key, value }) => [key, value]));
@@ -42,6 +44,33 @@ describe("application security headers", () => {
     expect(headers["Strict-Transport-Security"]).toBeUndefined();
     expect(headers["X-Robots-Tag"]).toBeUndefined();
     expect(headers["Content-Security-Policy"]).toContain("https://storage.family.example:9443");
+    expect(headers["Content-Security-Policy"]).not.toContain("plausible.io");
+  });
+
+  it("allows only plausible.io script and event submission when hosted analytics are plausible", async () => {
+    stubPrivateHostedEnvironment();
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("KINRESOLVE_PUBLIC_DEMO_ANALYTICS", "plausible");
+
+    const rules = await nextConfig.headers?.();
+    const headers = Object.fromEntries((rules?.[0]?.headers ?? []).map(({ key, value }) => [key, value]));
+
+    expect(headers["Content-Security-Policy"]).toContain(
+      "script-src 'self' 'unsafe-inline' https://plausible.io"
+    );
+    expect(headers["Content-Security-Policy"]).toMatch(
+      /connect-src 'self' [^;]*https:\/\/plausible\.io/
+    );
+  });
+
+  it("rejects an invalid hosted analytics mode instead of guessing a policy", async () => {
+    stubPrivateHostedEnvironment();
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("KINRESOLVE_PUBLIC_DEMO_ANALYTICS", "on");
+
+    await expect(nextConfig.headers?.()).rejects.toThrow(
+      /KINRESOLVE_PUBLIC_DEMO_ANALYTICS must be exactly off or plausible\./
+    );
   });
 });
 

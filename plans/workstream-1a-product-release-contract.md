@@ -1,3 +1,5 @@
+> Status: In execution · Last updated: 2026-07-13
+
 # Workstream 1A execution plan: product release contract
 
 Status: In execution

@@ -24,8 +24,10 @@ export const site = {
 export const navigation = [
   { href: "/product", label: "Product" },
   { href: "/method", label: "Method" },
+  { href: "/pricing", label: "Pricing" },
   { href: "/developers", label: "Developers" },
   { href: "/open-source", label: "Open source" },
+  { href: "/roadmap", label: "Roadmap" },
   { href: "/about", label: "About" },
   { href: "/privacy", label: "Privacy" }
 ] as const;

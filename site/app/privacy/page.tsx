@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { CtaStrip } from "@/components/cta-strip";
 import { PageHero } from "@/components/page-hero";
+import { marketingAnalyticsMode } from "@/lib/analytics";
 import { betaApplicationMode } from "@/lib/beta-application-mode";
 import { betaStatus } from "@/lib/beta-status";
 import { pageMetadata } from "@/lib/metadata";
+import { site } from "@/lib/site";
 
 export const metadata = pageMetadata({
   title: "Privacy and data practices",
@@ -168,6 +170,15 @@ export default function PrivacyPage() {
       </section>
 
       <section className="shell section practice-note">
+        <strong>{marketingAnalyticsMode === "plausible"
+          ? "Aggregate visitor analytics run on Plausible—cookieless, EU-hosted, and script-gated."
+          : "No visitor analytics script loads in this release."}</strong>
+        <p>{marketingAnalyticsMode === "plausible"
+          ? "This release loads Plausible Analytics to count page views, a few fixed events, and outbound-link clicks in aggregate. Outbound-link clicks record the destination address of the public link clicked—no personal data. Plausible is cookieless and EU-hosted, sets no browser identifier, and performs no cross-site tracking. The analytics script loads only when the marketing analytics mode is explicitly enabled for a release."
+          : "The marketing analytics mode is off, so this release serves no analytics script at all. When a release enables it, the site loads Plausible Analytics—a cookieless, EU-hosted service with no cross-site tracking—to count page views, a few fixed events, and outbound-link clicks in aggregate. Outbound-link clicks record the destination address of the public link clicked—no personal data."}</p>
+      </section>
+
+      <section className="shell section practice-note">
         <strong>This is a product-practices page—not the private-beta legal privacy notice.</strong>
         <p>{betaStatus.hostedLive ? "The approved participation terms, privacy notice, and cohort boundary are published as exact versioned documents and presented with each invitation for explicit acceptance. Only those accepted documents govern hosted participation." : "The approved participation terms, privacy notice, and cohort boundary have not been published. No invitation should be accepted and no real family data should be uploaded until their exact versioned bytes are approved, published, verified, and presented for explicit acceptance."}</p>
         <p>A beta application consents only to beta communications; it does not accept hosted participation terms.</p>
@@ -178,6 +189,10 @@ export default function PrivacyPage() {
         <CtaStrip
           body="Apply with the fixed contact and workflow fields only. Keep GEDCOM files, DNA data, source images, credentials, and private family details out of the application and email."
           eyebrow="Privacy-minded beta"
+          primaryHref="/beta"
+          primaryLabel="Apply for the private beta"
+          secondaryHref={site.github}
+          secondaryLabel="View on GitHub"
           title="Help test the boundary between private research and public history."
         />
       </div>

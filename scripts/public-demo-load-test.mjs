@@ -3,7 +3,7 @@ import { performance } from "node:perf_hooks";
 
 const canonicalOrigin = "https://demo.kinresolve.com";
 const guidedPath = "/app/cases/case-mercer-march-identity?guide=1";
-const noticeVersion = "public-demo-2026-07-16";
+const noticeVersion = "public-demo-2026-07-20";
 const sessionCount = 25;
 const p95LimitMs = 5_000;
 const requestTimeoutMs = 30_000;

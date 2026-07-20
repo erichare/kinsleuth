@@ -165,7 +165,7 @@ async function startDisposableSession(configuration, fetchImplementation) {
     configuration,
     fetchImplementation,
     "/api/demo/sessions",
-    { noticeVersion: "public-demo-2026-07-16" }
+    { noticeVersion: "public-demo-2026-07-20" }
   );
   if (started.response.status !== 200 && started.response.status !== 201) {
     throw new Error("The disposable demo session could not be started.");

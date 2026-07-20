@@ -7,6 +7,7 @@ import { Icons } from "@/components/icons";
 import { PublicShell } from "@/components/public-shell";
 import { Status, TableScroll } from "@/components/ui";
 import { publicDemoGuidedCaseTitle } from "@/lib/public-demo-contract";
+import { publicDemoAnalyticsMode } from "@/lib/public-demo-analytics";
 import { publicDemoEnabled } from "@/lib/public-demo-config";
 import { recordPublicDemoEvent } from "@/lib/public-demo-session-store";
 import { privateWorkspaceLoginPath, publicArchiveEnabled, resolvePublicArchiveId } from "@/lib/public-surface";
@@ -175,6 +176,9 @@ function PublicDemoLanding() {
               <p>
                 Every person and record is fictional. Your private demo workspace expires after 24 hours. Do not enter real family data.
                 Only curated synthetic context may be sent to the configured AI provider. Coarse usage events are retained for 30 days.
+                {publicDemoAnalyticsMode() === "plausible"
+                  ? " Cookieless aggregate page and event counts also go to Plausible Analytics; they carry no identifier, cookie, or record content."
+                  : ""}
               </p>
             </div>
           </div>

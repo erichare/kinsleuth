@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
+import { marketingAnalyticsMode } from "@/lib/analytics";
 import { site } from "@/lib/site";
 import "./globals.css";
 
@@ -74,6 +75,9 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <SiteHeader />
         <main id="main-content">{children}</main>
         <SiteFooter />
+        {marketingAnalyticsMode === "plausible" ? (
+          <script data-domain="kinresolve.com" defer src="https://plausible.io/js/script.outbound-links.js" />
+        ) : null}
       </body>
     </html>
   );

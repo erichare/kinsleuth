@@ -1,8 +1,10 @@
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { BetaForm } from "@/components/beta-form";
 import { PageHero } from "@/components/page-hero";
 import { betaStatus } from "@/lib/beta-status";
 import { betaApplicationMode } from "@/lib/beta-application-mode";
+import { demoLive } from "@/lib/demo-status";
 import { pageMetadata } from "@/lib/metadata";
 import { site } from "@/lib/site";
 
@@ -12,24 +14,65 @@ export const metadata = pageMetadata({
   path: "/beta/"
 });
 
-const faqs = [
+interface EvaluatePath {
+  title: string;
+  body: string;
+  href: string;
+  action: string;
+  status?: { tone: "live" | "pending"; label: string };
+}
+
+const evaluateToday: readonly EvaluatePath[] = [
+  {
+    title: "The passenger mystery",
+    body: demoLive
+      ? "Open a disposable synthetic workspace and work the Hartwell–Mercer passenger question with the real product tools. The workspace expires after 24 hours, and nothing you try is kept."
+      : "The demo opens a disposable synthetic workspace for working the Hartwell–Mercer passenger question with the real product tools. It is staged behind its own launch checks, and this page will link it the moment it is live.",
+    href: demoLive ? site.demoUrl : "/roadmap",
+    action: demoLive ? "Open the demo" : "Follow the demo launch",
+    status: demoLive
+      ? { tone: "live", label: "Live · no signup" }
+      : { tone: "pending", label: "Launch pending" }
+  },
+  {
+    title: "A read-only family archive",
+    body: demoLive
+      ? "Browse the published face of the fictional archive—the ancestor profiles, stories, and sources a careful researcher chose to share."
+      : "The published face of the fictional archive—the ancestor profiles, stories, and sources a careful researcher chose to share—opens together with the demo.",
+    href: demoLive ? `${site.demoUrl}/family` : "/roadmap",
+    action: demoLive ? "Browse the archive" : "Follow the demo launch",
+    status: demoLive
+      ? { tone: "live", label: "Live · no signup" }
+      : { tone: "pending", label: "Launch pending" }
+  },
+  {
+    title: "The research-instincts challenge",
+    body: "Work five immersive cases across thirty synthetic records in your browser. No account and no workspace—just the records and your judgment.",
+    href: "/challenge",
+    action: "Test your instincts"
+  }
+];
+
+const faqs: readonly [string, ReactNode][] = [
+  [
+    "Can I just try it?",
+    demoLive ? (
+      <>
+        Yes—today, without applying. The <a href={site.demoUrl}>public demo</a> opens a disposable synthetic workspace with no signup, and the <Link href="/challenge">research-instincts challenge</Link> runs in the browser with no account at all.
+      </>
+    ) : (
+      <>
+        The <Link href="/challenge">research-instincts challenge</Link> runs in the browser now, with no account. The public demo workspace is staged behind its own launch checks and this page will link it the moment it is live.
+      </>
+    )
+  ],
   [
     "Is the beta free?",
     `${betaStatus.hostedLive ? "The first" : "The proposed first"} 30-day pilot is free and has no billing or payment-information step. The invitation states the exact participation terms before an account is created.`
   ],
   [
-    "When will I get access?",
-    betaStatus.hostedLive
-      ? "Invitations are issued privately to approved participants. Applying records interest but does not create an account, guarantee access, or place you in an automatic queue. Cohorts remain deliberately small."
-      : "Invitations have not started. Applying records interest but does not create an account, guarantee access, or place you in an automatic queue. Cohorts will remain deliberately small after the launch gates pass."
-  ],
-  [
     `What file can ${betaStatus.hostedLive ? "the pilot" : "the proposed pilot"} accept?`,
     "Plain .ged or .gedcom only, initially limited to 10 MiB (10,485,760 bytes) and 40,000 people. Source work is limited to metadata, links, and pasted text or transcripts."
-  ],
-  [
-    "Can I upload family data?",
-    "Not when applying. Every participant starts with synthetic records. One isolated plain-GEDCOM pilot may accept real family data only after the legal, restore, deletion, recovery, and security gates pass."
   ],
   [
     "Can I use DNA, external AI, media, or public publishing?",
@@ -40,16 +83,12 @@ const faqs = [
     "Founder-operated onboarding and a one-business-day support acknowledgement target, with weekly check-ins and announced maintenance. This is a target, not an uptime or response-time SLA."
   ],
   [
-    "What am I agreeing to when I apply?",
-    betaStatus.hostedLive
-      ? "Only to receive beta communications. Applying is not acceptance of beta participation terms. An invitation presents the approved, published participation terms, privacy notice, and cohort boundary for explicit acceptance."
-      : "Only to receive beta communications. Applying is not acceptance of beta participation terms. An invitation can be accepted only after the approved participation terms, privacy notice, and cohort boundary are published and presented for explicit acceptance."
-  ],
-  [
-    "Can I self-host?",
-    "The AGPL source is available now. The current Compose path is suitable for development and beta evaluation while production hardening continues."
+    "What will hosted plans cost?",
+    <>
+      Nothing has a price yet. Hosted plans will be announced before anything costs money, beta participants get clear notice first, and self-hosting stays free under the AGPL. The <Link href="/pricing">pricing page</Link> states the full intent.
+    </>
   ]
-] as const;
+];
 
 const cohortIncluded = [
   "An invitation-only private archive for one researcher or trusted household",
@@ -80,11 +119,36 @@ export default function BetaPage() {
       <PageHero
         eyebrow={betaStatus.badge}
         lead={`${betaStatus.summary} We’re prioritizing family historians and genealogists with rigorous source, GEDCOM, and case workflows—and the patience to give detailed feedback.`}
-        note="Applying does not create an account, accept participation terms, or authorize family-data submission."
         primary="Start the application"
         primaryHref="#apply"
         title="Help shape a more rigorous genealogy research workspace."
       />
+
+      <section className="shell section evaluate-section" aria-labelledby="evaluate-today-title">
+        <div className="section-heading">
+          <span className="eyebrow">{demoLive ? "What you can use today" : "What you can evaluate today"}</span>
+          <h2 id="evaluate-today-title">You don’t need an invitation to evaluate Kin Resolve.</h2>
+          <p>{demoLive
+            ? "Every surface below is public, free, and built entirely from fictional Hartwell–Mercer records—judge the product before you apply."
+            : "The research-instincts challenge is live in your browser now; the demo workspace and family archive are staged behind their own launch checks. Everything is free and built entirely from fictional Hartwell–Mercer records—judge the product before you apply."}</p>
+        </div>
+        <div className="evaluate-grid">
+          {evaluateToday.map((path) => (
+            <article className="evaluate-card" key={path.title}>
+              {path.status && (
+                <span className={`demo-status-pill ${path.status.tone}`} data-demo-card-status={path.status.tone}>
+                  {path.status.label}
+                </span>
+              )}
+              <h3>{path.title}</h3>
+              <p>{path.body}</p>
+              {path.href.startsWith("http")
+                ? <a className="arrow-link" href={path.href}>{path.action} <span aria-hidden="true">↗</span></a>
+                : <Link className="arrow-link" href={path.href}>{path.action} <span aria-hidden="true">→</span></Link>}
+            </article>
+          ))}
+        </div>
+      </section>
 
       <section className="shell section beta-fit-grid" data-beta-status-surface="beta">
         <div>
@@ -93,7 +157,7 @@ export default function BetaPage() {
         </div>
         <div className="fit-cards">
           <article><strong>Bring</strong><p>An unresolved question and a workflow you know well. Do not send records with the application.</p></article>
-          <article><strong>Expect</strong><p>{betaStatus.headline} {betaStatus.rollout} Applying does not guarantee access.</p></article>
+          <article><strong>Expect</strong><p>{betaStatus.headline} {betaStatus.rollout}</p></article>
           <article><strong>Protect</strong><p>Living people and sensitive data. The application itself should contain no family records.</p></article>
         </div>
       </section>
@@ -122,16 +186,13 @@ export default function BetaPage() {
         </div>
       </section>
 
-      <section className="shell section privacy-roadmap">
-        <div className="section-heading">
-          <span className="eyebrow">From application to archive</span>
-          <h2>An application is not an invitation—and an invitation is not permission to skip the gates.</h2>
-        </div>
-        <ol>
-          <li><strong>Apply without records</strong><span>Send only the fixed contact and workflow fields shown below. There is no free-text field or file upload.</span></li>
-          <li><strong>Private selection</strong><span>A founder reviews fit and capacity. There is no automatic account creation or guaranteed placement.</span></li>
-          <li><strong>Review exact documents</strong><span>Before account creation, an invite presents the approved participation terms, privacy notice, and cohort boundary for explicit acceptance.</span></li>
-          <li><strong>Start synthetic</strong><span>Use fictional Hartwell–Mercer data first. Real family data remains prohibited until every real-data gate is approved and evidenced.</span></li>
+      <section className="shell section application-path" aria-label="From application to archive">
+        <span className="eyebrow">From application to archive</span>
+        <ol className="steps-inline">
+          <li><strong>Apply without records.</strong> Only the fixed contact and workflow fields below—no free text and no file upload.</li>
+          <li><strong>Private selection.</strong> A founder reviews fit and capacity.</li>
+          <li><strong>Review exact documents.</strong> An invitation presents the approved participation terms, privacy notice, and cohort boundary for explicit acceptance.</li>
+          <li><strong>Start synthetic.</strong> Fictional Hartwell–Mercer records come first; real family data remains prohibited until every real-data gate is approved and evidenced.</li>
         </ol>
       </section>
 
@@ -141,7 +202,7 @@ export default function BetaPage() {
             <span className="eyebrow">Beta interest</span>
             <h2>Tell us about the work you want to test.</h2>
             <p>{betaApplicationMode === "application" ? "The active no-JavaScript form posts fixed, minimal fields to the product application endpoint. The marketing site remains static and does not store the submission." : `The fallback intake opens a prepared email addressed to ${site.betaEmail}. The marketing site does not store your submission.`}</p>
-            <p>Submitting consents only to beta communications. It does not accept participation terms or authorize Kin Resolve to receive family records. Read the current <Link href="/privacy">data-practices disclosure</Link> before applying.</p>
+            <p>Submitting consents only to beta communications. It does not accept participation terms, create an account, guarantee access, place you in a queue, or authorize Kin Resolve to receive family records. Read the current <Link href="/privacy">data-practices disclosure</Link> before applying.</p>
             <div className="application-boundary">
               <strong>Please do not submit</strong>
               <span>GEDCOM files, DNA results, relatives’ or other living people’s names or details, source images, credentials, or private family details.</span>
