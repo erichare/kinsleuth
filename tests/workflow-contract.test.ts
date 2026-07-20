@@ -88,6 +88,25 @@ describe("product CI workflow contract", () => {
     );
   });
 
+  it("lints every workflow definition with a checksummed pinned actionlint before unit tests", async () => {
+    const contents = await workflow("ci.yml");
+    const staticJob = job(contents, "static", "database");
+    const workflowLint = staticJob.indexOf("Lint workflow definitions");
+    const dependencyInstall = staticJob.indexOf("npm ci");
+
+    expect(workflowLint).toBeGreaterThan(0);
+    expect(dependencyInstall).toBeGreaterThan(0);
+    expect(workflowLint).toBeGreaterThan(dependencyInstall);
+    expect(workflowLint).toBeLessThan(staticJob.indexOf("Unit tests"));
+    expect(staticJob).toContain(
+      "https://github.com/rhysd/actionlint/releases/download/",
+    );
+    expect(staticJob).toMatch(/actionlint_version="\d+\.\d+\.\d+"/);
+    expect(staticJob).toMatch(/expected_sha256="[0-9a-f]{64}"/);
+    expect(staticJob).toContain('test "$actual_sha256" = "$expected_sha256"');
+    expect(staticJob).toContain("-config-file .github/actionlint.yaml");
+  });
+
   it("validates the Vercel deployment bypass guard in the release-contract job before installation", async () => {
     const contents = await workflow("ci.yml");
     const releaseContract = job(contents, "release-contract", "gate");
