@@ -7,7 +7,8 @@ marketing site and `app.kinresolve.com` remains private-beta holding.
 
 This runbook is the source of truth for the synthetic Hartwell–Mercer public demo. It does
 not authorize real-family data, visitor uploads, accounts, email, object storage, arbitrary
-prompts, arbitrary text, or external integrations.
+prompts, arbitrary text, or external integrations. The staging and production product
+release procedure lives in [releases.md](releases.md).
 
 ## Control-plane prerequisites
 

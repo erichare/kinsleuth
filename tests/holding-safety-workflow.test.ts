@@ -6,7 +6,7 @@ const workflow = readFileSync(
   path.join(process.cwd(), ".github", "workflows", "holding-safety.yml"),
   "utf8"
 );
-const readme = readFileSync(path.join(process.cwd(), "README.md"), "utf8");
+const releasesDoc = readFileSync(path.join(process.cwd(), "docs", "releases.md"), "utf8");
 
 function job(name: string, nextName?: string): string {
   const start = workflow.indexOf(`\n  ${name}:`);
@@ -175,16 +175,16 @@ describe("failed holding auto-assignment safety workflow", () => {
   });
 
   it("documents non-interactive Vercel-only target safety environments", () => {
-    expect(readme).toContain(
+    expect(releasesDoc).toContain(
       "`beta-staging-containment` is an automatic safety environment with no required reviewers"
     );
-    expect(readme).toContain(
+    expect(releasesDoc).toContain(
       "Secrets: `STAGING_HOLDING_DEPLOYMENT_ID`, `VERCEL_ORG_ID`,"
     );
-    expect(readme).toContain(
+    expect(releasesDoc).toContain(
       "`VERCEL_PROJECT_ID`, and `VERCEL_TOKEN`. Variables: `APP_BASE_URL`, `VERCEL_ORG_ID`, and"
     );
-    expect(readme).toContain(
+    expect(releasesDoc).toContain(
       "`production-containment` is an automatic safety environment with no required reviewers"
     );
   });
