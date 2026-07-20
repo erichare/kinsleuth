@@ -2,6 +2,9 @@ import { createHash, randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 
 import { query, withTransaction, type DatabaseOptions } from "../db";
+// Imported from ../db-rls directly so unit tests that mock "@/lib/db" keep
+// the real scope helper.
+import { withRlsArchiveScope, withRlsMaintenanceMode } from "../db-rls";
 import { validateHostedGedcomFile } from "../hosted-capabilities";
 import { assertReleaseWritesAllowed } from "../release-fence";
 import {
@@ -126,7 +129,7 @@ export async function stageDirectIntegrationUpload(
   const intentId = `integration-upload-intent-${randomUUID()}`;
   const stagingKey = `archives/${archiveId}/integration-upload-staging/${randomUUID()}${file.extension}`;
 
-  const intent = await withTransaction(options, async (client) => {
+  const intent = await withTransaction(withRlsArchiveScope(options, archiveId), async (client) => {
     const provider = await requireEnabledConnection(client, archiveId, normalizedConnectionId, options);
     const rightsAcknowledgement = resolveArtifactRightsAcknowledgement({
       provider,
@@ -198,7 +201,7 @@ export async function completeDirectIntegrationUpload(
       size: Number(intent.declared_size_bytes)
     });
   }
-  await withTransaction(options, (client) =>
+  await withTransaction(withRlsArchiveScope(options, archiveId), (client) =>
     requireEnabledConnection(client, archiveId, normalizedConnectionId, { ...options, featureFlags })
   );
 
@@ -291,7 +294,10 @@ export async function cleanupExpiredDirectIntegrationUploadIntents(
     throw directUploadError("INVALID_INPUT", "Direct upload cleanup limit must be between 1 and 500");
   }
   const now = currentTime(options);
-  const candidates = await withTransaction(options, async (client) => {
+  // RLS maintenance mode: this bounded janitor sweeps expired upload intents
+  // across every archive in one locked scan, so no single archive scope can
+  // describe its FOR UPDATE locks and expiry updates.
+  const candidates = await withTransaction(withRlsMaintenanceMode(options), async (client) => {
     const selected = await client.query<UploadIntentRow & { archive_id: string }>(
       `SELECT intent.*
        FROM integration_upload_intents intent
@@ -362,7 +368,7 @@ async function finalizeIntent(
   options: DirectIntegrationUploadOptions
 ): Promise<{ artifact: IntegrationArtifact; replayed: boolean }> {
   const archiveId = required(options.archiveId, "archiveId");
-  return withTransaction(options, async (client) => {
+  return withTransaction(withRlsArchiveScope(options, archiveId), async (client) => {
     const selected = await client.query<UploadIntentRow>(
       `SELECT * FROM integration_upload_intents
        WHERE archive_id = $1 AND connection_id = $2 AND id = $3
@@ -657,7 +663,7 @@ async function deletePromotedArtifactIfUnreferenced(
   options: DirectIntegrationUploadOptions
 ): Promise<boolean> {
   const archiveId = required(options.archiveId, "archiveId");
-  return withTransaction(options, async (client) => {
+  return withTransaction(withRlsArchiveScope(options, archiveId), async (client) => {
     await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [promotedKey]);
     const references = await client.query<{ total: number | string }>(
       `SELECT (
@@ -733,7 +739,7 @@ async function markStagingObjectDeleted(
      SET staging_deleted_at = COALESCE(staging_deleted_at, now()), updated_at = now()
      WHERE archive_id = $1 AND id = $2 AND staging_key = $3 AND status <> 'pending'`,
     [archiveId, intentId, stagingKey],
-    options
+    withRlsArchiveScope(options, archiveId)
   );
 }
 
@@ -753,7 +759,7 @@ async function consumePendingIntent(
       status,
       currentTime(options).toISOString()
     ],
-    options
+    withRlsArchiveScope(options, required(options.archiveId, "archiveId"))
   );
   return result.rowCount === 1;
 }

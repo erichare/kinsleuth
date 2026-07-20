@@ -1,6 +1,9 @@
 import type { PoolClient } from "pg";
 
 import { withTransaction, type DatabaseOptions } from "../db";
+// Imported from ../db-rls directly so unit tests that mock "@/lib/db" keep
+// the real scope helper.
+import { withRlsArchiveScope } from "../db-rls";
 import {
   createConfiguredArchiveObjectStorage,
   type ArchiveObjectStorage
@@ -43,7 +46,7 @@ export async function registerIntegrationMediaWriteClaim(
   }
   const expiresAt = new Date(now.getTime() + lifetime);
 
-  await withTransaction(options, async (client) => {
+  await withTransaction(withRlsArchiveScope(options, archiveId), async (client) => {
     await lockObjectKey(client, archiveId, input.objectKey);
     const inserted = await client.query<{ object_key: string }>(
       `INSERT INTO integration_media_write_claims (
@@ -81,7 +84,8 @@ export async function expireIntegrationMediaWriteClaims(
   options: Pick<MediaClaimOptions, "archiveId" | "databaseUrl" | "now">
 ): Promise<number> {
   const now = options.now?.() ?? new Date();
-  return withTransaction(options, async (client) => {
+  const archiveId = required(options.archiveId, "archive id");
+  return withTransaction(withRlsArchiveScope(options, archiveId), async (client) => {
     const result = await client.query(
       `UPDATE integration_media_write_claims
        SET expires_at = LEAST(expires_at, $3::timestamptz), updated_at = $3::timestamptz
@@ -155,6 +159,7 @@ export async function cleanupExpiredIntegrationMediaWriteClaims(
   }
   const now = options.now?.() ?? new Date();
   const candidates = await withTransaction(options, async (client) => {
+    // Read-only cross-archive scan; SELECT stays unscoped under the policies.
     const result = await client.query<{ archive_id: string; object_key: string }>(
       `SELECT archive_id, object_key
        FROM integration_media_write_claims
@@ -173,7 +178,9 @@ export async function cleanupExpiredIntegrationMediaWriteClaims(
   let failed = 0;
   for (const candidate of candidates) {
     try {
-      const removedObject = await withTransaction(options, async (client) => {
+      // Each expired claim is deleted inside a transaction pinned to that
+      // claim's own archive, so the janitor needs no maintenance mode here.
+      const removedObject = await withTransaction(withRlsArchiveScope(options, candidate.archive_id), async (client) => {
         await lockObjectKey(client, candidate.archive_id, candidate.object_key);
         const expired = await client.query<{ run_id: string }>(
           `SELECT run_id FROM integration_media_write_claims

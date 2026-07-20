@@ -13,6 +13,12 @@ import {
   type ApiRateLimitHeaders
 } from "./durable-api-rate-limit";
 import { withTransaction, type DatabaseOptions } from "./db";
+// RLS maintenance mode (imported from ./db-rls so unit tests that mock
+// "@/lib/db" keep the real helper): token issuance/rotation/revocation and
+// append-only security events are operator/identity-plane writes where the
+// row's archive is derived from stored token data rather than a
+// request-scoped archive, so they cannot be pinned to one archive setting.
+import { withRlsMaintenanceMode } from "./db-rls";
 import {
   readDatabaseIdentity,
   validateConfiguredDatabaseIdentity
@@ -223,7 +229,7 @@ export async function authenticateApiToken(
   const prefix = token.slice(0, "kr_beta_".length + 8);
 
   try {
-    return await withTransaction(options, async (client) => {
+    return await withTransaction(withRlsMaintenanceMode(options), async (client) => {
       const result = await client.query<TokenRow & { unexpired: boolean }>(
         `SELECT token.*, token.expires_at > clock_timestamp() AS unexpired
          FROM public.api_tokens AS token
@@ -341,7 +347,7 @@ export async function createApiTokenForOwner(
   const tokenId = randomUUID();
 
   try {
-    const row = await withTransaction(options, async (client) => {
+    const row = await withTransaction(withRlsMaintenanceMode(options), async (client) => {
       await requireOwnerForTokenCreation(client, input.archiveId, input.userId);
       const inventory = await client.query<{ total_tokens: number; active_tokens: number }>(
         `SELECT count(*)::integer AS total_tokens,
@@ -402,7 +408,7 @@ export async function listApiTokensForOwner(
   requireEnabled(options);
   validateArchiveAndUser(input.archiveId, input.userId);
   try {
-    return await withTransaction(options, async (client) => {
+    return await withTransaction(withRlsMaintenanceMode(options), async (client) => {
       await requireOwner(client, input.archiveId, input.userId);
       const result = await client.query<TokenRow>(
         `SELECT id, archive_id, user_id, name, prefix, scopes,
@@ -433,7 +439,7 @@ export async function revokeApiTokenForOwner(
   validateTokenId(input.tokenId);
   validateRequestId(input.requestId);
   try {
-    const row = await withTransaction(options, async (client) => {
+    const row = await withTransaction(withRlsMaintenanceMode(options), async (client) => {
       await requireOwner(client, input.archiveId, input.userId);
       const existing = await client.query<TokenRow>(
         `SELECT *
@@ -487,7 +493,7 @@ export async function recordApiTokenExportUse(
     throw new BetaApiTokenError("INVALID_INPUT");
   }
   try {
-    await withTransaction(options, async (client) => {
+    await withTransaction(withRlsMaintenanceMode(options), async (client) => {
       const token = await client.query(
         `SELECT 1
          FROM public.api_tokens
@@ -522,7 +528,7 @@ export async function revokeAllApiTokensForOperator(
   validateArchiveAndUser(input.archiveId, "operator");
   validateRequestId(input.requestId);
   try {
-    return await withTransaction(options, async (client) => {
+    return await withTransaction(withRlsMaintenanceMode(options), async (client) => {
       validateConfiguredDatabaseIdentity(
         input.expectedDatabaseIdentity,
         await readDatabaseIdentity(client)

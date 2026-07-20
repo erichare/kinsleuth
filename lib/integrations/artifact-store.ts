@@ -2,6 +2,9 @@ import { createHash, randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 
 import { query, withTransaction, type DatabaseOptions } from "../db";
+// Imported from ../db-rls directly so unit tests that mock "@/lib/db" keep
+// the real scope helper.
+import { withRlsArchiveScope } from "../db-rls";
 import { validateHostedGedcomFile } from "../hosted-capabilities";
 import {
   createConfiguredArchiveObjectStorage,
@@ -97,7 +100,7 @@ export async function createIntegrationArtifact(
   let storedKey: string | undefined;
 
   try {
-    return await withTransaction(options, async (client) => {
+    return await withTransaction(withRlsArchiveScope(options, archiveId), async (client) => {
       await lockArtifactKey(client, expectedKey);
       const connection = await client.query<{ id: string; provider: IntegrationProvider }>(
         `SELECT id, provider FROM integration_connections
@@ -298,7 +301,7 @@ export async function setIntegrationArtifactState(
      WHERE archive_id = $1 AND connection_id = $2 AND id = $3 AND state <> 'abandoned'
      RETURNING *`,
     [archiveId, required(connectionId, "connection id"), required(artifactId, "artifact id"), state],
-    options
+    withRlsArchiveScope(options, archiveId)
   );
   if (!result.rows[0]) throw integrationArtifactError("NOT_FOUND", "staged artifact not found");
   return mapArtifact(result.rows[0], false);
@@ -312,7 +315,7 @@ export async function deleteIntegrationArtifact(
   const archiveId = required(options.archiveId, "archiveId");
   const normalizedConnectionId = required(connectionId, "connection id");
   const normalizedArtifactId = required(artifactId, "artifact id");
-  const artifact = await withTransaction(options, async (client) => {
+  const artifact = await withTransaction(withRlsArchiveScope(options, archiveId), async (client) => {
     const lookup = await client.query<{ artifact_key: string }>(
       `SELECT artifact_key FROM integration_artifacts
        WHERE archive_id = $1 AND connection_id = $2 AND id = $3`,
@@ -364,7 +367,7 @@ async function deleteArtifactObjectIfUnreferenced(
   options: IntegrationArtifactStoreOptions
 ): Promise<boolean> {
   const archiveId = required(options.archiveId, "archiveId");
-  return withTransaction(options, async (client) => {
+  return withTransaction(withRlsArchiveScope(options, archiveId), async (client) => {
     await lockArtifactKey(client, artifactKey);
     const references = await client.query<{ total: number | string }>(
       `SELECT (

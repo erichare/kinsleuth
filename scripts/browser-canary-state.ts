@@ -144,6 +144,9 @@ async function prepareState(
   let state: CanaryState;
   try {
     await client.query("BEGIN");
+    await client.query("SELECT pg_catalog.set_config('kinresolve.archive_id', $1, true)", [
+      config.archiveId
+    ]);
     await lockDemoArchive(client, config.archiveId);
     const residue = await client.query<{
       cases: string;
@@ -242,6 +245,9 @@ async function cleanupState(
   const client = await database.connect();
   try {
     await client.query("BEGIN");
+    await client.query("SELECT pg_catalog.set_config('kinresolve.archive_id', $1, true)", [
+      state.archiveId
+    ]);
     await lockDemoArchive(client, state.archiveId);
     currentStage = "exact temporal baseline restoration";
     await restoreTemporalBaseline(client, state.archiveId, state.temporalBaseline);
@@ -374,6 +380,9 @@ async function deleteGraphRows(
   const client = await database.connect();
   try {
     await client.query("BEGIN");
+    await client.query("SELECT pg_catalog.set_config('kinresolve.archive_id', $1, true)", [
+      state.archiveId
+    ]);
     await lockDemoArchive(client, state.archiveId);
     for (const caseId of graph.caseIds) {
       const deleted = await client.query(
@@ -472,6 +481,9 @@ async function cleanupCanaryIdentity(
   const client = await database.connect();
   try {
     await client.query("BEGIN");
+    await client.query("SELECT pg_catalog.set_config('kinresolve.archive_id', $1, true)", [
+      state.archiveId
+    ]);
     await lockDemoArchive(client, state.archiveId);
     const selector = config.userId ?? config.email!.toLowerCase();
     if (sha256(`${config.mode}:${selector}`) !== state.identity.selectorSha256) throw new Error();

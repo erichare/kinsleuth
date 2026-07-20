@@ -19,6 +19,13 @@ export async function createResearchArchiveExport(
   const snapshot = await withClient(options, async (client) => {
     await client.query("BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY");
     try {
+      // The provisioning check inside readWorkspaceSnapshot locks the archive
+      // row FOR SHARE, which the archive-scoped RLS UPDATE policy gates under
+      // a NOBYPASSRLS role, so this read-only export pins its archive.
+      await client.query(
+        "SELECT pg_catalog.set_config('kinresolve.archive_id', $1, true)",
+        [options.archiveId]
+      );
       const workspace = await readWorkspaceSnapshot(client, options);
       const participant = await readParticipantMetadata(client, options);
       const legal = await readLegalMetadata(client, options);

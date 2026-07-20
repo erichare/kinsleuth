@@ -87,23 +87,43 @@ If any proof fails, the release stops before staging smoke or production fence r
 Adding another runtime table requires a separately reviewed contract change; broad
 `ALL TABLES`, default privileges, or role-name inputs are intentionally unsupported.
 
-## RLS tradeoff for the private beta
+## RLS policies and the staged NOBYPASSRLS flip
 
-The current single-cell schema enables row-level security but defines no runtime
-policies. A non-owner `NOBYPASSRLS` role therefore cannot perform the app's required
-writes. For this beta, the attester explicitly records `BYPASSRLS` as either `true` or
-`false` and does not pretend that `NOBYPASSRLS` is currently viable; the independent
-rolled-back write proof still has to pass. In practice, the present schema needs a
-dedicated `BYPASSRLS` runtime login. This is a narrow single-cell exception, not a
-multi-tenant authorization boundary. Add archive-scoped policies and then require
-`NOBYPASSRLS` before introducing shared cells or database-enforced tenant isolation.
+Migration `020_core_rls_policies` defines the archive-scoped policies that were the
+first half of this follow-up. Every application table keyed by `archive_id` (and the
+`archives` root itself) now carries mutation-only policies: `SELECT` stays unscoped
+because many server reads still run as one-shot pool queries outside a transaction,
+while `INSERT`/`UPDATE`/`DELETE` (and the `UPDATE`-policy check behind
+`SELECT ... FOR UPDATE/SHARE`) require the writing transaction to pin its archive via
+`set_config('kinresolve.archive_id', <archive id>, true)`. Cross-archive system work
+(demo purge, provisioning cleanup, operator identity flows) instead sets
+`set_config('kinresolve.rls_mode', 'maintenance', true)`. Application code attaches
+these transaction-local settings through `withRlsArchiveScope` /
+`withRlsMaintenanceMode` (`lib/db-rls.ts`), and the attester's rolled-back
+representative write pins its configured archive the same way. Because
+`current_setting(..., true)` is `NULL` when unset, an unpinned write under a
+non-bypass role is denied by default — the designed loud failure for any missed
+call site.
+
+The policies are inert for the current dedicated `BYPASSRLS` runtime login and for
+the table owner (no `FORCE ROW LEVEL SECURITY`; the owner runs migrations, fixture
+rotation, and recovery purges). The remaining operator action is re-provisioning the
+runtime role with `NOBYPASSRLS`, staged deliberately: flip the disposable public-demo
+cell first, observe the demo lifecycle (provision, session start, outcome recording,
+cleanup/drain) under the restricted role, then flip the hosted cells. The attester
+already records `bypassRls` explicitly, so each cell's posture stays visible in the
+release evidence during the rollout. `tests/core-rls-policies.test.ts` proves the
+demo lifecycle and the policy matrix against a non-owner `NOBYPASSRLS` role carrying
+the checked-in grant contract.
 
 ## External provisioning checklist
 
 Run the equivalent of the following through the protected database control plane, with a
 new generated password supplied out of band. Adapt the table grant loop to the exact
 checked-in application inventory and review its output before committing it; never store
-the password or resulting URL in this repository.
+the password or resulting URL in this repository. Once a cell completes the staged
+`NOBYPASSRLS` flip described above, provision (or re-provision) its role with
+`NOBYPASSRLS` in place of `BYPASSRLS` below.
 
 ```sql
 CREATE ROLE kinresolve_runtime

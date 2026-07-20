@@ -171,6 +171,13 @@ try {
     }
     await runtimeClient.query("BEGIN");
     try {
+      // The representative write must satisfy the archive-scoped RLS mutation
+      // policies once the recovery runtime role runs as NOBYPASSRLS, so the
+      // rolled-back transaction pins the configured archive.
+      await runtimeClient.query(
+        "SELECT pg_catalog.set_config('kinresolve.archive_id', $1, true)",
+        [expectedArchiveId]
+      );
       const representativeWrite = await runtimeClient.query(
         `UPDATE public.archives
          SET updated_at = updated_at

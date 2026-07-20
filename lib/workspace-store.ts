@@ -2,6 +2,9 @@ import { randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import { projectResearchCaseForDnaCapability } from "./case-search";
 import { withTransaction, type DatabaseOptions } from "./db";
+// Imported from ./db-rls directly so unit tests that mock "@/lib/db" keep the
+// real scope helper.
+import { withRlsArchiveScope } from "./db-rls";
 import { createDemoAiRuns } from "./demo-ai-runs";
 import { createDemoSources } from "./demo-sources";
 import { demoPurgeProductTables } from "./demo-purge";
@@ -200,7 +203,7 @@ export async function getArchiveProvisioning(
   options: WorkspaceStoreOptions = {}
 ): Promise<ArchiveProvisioning | null> {
   const archiveId = getArchiveId(options);
-  return withTransaction(options, async (client) => {
+  return withTransaction(withRlsArchiveScope(options, archiveId), async (client) => {
     const result = await client.query<ArchiveProvisioningRow>(
       "SELECT id, dataset_mode, demo_fixture_version FROM archives WHERE id = $1",
       [archiveId]
@@ -213,7 +216,7 @@ export async function requireProvisionedArchive(
   options: WorkspaceStoreOptions = {}
 ): Promise<ArchiveProvisioning> {
   const archiveId = getArchiveId(options);
-  return withTransaction(options, (client) => requireProvisionedArchiveRow(client, archiveId, options));
+  return withTransaction(withRlsArchiveScope(options, archiveId), (client) => requireProvisionedArchiveRow(client, archiveId, options));
 }
 
 export async function provisionArchive(
@@ -228,7 +231,7 @@ export async function provisionArchive(
   const workspace = datasetMode === "demo" ? createDemoWorkspace() : createEmptyWorkspace();
   const fixtureVersion = datasetMode === "demo" ? demoFixtureVersion : null;
 
-  return withTransaction(options, async (client) => {
+  return withTransaction(withRlsArchiveScope(options, archiveId), async (client) => {
     const inserted = await client.query<ArchiveProvisioningRow>(
       `INSERT INTO archives
          (id, name, tagline, slug, dataset_mode, demo_fixture_version, updated_at)
@@ -304,7 +307,7 @@ export async function rotateCanonicalPublicDemoFixture(
     throw new Error("The expected previous demo fixture version must be a positive integer below the current version.");
   }
 
-  return withTransaction(options, async (client) => {
+  return withTransaction(withRlsArchiveScope(options, archiveId), async (client) => {
     await client.query("SET LOCAL lock_timeout = '60s'");
     await client.query("SET LOCAL statement_timeout = '5min'");
     const existing = await client.query<ArchiveProvisioningRow>(
@@ -388,7 +391,7 @@ export async function rotateCanonicalPublicDemoFixture(
 export async function readWorkspace(options: WorkspaceStoreOptions = {}): Promise<WorkspaceData> {
   const archiveId = getArchiveId(options);
 
-  return withTransaction(options, async (client) => {
+  return withTransaction(withRlsArchiveScope(options, archiveId), async (client) => {
     await requireProvisionedArchiveRow(client, archiveId, options);
     return loadWorkspace(client, archiveId);
   });
@@ -416,7 +419,7 @@ export async function withWorkspaceReadTransaction(
 ): Promise<unknown> {
   const archiveId = getArchiveId(options);
 
-  return withTransaction(options, async (client) => {
+  return withTransaction(withRlsArchiveScope(options, archiveId), async (client) => {
     await requireProvisionedArchiveRow(client, archiveId, options);
     return action(client, archiveId);
   });
@@ -435,7 +438,7 @@ export async function writeWorkspace(workspace: WorkspaceData, options: Workspac
     updatedAt: new Date().toISOString()
   });
 
-  await withTransaction(options, async (client) => {
+  await withTransaction(withRlsArchiveScope(options, archiveId), async (client) => {
     await requireProvisionedArchiveRow(client, archiveId, options);
     await persistWorkspace(client, archiveId, next);
   });
@@ -454,7 +457,7 @@ async function withArchiveMutation<T>(
 ): Promise<T> {
   const archiveId = getArchiveId(options);
 
-  return withTransaction(options, async (client) => {
+  return withTransaction(withRlsArchiveScope(options, archiveId), async (client) => {
     const locked = await client.query<ArchiveProvisioningRow>(
       `UPDATE archives SET updated_at = now() WHERE id = $1
        RETURNING id, dataset_mode, demo_fixture_version`,
@@ -636,7 +639,7 @@ export async function updateArchiveBranding(input: ArchiveBranding, options: Wor
     throw new Error("archive name is required");
   }
 
-  return withTransaction(options, async (client) => {
+  return withTransaction(withRlsArchiveScope(options, archiveId), async (client) => {
     const existing = await client.query<ArchiveProvisioningRow>(
       "SELECT id, dataset_mode, demo_fixture_version FROM archives WHERE id = $1 FOR UPDATE",
       [archiveId]
@@ -867,7 +870,7 @@ export async function updateCaseTask(
 
 export async function readResearchCase(caseId: string, options: WorkspaceStoreOptions = {}): Promise<ResearchCase | undefined> {
   const archiveId = getArchiveId(options);
-  return withTransaction(options, async (client) => {
+  return withTransaction(withRlsArchiveScope(options, archiveId), async (client) => {
     await requireProvisionedArchiveRow(client, archiveId, options);
     return loadCaseData(client, archiveId, caseId);
   });
@@ -1560,7 +1563,7 @@ export type GedcomRelationshipRepairResult = {
 export async function repairGedcomRelationshipLinks(options: WorkspaceStoreOptions = {}): Promise<GedcomRelationshipRepairResult> {
   const archiveId = getArchiveId(options);
 
-  return withTransaction(options, async (client) => {
+  return withTransaction(withRlsArchiveScope(options, archiveId), async (client) => {
     // Lock the archive row so the read-transform-write below cannot interleave
     // with another repair and clobber a concurrent workspace write.
     const archive = await client.query<{ id: string }>("SELECT id FROM archives WHERE id = $1 FOR UPDATE", [archiveId]);

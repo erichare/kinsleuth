@@ -317,6 +317,13 @@ export async function attestRuntimeDatabaseRole(
     runtimeClient = await runtimePool.connect();
     await runtimeClient.query("BEGIN");
     transactionOpen = true;
+    // The representative archive write below must satisfy the archive-scoped
+    // RLS mutation policies once the runtime role runs as NOBYPASSRLS, so the
+    // rolled-back transaction pins the configured archive.
+    await runtimeClient.query(
+      "SELECT pg_catalog.set_config('kinresolve.archive_id', $1, true)",
+      [input.expectedArchiveId]
+    );
     const runtimeResult = await runtimeClient.query(runtimeDatabaseRoleQuery, [migrationRoleOid]);
     if (runtimeResult.rows.length !== 1) {
       throw new Error("The runtime credential does not resolve to exactly one database role.");

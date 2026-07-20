@@ -66,7 +66,8 @@ describe("migration checksum history", () => {
         "016_beta_api_tokens.sql",
         "017_beta_applications.sql",
         "018_public_demo.sql",
-        "019_public_demo_stats.sql"
+        "019_public_demo_stats.sql",
+        "020_core_rls_policies.sql"
       ],
       releaseAnchors: ["v0.17.4"]
     });

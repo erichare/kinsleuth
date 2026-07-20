@@ -2,6 +2,9 @@ import { randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import type { DatabaseOptions } from "./db";
 import { query, withTransaction } from "./db";
+// Imported from ./db-rls directly so unit tests that mock "@/lib/db" keep the
+// real scope helper.
+import { withRlsArchiveScope } from "./db-rls";
 import {
   createPublicDemoSessionToken,
   digestPublicDemoSessionToken
@@ -1150,7 +1153,11 @@ async function deletePublicDemoArchive(archiveId: string, options: DatabaseOptio
   if (!/^demo-[a-f0-9]{32}$/.test(archiveId)) {
     throw new Error("Refusing to delete a non-demo archive.");
   }
-  await withTransaction(options, async (client) => {
+  // The archives-row lock and delete below are the only statements in this
+  // store that touch a table with archive-scoped mutation policies; the demo
+  // archive being cleaned is known, so the transaction pins exactly that
+  // archive instead of using maintenance mode.
+  await withTransaction(withRlsArchiveScope(options, archiveId), async (client) => {
     const eligible = await client.query(
       `SELECT generation.archive_id
        FROM public.public_demo_generations AS generation

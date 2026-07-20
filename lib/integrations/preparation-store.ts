@@ -1,6 +1,9 @@
 import { randomUUID } from "node:crypto";
 
 import { withTransaction } from "../db";
+// Imported from ../db-rls directly so unit tests that mock "@/lib/db" keep
+// the real scope helper.
+import { withRlsArchiveScope } from "../db-rls";
 import { syncChangeSearchProjection } from "./change-search";
 import {
   DESKTOP_MEDIA_RIGHTS_ACKNOWLEDGEMENT_VERSION,
@@ -70,7 +73,7 @@ export async function commitIntegrationPreparation(
   const mediaObjects = input.mediaObjects ?? [];
   mediaObjects.forEach(validatePreparedIntegrationMediaObject);
 
-  const committed = await withTransaction(options, async (client) => {
+  const committed = await withTransaction(withRlsArchiveScope(options, archiveId), async (client) => {
     if (leaseFence) {
       const activeLease = await client.query<{ id: string }>(
         `SELECT id FROM durable_jobs
@@ -330,7 +333,7 @@ export async function resetIntegrationPreparationForRetry(
 ) {
   const archiveId = required(options.archiveId, "archiveId");
   const normalizedRunId = required(runId, "sync run id");
-  const state = await withTransaction(options, async (client) => {
+  const state = await withTransaction(withRlsArchiveScope(options, archiveId), async (client) => {
     const selected = await client.query<{ status: string; artifact_id: string | null }>(
       `SELECT status, artifact_id FROM sync_runs
        WHERE archive_id = $1 AND id = $2
@@ -376,7 +379,7 @@ export async function failIntegrationPreparationTerminally(
     throw preparationError("INVALID_INPUT", "public error code is invalid");
   }
   const errorMessage = terminalPreparationMessage(errorCode);
-  const state = await withTransaction(options, async (client) => {
+  const state = await withTransaction(withRlsArchiveScope(options, archiveId), async (client) => {
     const selected = await client.query<{ status: string; artifact_id: string | null }>(
       `SELECT status, artifact_id FROM sync_runs
        WHERE archive_id = $1 AND id = $2
@@ -416,7 +419,7 @@ export async function reconcileTerminalIntegrationFailures(
   options: IntegrationStoreOptions
 ): Promise<number> {
   const archiveId = required(options.archiveId, "archiveId");
-  return withTransaction(options, async (client) => {
+  return withTransaction(withRlsArchiveScope(options, archiveId), async (client) => {
     const selected = await client.query<{
       id: string;
       artifact_id: string | null;

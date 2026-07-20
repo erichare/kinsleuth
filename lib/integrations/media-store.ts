@@ -1,4 +1,7 @@
 import { query, withTransaction, type DatabaseOptions } from "../db";
+// Imported from ../db-rls directly so unit tests that mock "@/lib/db" keep
+// the real scope helper.
+import { withRlsArchiveScope } from "../db-rls";
 import {
   createConfiguredArchiveObjectStorage,
   type ArchiveObjectStorage
@@ -189,7 +192,7 @@ export async function reclassifyIntegrationMedia(
     throw mediaError("INVALID_INPUT", "the current ownership attestation is required");
   }
   const attestedBy = required(input.attestedBy, "attestation actor");
-  return withTransaction(options, async (client) => {
+  return withTransaction(withRlsArchiveScope(options, archiveId), async (client) => {
     const selected = await client.query<MediaRow>(
       "SELECT * FROM integration_media_objects WHERE archive_id = $1 AND id = $2 FOR UPDATE",
       [archiveId, required(mediaId, "media id")]

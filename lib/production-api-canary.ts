@@ -12,6 +12,9 @@ import {
   validateConfiguredDatabaseIdentity
 } from "./database-attestation";
 import { withClient, withTransaction, type DatabaseOptions } from "./db";
+// Imported from ./db-rls directly so unit tests that mock "@/lib/db" keep the
+// real scope helper.
+import { withRlsArchiveScope } from "./db-rls";
 
 type ApiEnvironment = Record<string, string | undefined>;
 
@@ -634,7 +637,10 @@ async function attestProductionApiCanaryTarget(
   input: ReturnType<typeof validateTargetInput>,
   options: DatabaseOptions
 ): Promise<{ archiveResourceBindingSha256: string }> {
-  return withTransaction(options, async (client) => {
+  // The archives FOR SHARE lock below is gated by the archive-scoped UPDATE
+  // policy under a NOBYPASSRLS role, so the transaction pins the canary's
+  // configured archive.
+  return withTransaction(withRlsArchiveScope(options, input.expectedArchiveId), async (client) => {
     validateConfiguredDatabaseIdentity(
       input.expectedDatabaseIdentity,
       await readDatabaseIdentity(client)
