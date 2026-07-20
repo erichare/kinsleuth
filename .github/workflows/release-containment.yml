@@ -140,42 +140,28 @@ jobs:
     outputs:
       authorized: ${{ steps.event.outputs.authorized }}
     steps:
-      - name: Validate the exact failed release event for staging containment
+      - name: Check out the trusted authorization gate from main
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: main
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up Node.js for the credential-free authorization gate
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+
+      - name: Authorize the exact failed release event for staging containment
         id: event
         env:
-          CURRENT_REPOSITORY: ${{ github.repository }}
-          EVENT_ACTION: ${{ github.event.action }}
-          EVENT_REPOSITORY: ${{ github.event.repository.full_name }}
-          SOURCE_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
-          SOURCE_DISPLAY_TITLE: ${{ github.event.workflow_run.display_title }}
-          SOURCE_EVENT: ${{ github.event.workflow_run.event }}
-          SOURCE_HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
-          SOURCE_HEAD_REPOSITORY: ${{ github.event.workflow_run.head_repository.full_name }}
-          SOURCE_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
-          SOURCE_RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
-          SOURCE_RUN_REPOSITORY: ${{ github.event.workflow_run.repository.full_name }}
-          SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}
-          SOURCE_WORKFLOW_NAME: ${{ github.event.workflow_run.name }}
-          SOURCE_WORKFLOW_PATH: ${{ github.event.workflow_run.path }}
-        run: |
-          set -euo pipefail
-          test "$EVENT_ACTION" = "completed"
-          test "$EVENT_REPOSITORY" = "$CURRENT_REPOSITORY"
-          test "$SOURCE_WORKFLOW_NAME" = "Release Kin Resolve beta candidate" || \
-            test "$SOURCE_WORKFLOW_NAME" = "$SOURCE_DISPLAY_TITLE"
-          test "$SOURCE_DISPLAY_TITLE" = "Kin Resolve beta release run $SOURCE_RUN_ID attempt $SOURCE_RUN_ATTEMPT"
-          test "$SOURCE_WORKFLOW_PATH" = ".github/workflows/vercel-release.yml"
-          test "$SOURCE_EVENT" = "workflow_dispatch"
-          test "$SOURCE_HEAD_BRANCH" = "main"
-          test "$SOURCE_HEAD_REPOSITORY" = "$CURRENT_REPOSITORY"
-          test "$SOURCE_RUN_REPOSITORY" = "$CURRENT_REPOSITORY"
-          test "$SOURCE_CONCLUSION" = "failure" || \
-            test "$SOURCE_CONCLUSION" = "cancelled" || \
-            test "$SOURCE_CONCLUSION" = "timed_out"
-          [[ "$SOURCE_RUN_ID" =~ ^[1-9][0-9]{0,19}$ ]]
-          [[ "$SOURCE_RUN_ATTEMPT" =~ ^[1-9][0-9]{0,9}$ ]]
-          [[ "$SOURCE_HEAD_SHA" =~ ^[a-f0-9]{40}$ ]]
-          printf 'authorized=true\n' >> "$GITHUB_OUTPUT"
+          ALLOWED_SOURCE_CONCLUSIONS: failure,cancelled,timed_out
+          ALLOWED_SOURCE_EVENTS: workflow_dispatch
+          DISPLAY_TITLE_TEMPLATES: '[{"template":"Kin Resolve beta release run {run_id} attempt {run_attempt}"}]'
+          EXPECTED_SOURCE_WORKFLOW_NAME: Release Kin Resolve beta candidate
+          EXPECTED_SOURCE_WORKFLOW_PATH: .github/workflows/vercel-release.yml
+          REQUIRED_HEAD_BRANCH: main
+        run: node --experimental-strip-types scripts/authorize-workflow-run-source.mjs
 
       - name: Check out the exact failed release revision for staging authorization
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4

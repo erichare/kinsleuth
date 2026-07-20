@@ -72,36 +72,47 @@ describe("failed release containment workflow", () => {
   it("independently authorizes exact failed release provenance for staging without protected credentials", async () => {
     const contents = await workflow();
     const authorize = job(contents, "staging-authorize", "staging-contain");
-    const validation = authorize.indexOf(
-      "Validate the exact failed release event for staging containment"
+    const trustedMainCheckout = authorize.indexOf(
+      "Check out the trusted authorization gate from main"
     );
-    const checkout = authorize.indexOf(
-      "actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5"
+    const authorization = authorize.indexOf(
+      "Authorize the exact failed release event for staging containment"
+    );
+    const authorizationScript = authorize.indexOf("scripts/authorize-workflow-run-source.mjs");
+    const headShaCheckout = authorize.indexOf(
+      "Check out the exact failed release revision for staging authorization"
     );
     const ancestry = authorize.indexOf("git merge-base --is-ancestor");
 
-    expect(validation).toBeGreaterThan(0);
-    expect(checkout).toBeGreaterThan(validation);
-    expect(ancestry).toBeGreaterThan(checkout);
+    expect(trustedMainCheckout).toBeGreaterThan(0);
+    expect(authorization).toBeGreaterThan(trustedMainCheckout);
+    expect(authorizationScript).toBeGreaterThan(authorization);
+    expect(headShaCheckout).toBeGreaterThan(authorizationScript);
+    expect(ancestry).toBeGreaterThan(headShaCheckout);
     expect(authorize).toContain("github.event.workflow_run.conclusion == 'failure'");
     expect(authorize).toContain("github.event.workflow_run.conclusion == 'cancelled'");
     expect(authorize).toContain("github.event.workflow_run.conclusion == 'timed_out'");
-    expect(authorize).toContain('test "$EVENT_ACTION" = "completed"');
-    expect(authorize).toContain('test "$EVENT_REPOSITORY" = "$CURRENT_REPOSITORY"');
-    expect(authorize).toContain('test "$SOURCE_EVENT" = "workflow_dispatch"');
-    expect(authorize).toContain('test "$SOURCE_HEAD_BRANCH" = "main"');
-    expect(authorize).toContain('test "$SOURCE_HEAD_REPOSITORY" = "$CURRENT_REPOSITORY"');
-    expect(authorize).toContain('test "$SOURCE_RUN_REPOSITORY" = "$CURRENT_REPOSITORY"');
+    expect(authorize).toContain("ref: main");
+    expect(authorize).toContain("fetch-depth: 1");
+    expect(authorize).toContain("persist-credentials: false");
+    expect(authorize).toContain("id: event");
+    expect(authorize).toContain("ALLOWED_SOURCE_CONCLUSIONS: failure,cancelled,timed_out");
+    expect(authorize).toContain("ALLOWED_SOURCE_EVENTS: workflow_dispatch");
     expect(authorize).toContain(
-      'test "$SOURCE_DISPLAY_TITLE" = "Kin Resolve beta release run $SOURCE_RUN_ID attempt $SOURCE_RUN_ATTEMPT"'
+      "DISPLAY_TITLE_TEMPLATES: '[{\"template\":\"Kin Resolve beta release run {run_id} attempt {run_attempt}\"}]'"
     );
     expect(authorize).toContain(
-      'test "$SOURCE_WORKFLOW_PATH" = ".github/workflows/vercel-release.yml"'
+      "EXPECTED_SOURCE_WORKFLOW_NAME: Release Kin Resolve beta candidate"
     );
+    expect(authorize).toContain(
+      "EXPECTED_SOURCE_WORKFLOW_PATH: .github/workflows/vercel-release.yml"
+    );
+    expect(authorize).toContain("REQUIRED_HEAD_BRANCH: main");
+    expect(authorize).toContain("ref: ${{ github.event.workflow_run.head_sha }}");
     expect(authorize).toContain(
       'test "$(git rev-parse --verify \'HEAD^{commit}\')" = "$SOURCE_HEAD_SHA"'
     );
-    expect(authorize).toContain("authorized=true");
+    expect(authorize).toContain("authorized: ${{ steps.event.outputs.authorized }}");
     expect(authorize).not.toContain("secrets.");
     expect(authorize).not.toContain("environment: beta-staging-containment");
   });
