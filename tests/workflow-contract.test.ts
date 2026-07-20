@@ -94,7 +94,7 @@ describe("product CI workflow contract", () => {
     const contents = await workflow("ci.yml");
     const staticJob = job(contents, "static", "database");
     const workflowLint = staticJob.indexOf("Lint workflow definitions");
-    const dependencyInstall = staticJob.indexOf("npm ci");
+    const dependencyInstall = staticJob.indexOf("uses: ./.github/actions/setup-node-npm");
 
     expect(workflowLint).toBeGreaterThan(0);
     expect(dependencyInstall).toBeGreaterThan(0);
@@ -1406,12 +1406,16 @@ describe("marketing workflow release and intake modes", () => {
     for (const target of [ci, deploy, marketing]) {
       expect(target).toContain("fetch-depth: 0");
       expect(target).toContain("persist-credentials: false");
-      expect(target).toContain("Install launch-media validator dependencies");
       expect(target).toContain("Validate the committed synthetic launch media");
       expect(target).toContain("npm run launch:media:validate");
       expect(target).not.toMatch(
         /name: Validate the committed synthetic launch media[\s\S]{0,120}\n\s+if:/
       );
+    }
+    expect(ci).toContain("Set up Node.js and install launch-media validator dependencies");
+    expect(ci).toContain("uses: ./.github/actions/setup-node-npm");
+    for (const target of [deploy, marketing]) {
+      expect(target).toContain("Install launch-media validator dependencies");
     }
     expect(marketing.indexOf("npm run launch:media:validate")).toBeLessThan(
       marketing.indexOf("Prove both static intake exports before loading deploy credentials")

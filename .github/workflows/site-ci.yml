@@ -52,18 +52,13 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Set up Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - name: Set up Node.js and install launch-media validator dependencies
+        uses: ./.github/actions/setup-node-npm
         with:
-          node-version: 24
-          cache: npm
+          node-version: "24"
           cache-dependency-path: |
             package-lock.json
             site/package-lock.json
-
-      - name: Install launch-media validator dependencies
-        working-directory: .
-        run: npm ci
 
       - name: Install marketing dependencies
         run: npm ci
