@@ -562,7 +562,12 @@ if (marketingReleaseMode === "prelaunch") {
     }
   }
 }
-const pricingVisibleMarkup = pricing.replace(/<script[\s\S]*?<\/script>/g, "");
+let pricingVisibleMarkup = pricing;
+let previousPricingVisibleMarkup;
+do {
+  previousPricingVisibleMarkup = pricingVisibleMarkup;
+  pricingVisibleMarkup = pricingVisibleMarkup.replace(/<script[\s\S]*?<\/script>/g, "");
+} while (pricingVisibleMarkup !== previousPricingVisibleMarkup);
 if (/[$€£]\s?\d/.test(pricingVisibleMarkup) || /\d+\s?(?:\/|per\s+)(?:month|mo\b|year|yr\b|user|seat)/i.test(pricingVisibleMarkup)) {
   problems.push("Pricing page must not contain a price before hosted pricing is announced.");
 }
