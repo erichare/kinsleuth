@@ -8,6 +8,7 @@ import {
   resolveBrowserCanaryStateConfiguration,
   syntheticMutationAcknowledgement
 } from "@/scripts/browser-canary-contract";
+import { pinnedAction } from "./helpers/action-pins";
 
 const releaseSha = "a".repeat(40);
 const probeSecret = "p".repeat(43);
@@ -282,8 +283,8 @@ describe("browser canary source and artifact boundary", () => {
       ciSource.indexOf("\n  release-contract:")
     );
     expect(job).toContain("timeout-minutes: 30");
-    expect(job).toContain("actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5");
-    expect(job).toContain("actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020");
+    expect(job).toContain(pinnedAction("checkout"));
+    expect(job).toContain(pinnedAction("setupNode"));
     expect(job).toContain("git rev-parse HEAD");
     expect(job).toContain("npm run build");
     expect(job).toContain("npm run start -- --hostname 127.0.0.1 --port 3107");

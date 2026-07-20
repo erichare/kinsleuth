@@ -2,6 +2,8 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
+import { pinnedActionWithComment } from "./helpers/action-pins";
+
 async function workflow(): Promise<string> {
   return readFile(
     path.join(process.cwd(), ".github", "workflows", "public-demo-safety.yml"),
@@ -52,9 +54,7 @@ describe("failed public demo release safety workflow", () => {
     expect(revisionCheckout).toBeGreaterThan(cli);
     expect(ancestry).toBeGreaterThan(revisionCheckout);
     const trustedGate = authorize.slice(trustedCheckout, eventValidation);
-    expect(trustedGate).toContain(
-      "actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4"
-    );
+    expect(trustedGate).toContain(pinnedActionWithComment("checkout"));
     expect(trustedGate).toContain("ref: main");
     expect(trustedGate).toContain("fetch-depth: 1");
     expect(trustedGate).toContain("persist-credentials: false");

@@ -2,6 +2,8 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
+import { pinnedAction } from "./helpers/action-pins";
+
 const workflow = readFileSync(
   path.join(process.cwd(), ".github", "workflows", "recovery-cleanup.yml"),
   "utf8"
@@ -90,7 +92,7 @@ describe("failed recovery target janitor", () => {
     const protectedStart = workflow.indexOf("  cleanup:");
     const protectedJob = workflow.slice(protectedStart);
     const identities = protectedJob.indexOf("Validate current protected identities before immutable checkout");
-    const checkout = protectedJob.indexOf("actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5");
+    const checkout = protectedJob.indexOf(pinnedAction("checkout"));
     const firstSecret = protectedJob.indexOf("secrets.");
     expect(identities).toBeGreaterThan(-1);
     expect(identities).toBeLessThan(checkout);
