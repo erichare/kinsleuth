@@ -55,7 +55,17 @@ describe("public demo operating runbook", () => {
       "attributable tester quotes",
       "with written consent recorded",
       "first name and researcher type only",
-      "public-demo-launch-materials.md"
+      "public-demo-launch-materials.md",
+      "Plausible is receiving pageviews and the fixed custom events",
+      "produces zero Plausible events",
+      "one deliberate, scrubbed test error",
+      "no headers, cookies, query, body, or",
+      "disappear gracefully with the demo contained",
+      "`NOBYPASSRLS` attestation with the",
+      "signed deferral of the role flip",
+      "names Plausible, Cloudflare",
+      "`KINRESOLVE_MARKETING_DEMO_MODE=live`",
+      "then rolled back to `pending`"
     ]) {
       expect(runbook).toContain(marker);
     }

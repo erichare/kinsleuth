@@ -282,5 +282,22 @@ On failure:
 - [ ] Two or three attributable tester quotes are captured during the five-tester gate,
       with written consent recorded, attributed by first name and researcher type only,
       per [`public-demo-launch-materials.md`](public-demo-launch-materials.md).
+- [ ] Plausible is receiving pageviews and the fixed custom events on both
+      `kinresolve.com` and `demo.kinresolve.com`, and a full canary monitoring run
+      produces zero Plausible events.
+- [ ] Sentry received one deliberate, scrubbed test error from demo production, and the
+      recorded event was spot-checked to contain no headers, cookies, query, body, or
+      user context.
+- [ ] `GET /api/public/demo-stats` is live with its cache headers verified, and the
+      marketing counter was proven to disappear gracefully with the demo contained
+      (holding artifact serving).
+- [ ] The demo cell's runtime role passed the `NOBYPASSRLS` attestation with the
+      archive-scoped policies active, or a signed deferral of the role flip is recorded
+      here.
+- [ ] The deployed landing notice is the version that names Plausible, Cloudflare
+      Turnstile, and Sentry, and founder/legal review re-approved that exact wording.
+- [ ] The marketing flip was rehearsed end to end: `KINRESOLVE_MARKETING_DEMO_MODE=live`
+      on a preview deployment (repository variable plus `site-deploy` input), hero and
+      counter verified, then rolled back to `pending`.
 - [ ] Founder/legal review approves the fictional-data notice, privacy wording, feedback
       fields, and the August 13, 2026 launch (or August 20 contingency).
