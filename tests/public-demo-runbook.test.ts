@@ -33,7 +33,11 @@ describe("public demo operating runbook", () => {
       "demo-containment",
       "demo-monitoring",
       "holding -> candidate -> public -> rollback -> holding -> same-SHA re-promotion",
-      "Five unfamiliar testers"
+      "Five unfamiliar testers",
+      "attributable tester quotes",
+      "with written consent recorded",
+      "first name and researcher type only",
+      "public-demo-launch-materials.md"
     ]) {
       expect(runbook).toContain(marker);
     }
@@ -48,7 +52,12 @@ describe("public demo operating runbook", () => {
     expect(readme).toContain("legacy staging demo controller is retired");
     expect(readme).not.toContain("may open\n`demo.kinresolve.com`");
     expect(domains).toContain("Always-on isolated synthetic public demo");
-    expect(domains).toContain("Primary call to action:** Try Kin Resolve");
+    expect(domains).toContain("Primary call to action (demo live):** Solve the passenger mystery");
+    expect(domains).toContain("Generic product call to action:** Try Kin Resolve");
+    expect(domains).toContain(
+      "Demo-live claims — publishable only after the public-demo runbook gates pass"
+    );
+    expect(domains).toContain("Visitor-facing pages carry one status line each");
     expect(holding).toContain("`public-demo`");
     expect(holding).toContain("DEMO_HOLDING_DEPLOYMENT_ID=dpl_");
   });

@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security or privacy report
+    url: https://github.com/erichare/kinresolve/security/policy
+    about: >-
+      Do not file a public issue for security reports or privacy concerns about
+      published data. Email the maintainer instead — the security policy has the
+      private reporting instructions.

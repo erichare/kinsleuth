@@ -1,9 +1,10 @@
 # Private-beta launch materials
 
 - **Status:** Prelaunch copy and production brief; not authorization to claim launch
-- **Updated:** 2026-07-15
+- **Updated:** 2026-07-20
 - **Product boundary:** [`hosted-beta-contract.md`](hosted-beta-contract.md)
 - **Legal handoff:** [`private-beta-legal-handoff.md`](private-beta-legal-handoff.md)
+- **Demo launch:** [`public-demo-launch-materials.md`](public-demo-launch-materials.md)
 
 This package gives marketing, product, and operations one claim set for applications,
 launch, maintenance, and incident states. All media must use the fictional
@@ -44,6 +45,9 @@ proved.
 
 ### Hero
 
+Once the public demo is live, the homepage hero is demo-first; the approved demo message
+set lives in [`public-demo-launch-materials.md`](public-demo-launch-materials.md).
+
 **Headline**
 
 > Resolve the questions your family tree cannot answer.
@@ -54,11 +58,15 @@ proved.
 > steps together in one private genealogy workspace—so uncertainty stays visible until
 > the evidence earns a conclusion.
 
-**Primary action:** Apply for the private beta
+**Primary action (after the demo-live flip):** Solve the passenger mystery (links to the public demo)
 
-**Secondary action:** Work the fictional research challenge
+**Primary support line:** No signup · about 2 minutes · every record is fictional.
 
-**Status note:** Use the exact current prelaunch message above.
+**Secondary action (after the demo-live flip):** Apply for the private beta
+
+**Status note:** Use the exact current prelaunch message above. Before the demo-live flip,
+keep the generic product call to action (Try Kin Resolve) primary and the beta application
+secondary; the demo-first hero requires the public-demo runbook gates to pass.
 
 ### Six-part product tour
 
@@ -232,6 +240,20 @@ approved for capture.
 > tree: sources, research cases, competing hypotheses, reviewable GEDCOM changes, and a
 > clear export path. Private beta applications are open; invitations have not started.
 > Apply without sending family records: https://kinresolve.com/beta/
+
+### Demo-launch
+
+> The Kin Resolve public demo is live. Solve a fictional records mystery in about two
+> minutes—no signup, and every record is invented. Kin Resolve is an open-source,
+> evidence-led genealogy workspace; private beta applications are open, and invitations
+> have not started. Try it: https://demo.kinresolve.com/
+
+Do not publish the demo-launch variant until every external gate in
+[`public-demo-runbook.md`](public-demo-runbook.md) has recorded evidence and the
+launch-day flip checklist in
+[`public-demo-launch-materials.md`](public-demo-launch-materials.md) has verified the
+production hero. The variant claims only that the demo is live; it never implies hosted
+invitations, open signup, or API availability.
 
 ### Launch-only
 

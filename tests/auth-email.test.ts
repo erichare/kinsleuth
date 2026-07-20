@@ -67,6 +67,9 @@ function setBaseAuthEnvironment(): void {
 beforeEach(() => {
   vi.resetModules();
   vi.restoreAllMocks();
+  // Vitest 4: restoreAllMocks no longer clears vi.fn() call history, so the
+  // hoisted module mocks must be cleared explicitly between tests.
+  vi.clearAllMocks();
   vi.unstubAllEnvs();
   authModuleMocks.after.mockImplementation(() => undefined);
   authModuleMocks.betterAuth.mockImplementation((options: unknown) => ({ options }));

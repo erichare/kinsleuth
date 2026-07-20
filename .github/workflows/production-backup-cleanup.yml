@@ -35,35 +35,34 @@ jobs:
     env:
       BACKUP_CLEANUP_LEASE_ARTIFACT_NAME: production-backup-cleanup-lease-${{ github.event.workflow_run.run_attempt }}
       EXPECTED_SOURCE_WORKFLOW_ID: ${{ vars.PRODUCTION_BACKUP_WORKFLOW_ID }}
+      REQUIRE_EXPECTED_SOURCE_WORKFLOW_ID: "true"
       SOURCE_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
       SOURCE_RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
       SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}
 
     steps:
-      - name: Validate the exact failed production backup event without credentials
+      - name: Check out the trusted authorization gate from main
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: main
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up Node.js for the credential-free authorization gate
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+
+      - name: Authorize the exact failed production backup event without credentials
         shell: bash
+        env:
+          ALLOWED_SOURCE_CONCLUSIONS: failure,cancelled,timed_out
+          ALLOWED_SOURCE_EVENTS: workflow_dispatch
+          EXPECTED_SOURCE_WORKFLOW_PATH: .github/workflows/production-backup.yml
+          REQUIRED_HEAD_BRANCH: main
         run: |
           set -euo pipefail
-          node - <<'NODE'
-          const { readFileSync } = require("node:fs");
-          const event = JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH, "utf8"));
-          const run = event.workflow_run;
-          if (
-            event.action !== "completed" ||
-            event.repository?.full_name !== process.env.GITHUB_REPOSITORY ||
-            run?.repository?.full_name !== process.env.GITHUB_REPOSITORY ||
-            run?.head_repository?.full_name !== process.env.GITHUB_REPOSITORY ||
-            run?.path !== ".github/workflows/production-backup.yml" ||
-            !/^[1-9][0-9]{0,19}$/.test(process.env.EXPECTED_SOURCE_WORKFLOW_ID ?? "") ||
-            String(run?.workflow_id ?? "") !== process.env.EXPECTED_SOURCE_WORKFLOW_ID ||
-            run?.event !== "workflow_dispatch" ||
-            run?.head_branch !== "main" ||
-            !/^[1-9][0-9]{0,19}$/.test(String(run?.id ?? "")) ||
-            !/^[1-9][0-9]{0,19}$/.test(String(run?.run_attempt ?? "")) ||
-            !/^[a-f0-9]{40}$/.test(run?.head_sha ?? "") ||
-            !["failure", "cancelled", "timed_out"].includes(run?.conclusion)
-          ) process.exit(1);
-          NODE
+          node --experimental-strip-types scripts/authorize-workflow-run-source.mjs
           work="${RUNNER_TEMP}/kinresolve-production-backup-cleanup-authorization"
           install -d -m 700 "${work}"
           echo "BACKUP_CLEANUP_AUTH_WORK=${work}" >> "${GITHUB_ENV}"

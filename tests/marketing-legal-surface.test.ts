@@ -13,7 +13,8 @@ const files = {
   contract: "docs/hosted-beta-contract.md",
   brand: "docs/brand-and-domain.md",
   legalHandoff: "docs/private-beta-legal-handoff.md",
-  launchMaterials: "docs/private-beta-launch-materials.md"
+  launchMaterials: "docs/private-beta-launch-materials.md",
+  demoLaunchMaterials: "docs/public-demo-launch-materials.md"
 } as const;
 
 async function contents(...paths: string[]) {
@@ -125,9 +126,55 @@ describe("private-beta marketing and legal surface", () => {
     expect(materials).toMatch(/## Screenshot and demo brief/);
     expect(materials).toMatch(/## Ninety-second synthetic demo/);
     expect(materials).toMatch(/### Prelaunch/);
+    expect(materials).toMatch(/### Demo-launch/);
     expect(materials).toMatch(/### Launch-only/);
     expect(materials).toMatch(/## Public link readiness/);
     expect(materials).toMatch(/## Claim switch checklist/);
     expect(materials).toMatch(/Do not publish launch-only copy until the signed launch record/i);
+    expect(materials).toMatch(/Do not publish the demo-launch variant until every external gate/i);
+    expect(materials).toContain("public-demo-launch-materials.md");
+    expect(materials).toContain(
+      "**Primary action (after the demo-live flip):** Solve the passenger mystery",
+    );
+    expect(materials).toContain("**Primary support line:** No signup · about 2 minutes · every record is fictional.");
+    expect(materials).toContain(
+      "**Secondary action (after the demo-live flip):** Apply for the private beta",
+    );
+  });
+
+  it("keeps demo-launch materials gated with an exact message set, counter contract, and flip checklist", async () => {
+    const demo = await readFile(files.demoLaunchMaterials, "utf8");
+
+    expect(demo).toMatch(/not authorization to claim the demo is live/i);
+    expect(demo).toContain("## Approved demo-live message set");
+    expect(demo).toContain("Solve the passenger mystery");
+    expect(demo).toContain("No signup · about 2 minutes · every record is fictional.");
+    expect(demo).toMatch(/\*\*Forbidden phrases\.\*\*/);
+    expect(demo).toMatch(/“the beta is open,”/);
+    expect(demo).toMatch(/“production-ready,”/);
+    expect(demo).toMatch(/any hosted-availability claim/);
+    expect(demo).toContain("## Show HN draft");
+    expect(demo).toContain("### Prepared first comment (founder)");
+    expect(demo).toContain("## Genealogy community variants");
+    expect(demo).toMatch(/I built a fictional records mystery — can you solve it\?/);
+    expect(demo).toMatch(/r\/Genealogy/);
+    expect(demo).toMatch(/r\/opensource/);
+    expect(demo).toMatch(/r\/selfhosted/);
+    expect(demo).toMatch(/self-promotion rules/);
+    expect(demo).toContain("## Tester quotes and usage counter");
+    expect(demo).toMatch(/written consent/);
+    expect(demo).toMatch(/first name plus researcher type/);
+    expect(demo).toContain("GET https://demo.kinresolve.com/api/public/demo-stats");
+    expect(demo).toContain('{"mysteriesSolved": <number>, "since": <ISO-timestamp>}');
+    expect(demo).toContain("cache-control: public, s-maxage=60, stale-while-revalidate=300");
+    expect(demo).toContain("access-control-allow-origin: https://kinresolve.com");
+    expect(demo).toContain("## Launch-day flip checklist");
+    expect(demo).toContain("KINRESOLVE_MARKETING_DEMO_MODE=live");
+    expect(demo).toContain("KINRESOLVE_MARKETING_DEMO_MODE=pending");
+    expect(demo).toContain("gh variable set KINRESOLVE_MARKETING_DEMO_MODE --body live");
+    expect(demo).toContain("gh variable set KINRESOLVE_MARKETING_DEMO_MODE --body pending");
+    expect(demo).toMatch(/silently\s+rebuild `kinresolve\.com` with the pending homepage copy/);
+    expect(demo).toMatch(/invitation-only/);
+    expect(demo).toMatch(/`contain` action/);
   });
 });

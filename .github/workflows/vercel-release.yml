@@ -703,6 +703,13 @@ jobs:
               {"table":"beta_worker_heartbeats","select":true,"insert":true,"update":true,"delete":false},
               {"table":"api_tokens","select":true,"insert":true,"update":true,"delete":false},
               {"table":"api_rate_limit_buckets","select":true,"insert":true,"update":true,"delete":true},
+              {"table":"public_demo_capacity","select":true,"insert":true,"update":true,"delete":false},
+              {"table":"public_demo_sessions","select":true,"insert":true,"update":true,"delete":true},
+              {"table":"public_demo_rate_limits","select":true,"insert":true,"update":true,"delete":true},
+              {"table":"public_demo_generations","select":true,"insert":true,"update":true,"delete":true},
+              {"table":"public_demo_ai_attempts","select":true,"insert":true,"update":true,"delete":true},
+              {"table":"public_demo_events","select":true,"insert":true,"update":false,"delete":true},
+              {"table":"public_demo_stats","select":true,"insert":false,"update":true,"delete":false},
               {"table":"security_events","select":false,"insert":true,"update":false,"delete":false}
             ] and
             all(.managedTablePrivileges[];
@@ -1887,6 +1894,13 @@ jobs:
               {"table":"beta_worker_heartbeats","select":true,"insert":true,"update":true,"delete":false},
               {"table":"api_tokens","select":true,"insert":true,"update":true,"delete":false},
               {"table":"api_rate_limit_buckets","select":true,"insert":true,"update":true,"delete":true},
+              {"table":"public_demo_capacity","select":true,"insert":true,"update":true,"delete":false},
+              {"table":"public_demo_sessions","select":true,"insert":true,"update":true,"delete":true},
+              {"table":"public_demo_rate_limits","select":true,"insert":true,"update":true,"delete":true},
+              {"table":"public_demo_generations","select":true,"insert":true,"update":true,"delete":true},
+              {"table":"public_demo_ai_attempts","select":true,"insert":true,"update":true,"delete":true},
+              {"table":"public_demo_events","select":true,"insert":true,"update":false,"delete":true},
+              {"table":"public_demo_stats","select":true,"insert":false,"update":true,"delete":false},
               {"table":"security_events","select":false,"insert":true,"update":false,"delete":false}
             ] and
             all(.managedTablePrivileges[];
@@ -2777,6 +2791,7 @@ jobs:
     permissions:
       contents: read
     env:
+      KINRESOLVE_MARKETING_DEMO_MODE: ${{ vars.KINRESOLVE_MARKETING_DEMO_MODE || 'pending' }}
       KINRESOLVE_MARKETING_RELEASE_MODE: ${{ inputs.release_mode }}
       KINRESOLVE_MARKETING_SOURCE_COMMIT_SHA: ${{ inputs.release_commit }}
     defaults:
@@ -2828,6 +2843,7 @@ jobs:
       - name: Prove both static intake exports before loading deploy credentials
         run: |
           set -euo pipefail
+          [[ "$KINRESOLVE_MARKETING_DEMO_MODE" =~ ^(pending|live)$ ]]
           rm -rf .next out
           KINRESOLVE_MARKETING_BETA_APPLICATION_MODE=mailto npm run verify
           rm -rf .next out
@@ -2870,9 +2886,10 @@ jobs:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: vercel deploy --prebuilt --prod --yes
 
-      - name: Prove the canonical marketing release and form modes
+      - name: Prove the canonical marketing release, form, and demo modes
         timeout-minutes: 5
         env:
+          EXPECTED_MARKETING_DEMO_MODE: ${{ vars.KINRESOLVE_MARKETING_DEMO_MODE || 'pending' }}
           EXPECTED_MARKETING_MODE: ${{ inputs.beta_intake_enabled && 'application' || 'mailto' }}
           EXPECTED_MARKETING_RELEASE_MODE: ${{ inputs.release_mode }}
         run: |
@@ -2880,9 +2897,13 @@ jobs:
           for attempt in $(seq 1 20); do
             if curl --connect-timeout 10 --max-time 30 --fail --silent --show-error \
                 https://kinresolve.com/beta/ --output "$RUNNER_TEMP/marketing-beta.html" \
+              && curl --connect-timeout 10 --max-time 30 --fail --silent --show-error \
+                https://kinresolve.com/ --output "$RUNNER_TEMP/marketing-home.html" \
               && EXPECTED_MARKETING_MODE="$EXPECTED_MARKETING_MODE" \
                 EXPECTED_MARKETING_RELEASE_MODE="$EXPECTED_MARKETING_RELEASE_MODE" \
-                HTML_FILE="$RUNNER_TEMP/marketing-beta.html" node --input-type=module <<'NODE'
+                EXPECTED_MARKETING_DEMO_MODE="$EXPECTED_MARKETING_DEMO_MODE" \
+                HTML_FILE="$RUNNER_TEMP/marketing-beta.html" \
+                HOME_HTML_FILE="$RUNNER_TEMP/marketing-home.html" node --input-type=module <<'NODE'
           import { readFile } from "node:fs/promises";
           const html = await readFile(process.env.HTML_FILE, "utf8");
           const application = html.includes('action="https://app.kinresolve.com/api/public/beta-applications"')
@@ -2906,9 +2927,14 @@ jobs:
           if (!expectedClaims
             || !html.includes(`data-marketing-release-mode="${expectedReleaseMode}"`)
             || expectedClaims.some((claim) => !html.includes(claim))) process.exit(1);
+          const home = await readFile(process.env.HOME_HTML_FILE, "utf8");
+          const demoHeroCta = "Solve the passenger mystery";
+          const expectedDemoMode = process.env.EXPECTED_MARKETING_DEMO_MODE;
+          if (expectedDemoMode !== "pending" && expectedDemoMode !== "live") process.exit(1);
+          if ((expectedDemoMode === "live") !== home.includes(demoHeroCta)) process.exit(1);
           NODE
             then
-              rm -f "$RUNNER_TEMP/marketing-beta.html"
+              rm -f "$RUNNER_TEMP/marketing-beta.html" "$RUNNER_TEMP/marketing-home.html"
               exit 0
             fi
             if [[ "$attempt" = 20 ]]; then exit 1; fi
@@ -2919,7 +2945,7 @@ jobs:
         if: always()
         run: |
           rm -rf .vercel .next out
-          rm -f "$RUNNER_TEMP/marketing-beta.html"
+          rm -f "$RUNNER_TEMP/marketing-beta.html" "$RUNNER_TEMP/marketing-home.html"
 
   publish-release:
     name: Publish stable GitHub release

@@ -28,7 +28,7 @@ function list(...runs: unknown[]): WorkflowRunList {
 }
 
 function boundSourceRun(
-  source: "release" | "recovery" | "holding" | "demo" | "public-demo",
+  source: "release" | "recovery" | "holding" | "public-demo",
   id: number,
   attempt: number,
   overrides: Record<string, unknown> = {}
@@ -48,11 +48,6 @@ function boundSourceRun(
       name: "Deploy Kin Resolve static holding page",
       path: ".github/workflows/vercel-holding.yml",
       title: `Kin Resolve static holding production run ${id} attempt ${attempt}`
-    },
-    demo: {
-      name: "Operate Kin Resolve synthetic staging demo session",
-      path: ".github/workflows/staging-demo-session.yml",
-      title: `Kin Resolve staging demo open run ${id} attempt ${attempt}`
     },
     "public-demo": {
       name: "Release Kin Resolve public demo",
@@ -74,7 +69,7 @@ function boundSourceRun(
 }
 
 function currentSourceBinding(
-  source: "release" | "recovery" | "holding" | "demo",
+  source: "release" | "recovery" | "holding",
   id: number,
   attempt: number
 ) {
@@ -100,12 +95,10 @@ function input(overrides: Partial<FuturePublicDemoSafetyInput> = {}): FuturePubl
     releaseRuns: list(),
     recoveryRuns: list(),
     holdingRuns: list(),
-    demoRuns: list(),
     publicDemoRuns: list(),
     containmentRuns: list(),
     cleanupRuns: list(),
     holdingSafetyRuns: list(),
-    demoSafetyRuns: list(),
     publicDemoSafetyRuns: list(),
     ...overrides
   };
@@ -267,27 +260,6 @@ describe("release safety queue", () => {
       holdingSafetyRuns: list(exactReceipt),
       currentSourceRun: currentSourceBinding("holding", 820, 2),
       priorCurrentRunAttempts: [{ source: "holding", run: priorHoldingAttempt }]
-    }))).toEqual({ safe: true, issues: [] });
-  });
-
-  it("requires an exact successful close receipt for every failed demo session attempt", () => {
-    const failed = run({
-      id: 821,
-      conclusion: "failure",
-      display_title: "Kin Resolve staging demo open run 821 attempt 1"
-    });
-    expect(assessReleaseSafetyQueue(input({ demoRuns: list(failed) }))).toMatchObject({
-      safe: false,
-      issues: [expect.objectContaining({ source: "demo", runId: "821", runAttempt: "1" })]
-    });
-    const receipt = run({
-      id: 921,
-      event: "workflow_run",
-      display_title: "Close demo session run 821 attempt 1"
-    });
-    expect(assessReleaseSafetyQueue(input({
-      demoRuns: list(failed),
-      demoSafetyRuns: list(receipt)
     }))).toEqual({ safe: true, issues: [] });
   });
 
@@ -463,10 +435,6 @@ describe("release safety queue", () => {
     expect(assessReleaseSafetyQueue(input({
       holdingSafetyRuns: list(holdingFailed)
     })).safe).toBe(false);
-    const demoSafetyFailed = run({ id: 906, conclusion: "failure", event: "workflow_run" });
-    expect(assessReleaseSafetyQueue(input({
-      demoSafetyRuns: list(demoSafetyFailed)
-    })).safe).toBe(false);
     const skipped = run({ id: 903, conclusion: "skipped", event: "workflow_run" });
     expect(assessReleaseSafetyQueue(input({ cleanupRuns: list(skipped) })).safe).toBe(true);
   });
@@ -487,12 +455,8 @@ describe("release safety queue", () => {
     );
     expect(script).toContain('holding: "vercel-holding.yml"');
     expect(script).toContain('holdingSafety: "holding-safety.yml"');
-    expect(script).toContain('demo: "staging-demo-session.yml"');
-    expect(script).toContain('demoSafety: "staging-demo-safety.yml"');
     expect(script).toContain('workflowFiles.holding, "workflow_dispatch"');
     expect(script).toContain('workflowFiles.holdingSafety, "workflow_run"');
-    expect(script).toContain('workflowFiles.demo, "workflow_dispatch"');
-    expect(script).toContain('workflowFiles.demoSafety, "workflow_run"');
     expect(script).toContain('workflowFiles.publicDemo, "workflow_dispatch"');
     expect(script).toContain('workflowFiles.publicDemoSafety, "workflow_run"');
     expect(script).toContain('const safetyContractEpoch = "2026-07-14T00:00:00Z"');

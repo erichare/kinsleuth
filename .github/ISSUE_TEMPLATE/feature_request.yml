@@ -1,0 +1,34 @@
+name: Feature request
+description: Suggest an improvement to Kin Resolve.
+labels: ["enhancement"]
+body:
+  - type: dropdown
+    id: deployment
+    attributes:
+      label: Deployment flavor
+      description: Which deployment is this about?
+      options:
+        - Self-hosted (local dev or Docker Compose)
+        - Public demo / marketing site
+        - Both / not deployment-specific
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What are you trying to do that Kin Resolve makes hard today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What would you like to happen? Keep it focused — small, reviewable changes land faster.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Workarounds you tried or other approaches that could solve the same problem.

@@ -16,6 +16,14 @@ on:
         options:
           - mailto
           - application
+      demo_mode:
+        description: Explicit static public-demo mode; live is the one-input public demo launch flip
+        required: true
+        type: choice
+        default: pending
+        options:
+          - pending
+          - live
 
 permissions:
   contents: read
@@ -35,6 +43,7 @@ jobs:
     env:
       DEPLOY_ENV: ${{ inputs.production && 'production' || 'preview' }}
       KINRESOLVE_MARKETING_BETA_APPLICATION_MODE: ${{ inputs.beta_application_mode }}
+      KINRESOLVE_MARKETING_DEMO_MODE: ${{ inputs.demo_mode }}
       KINRESOLVE_MARKETING_RELEASE_MODE: prelaunch
     steps:
       - name: Check out source

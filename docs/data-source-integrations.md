@@ -120,6 +120,13 @@ They map to stable Kin Resolve entity identifiers; an xref is not a globally uni
 person identifier. This prevents unrelated trees that both contain `@I1@` from being
 treated as the same source identity.
 
+Raw GEDCOM records, xrefs, custom tags, source references, and checksums remain
+available for provenance. Full-archive GEDCOM exports carry curation flags as
+compatibility-preserved custom `_KS_` tags, and the explicit legacy Kin Resolve
+migration path can restore those tags; the provider-neutral refresh workflow treats
+incoming publication controls as untrusted and always creates new people private and
+unpublished.
+
 ## Package and media safety
 
 The package inspector accepts a single GEDCOM directly or exactly one GEDCOM inside a

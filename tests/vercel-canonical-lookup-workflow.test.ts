@@ -6,8 +6,7 @@ const workflowNames = [
   "vercel-holding.yml",
   "vercel-release.yml",
   "release-containment.yml",
-  "recovery-evidence.yml",
-  "staging-demo-safety.yml"
+  "recovery-evidence.yml"
 ] as const;
 
 const canonicalModes = ["holding", "containment", "promoted"] as const;
@@ -53,14 +52,4 @@ describe("Vercel canonical hostname lookup workflow contract", () => {
       }
     }
   );
-
-  it("keeps the retired staging demo controller free of deployment validators", async () => {
-    const contents = await readFile(
-      path.join(process.cwd(), ".github", "workflows", "staging-demo-session.yml"),
-      "utf8"
-    );
-
-    expect(contents).not.toMatch(canonicalInvocation);
-    expect(contents).not.toContain("VERCEL_TOKEN");
-  });
 });

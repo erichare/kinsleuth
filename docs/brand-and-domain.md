@@ -1,6 +1,6 @@
 # Kin Resolve brand and domain contract
 
-Last updated: 2026-07-16
+Last updated: 2026-07-20
 
 This document keeps the public name, URLs, claims, and legacy technical identifiers consistent while the product moves from KinSleuth to Kin Resolve.
 
@@ -12,8 +12,14 @@ This document keeps the public name, URLs, claims, and legacy technical identifi
 - **Repository:** `https://github.com/erichare/kinresolve`
 - **Tagline:** Evidence-led genealogy research.
 - **Primary message:** Resolve the questions your family tree cannot answer.
-- **Primary call to action:** Try Kin Resolve
+- **Primary call to action (demo live):** Solve the passenger mystery
+- **Generic product call to action:** Try Kin Resolve
 - **Secondary call to action:** Apply for the private beta
+
+The demo-live primary call to action becomes primary only after the public-demo runbook
+gates pass; until then, the generic product call to action remains primary. “Try Kin
+Resolve” stays the generic product call to action wherever a surface is not specifically
+promoting the live demo mystery.
 
 The working visual direction pairs archival warmth with research rigor: warm paper, forest green, restrained rust and brass accents, editorial typography, and evidence-led rather than nostalgic imagery.
 
@@ -63,6 +69,25 @@ Claims that must be labeled **in development** or **exploring**:
 - Agent-assisted record search
 
 Do not claim that the hosted product is live until `app.kinresolve.com` and every launch gate prove it. Do not claim production readiness, open hosted signup, shared multi-family tenancy, bundled hosted AI, audit logging, GPS certification, automated conflict resolution, GDPR compliance, unlimited GEDCOM size, guaranteed backups, Ancestry sync/approval, or production-grade hosted DNA handling.
+
+### Demo-live claims — publishable only after the public-demo runbook gates pass
+
+Once every external gate in [`public-demo-runbook.md`](public-demo-runbook.md) has
+recorded evidence and `demo.kinresolve.com` serves the promoted demo, these additional
+claims become safe:
+
+- The public demo at `demo.kinresolve.com` is live: solve the fictional Mercer–March
+  passenger mystery in about two minutes, with no signup, in a disposable workspace that
+  expires after 24 hours.
+- Every demo record is fictional Hartwell–Mercer data; the demo accepts no uploads and no
+  real family data.
+- The demo changes nothing about hosted availability: the hosted private beta remains
+  invitation-only, and applications continue through the public application page.
+
+Demo-live wording never implies open hosted signup, production readiness, or hosted API
+availability. Visitor-facing pages carry one status line each; the full claims discipline
+lives in this document, and the approved demo-live message set lives in
+[`public-demo-launch-materials.md`](public-demo-launch-materials.md).
 
 ## Compatibility contract
 

@@ -21,9 +21,14 @@ describe("failed public demo release safety workflow", () => {
   it("authorizes only exact failed public-demo workflow attempts before protected credentials", async () => {
     const contents = await workflow();
     const authorize = job(contents, "authorize", "contain");
+    const trustedCheckout = authorize.indexOf("Check out the trusted authorization gate from main");
+    const nodeSetup = authorize.indexOf(
+      "Set up Node.js for the credential-free authorization gate"
+    );
     const eventValidation = authorize.indexOf("Validate the exact failed public demo release event");
-    const checkout = authorize.indexOf(
-      "actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5"
+    const cli = authorize.indexOf("scripts/authorize-workflow-run-source.mjs");
+    const revisionCheckout = authorize.indexOf(
+      "Check out the exact failed public demo release revision"
     );
     const ancestry = authorize.indexOf("git merge-base --is-ancestor");
 
@@ -40,28 +45,36 @@ describe("failed public demo release safety workflow", () => {
     expect(authorize).toContain("github.event.workflow_run.conclusion == 'failure'");
     expect(authorize).toContain("github.event.workflow_run.conclusion == 'cancelled'");
     expect(authorize).toContain("github.event.workflow_run.conclusion == 'timed_out'");
-    expect(eventValidation).toBeGreaterThan(0);
-    expect(checkout).toBeGreaterThan(eventValidation);
-    expect(ancestry).toBeGreaterThan(checkout);
-    expect(authorize).toContain('test "$EVENT_ACTION" = "completed"');
-    expect(authorize).toContain('test "$EVENT_REPOSITORY" = "$CURRENT_REPOSITORY"');
-    expect(authorize).toContain(
-      'test "$SOURCE_WORKFLOW_NAME" = "Release Kin Resolve public demo"'
+    expect(trustedCheckout).toBeGreaterThan(0);
+    expect(nodeSetup).toBeGreaterThan(trustedCheckout);
+    expect(eventValidation).toBeGreaterThan(nodeSetup);
+    expect(cli).toBeGreaterThan(eventValidation);
+    expect(revisionCheckout).toBeGreaterThan(cli);
+    expect(ancestry).toBeGreaterThan(revisionCheckout);
+    const trustedGate = authorize.slice(trustedCheckout, eventValidation);
+    expect(trustedGate).toContain(
+      "actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4"
     );
-    expect(authorize).toContain('test "$SOURCE_WORKFLOW_NAME" = "$SOURCE_DISPLAY_TITLE"');
+    expect(trustedGate).toContain("ref: main");
+    expect(trustedGate).toContain("fetch-depth: 1");
+    expect(trustedGate).toContain("persist-credentials: false");
     expect(authorize).toContain(
-      'test "$SOURCE_WORKFLOW_PATH" = ".github/workflows/public-demo-release.yml"'
+      "run: node --experimental-strip-types scripts/authorize-workflow-run-source.mjs"
     );
-    expect(authorize).toContain('test "$SOURCE_EVENT" = "workflow_dispatch"');
-    expect(authorize).toContain('test "$SOURCE_HEAD_BRANCH" = "main"');
-    expect(authorize).toContain('test "$SOURCE_HEAD_REPOSITORY" = "$CURRENT_REPOSITORY"');
-    expect(authorize).toContain('test "$SOURCE_RUN_REPOSITORY" = "$CURRENT_REPOSITORY"');
-    for (const action of ["release", "rollback", "contain"]) {
-      expect(authorize).toContain(
-        `"Public demo ${action} $SOURCE_HEAD_SHA run $SOURCE_RUN_ID attempt $SOURCE_RUN_ATTEMPT"`
-      );
-    }
-    expect(authorize).toContain("authorized=true");
+    expect(authorize).toContain("ALLOWED_SOURCE_CONCLUSIONS: failure,cancelled,timed_out");
+    expect(authorize).toContain("ALLOWED_SOURCE_EVENTS: workflow_dispatch");
+    expect(authorize).toContain(
+      "EXPECTED_SOURCE_WORKFLOW_NAME: Release Kin Resolve public demo"
+    );
+    expect(authorize).toContain(
+      "EXPECTED_SOURCE_WORKFLOW_PATH: .github/workflows/public-demo-release.yml"
+    );
+    expect(authorize).toContain("REQUIRED_HEAD_BRANCH: main");
+    expect(authorize).toContain(
+      '[{"template":"Public demo {action} {head_sha} run {run_id} attempt {run_attempt}","captures":{"action":["release","rollback","contain"]}}]'
+    );
+    expect(authorize).toContain("action: ${{ steps.event.outputs.action }}");
+    expect(authorize).toContain("authorized: ${{ steps.event.outputs.authorized }}");
     expect(authorize).not.toContain("secrets.");
     expect(authorize).not.toMatch(/^    environment:/m);
   });

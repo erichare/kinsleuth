@@ -1,0 +1,49 @@
+name: Bug report
+description: Report a defect in Kin Resolve.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Never include real genealogy data (GEDCOM exports, DNA match files, family records) in an issue — use synthetic examples only. For security or privacy reports, do not file a public issue; follow the private reporting instructions in [SECURITY.md](https://github.com/erichare/kinresolve/blob/main/SECURITY.md).
+  - type: dropdown
+    id: deployment
+    attributes:
+      label: Deployment flavor
+      description: Where did you hit the bug?
+      options:
+        - Self-hosted (local dev or Docker Compose)
+        - Public demo / marketing site
+        - Both / not deployment-specific
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      description: Release tag (for example `v0.17.4`) or commit SHA.
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. ...
+        2. ...
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant log output
+      description: Redact secrets and anything derived from real family data.
+      render: shell

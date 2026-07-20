@@ -1,7 +1,8 @@
 # Static maintenance holding deployment
 
 Kin Resolve keeps its maintenance target in the repository as a deterministic Vercel
-Build Output API v3 artifact. It is a deliberately separate deployment surface from the
+Build Output API v3 artifact. It is the rollback target for the release procedure in
+[releases.md](releases.md) and a deliberately separate deployment surface from the
 Next.js product:
 
 - `GET` or `HEAD /login` (and `/`) renders the checked-in private-beta holding page.

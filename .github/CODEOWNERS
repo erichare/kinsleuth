@@ -1,0 +1,8 @@
+# Default owner for every file in the repository.
+* @erichare
+
+# Release-critical surfaces keep explicit rows so their ownership stays
+# visible even if the default rule is ever narrowed.
+/.github/workflows/ @erichare
+/db/ @erichare
+/lib/release-* @erichare

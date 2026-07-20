@@ -7,7 +7,8 @@ marketing site and `app.kinresolve.com` remains private-beta holding.
 
 This runbook is the source of truth for the synthetic Hartwell–Mercer public demo. It does
 not authorize real-family data, visitor uploads, accounts, email, object storage, arbitrary
-prompts, arbitrary text, or external integrations.
+prompts, arbitrary text, or external integrations. The staging and production product
+release procedure lives in [releases.md](releases.md).
 
 ## Control-plane prerequisites
 
@@ -21,10 +22,11 @@ prompts, arbitrary text, or external integrations.
 3. Keep `demo.kinresolve.com` attached only to `kinresolve-demo`. The holding workflow can
    move it atomically from the marketing project. Marketing deploys fail unless they prove
    the demo project owns the hostname and marketing does not.
-4. Manually disable **Operate Kin Resolve synthetic staging demo session** in GitHub. Set
-   repository variable `KINRESOLVE_STAGING_DEMO_WORKFLOW_ID` to its immutable numeric ID.
-   The checked-in workflow is a credential-free tombstone, but release remains blocked
-   unless GitHub reports it as `disabled_manually` with no active run.
+4. Keep the retired **Operate Kin Resolve synthetic staging demo session** workflow manually
+   disabled in GitHub, and keep repository variable `KINRESOLVE_STAGING_DEMO_WORKFLOW_ID`
+   set to its immutable numeric ID. The retired workflow file has been removed from the
+   repository, but GitHub retains the workflow record under that ID, and release remains
+   blocked unless GitHub reports it as `disabled_manually` with no active run.
 5. Set repository variable `PRODUCT_CI_WORKFLOW_ID` to the immutable numeric ID of
    `.github/workflows/ci.yml`. Release requires a successful exact-SHA `main` push run whose
    `Product release contract` job succeeded.
@@ -232,5 +234,8 @@ On failure:
 - [ ] Twenty-session KPI instrumentation review confirms canaries are excluded.
 - [ ] Five unfamiliar testers each complete the research outcome without assistance in
       under two minutes.
+- [ ] Two or three attributable tester quotes are captured during the five-tester gate,
+      with written consent recorded, attributed by first name and researcher type only,
+      per [`public-demo-launch-materials.md`](public-demo-launch-materials.md).
 - [ ] Founder/legal review approves the fictional-data notice, privacy wording, feedback
       fields, and the August 13, 2026 launch (or August 20 contingency).
