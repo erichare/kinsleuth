@@ -39,7 +39,7 @@ describe("public demo holding and domain control plane", () => {
     expect(holding).not.toMatch(/DELETE[\s\S]*demo\.kinresolve\.com/);
   });
 
-  it("blocks demo release until the legacy control path is manually disabled and idle", () => {
+  it("blocks demo release until the legacy control path is retired and idle", () => {
     const release = source(".github/workflows/public-demo-release.yml");
     const holding = source(".github/workflows/vercel-holding.yml");
 

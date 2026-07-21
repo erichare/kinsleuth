@@ -3,6 +3,7 @@ import { pathToFileURL } from "node:url";
 
 const expectedWorkflowName = "Operate Kin Resolve synthetic staging demo session";
 const expectedWorkflowPath = ".github/workflows/staging-demo-session.yml";
+const retiredWorkflowStates = Object.freeze(new Set(["disabled_manually", "deleted"]));
 const activeStatuses = Object.freeze(["queued", "in_progress", "waiting", "requested", "pending"]);
 const maximumResponseBytes = 256 * 1024;
 const timeoutMs = 20_000;
@@ -22,7 +23,7 @@ export async function validateLegacyDemoRetirement(
     String(workflow?.id) !== configuration.workflowId
     || workflow?.name !== expectedWorkflowName
     || workflow?.path !== expectedWorkflowPath
-    || workflow?.state !== "disabled_manually"
+    || !retiredWorkflowStates.has(workflow?.state)
   ) {
     throw retirementError();
   }
@@ -41,7 +42,7 @@ export async function validateLegacyDemoRetirement(
       throw new Error("The retired staging demo workflow still has an active run.");
     }
   }
-  return Object.freeze({ workflowId: configuration.workflowId, state: "disabled_manually" });
+  return Object.freeze({ workflowId: configuration.workflowId, state: workflow.state });
 }
 
 function resolveConfiguration(environment) {

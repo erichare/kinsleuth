@@ -92,13 +92,13 @@ The production target has four serialized phases. A staging-only target complete
    retryable final job. A failed post-promotion step must re-contain writes before the alias
    can return to the approved holding deployment.
 
-The legacy staging demo controller is retired and checked in only as a credential-free
-historical tombstone. The always-on synthetic public demo uses the dedicated
+The legacy staging demo controller is retired and retained by GitHub only as an immutable
+historical workflow record. The always-on synthetic public demo uses the dedicated
 `kinresolve-demo` project, database, holding target, release workflow, safety workflow, and
 monitoring cell. Its exact external configuration, first hostname cutover, release,
 rollback, containment, and rehearsal procedure are documented in
 [the public demo runbook](public-demo-runbook.md). Public-demo release remains blocked
-until GitHub reports the legacy controller manually disabled and idle.
+until GitHub reports the legacy controller deleted or manually disabled and idle.
 
 The protected GitHub environments are intentionally separate. Configure their exact
 inventory as follows; do not promote a repository-level secret as a shortcut:
@@ -239,4 +239,3 @@ zero-runtime holding deployment remains the traffic target until that follow-up 
 The operator containment runbook remains the fallback if either automation fails. An
 alias rollback is not a database rollback, and restore/forward-fix evidence remains a
 separate launch gate rather than something inferred from a successful migration.
-

@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 type Check = (
   environment?: Readonly<Record<string, string | undefined>>,
   fetchImplementation?: typeof fetch
-) => Promise<Readonly<{ workflowId: string; state: "disabled_manually" }>>;
+) => Promise<Readonly<{ workflowId: string; state: "disabled_manually" | "deleted" }>>;
 
 const opaqueToken = `ghs_314133192_${"a".repeat(300)}.${"b".repeat(300)}.${"c".repeat(64)}`;
 
@@ -18,7 +18,7 @@ const environment = {
 };
 
 describe("legacy staging demo retirement preflight", () => {
-  it("requires the exact workflow to be manually disabled with no active runs", async () => {
+  it("accepts the exact manually disabled workflow with no active runs", async () => {
     const check = await loadCheck();
     expect(opaqueToken.length).toBeGreaterThan(512);
     const fetchImplementation = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
@@ -42,6 +42,28 @@ describe("legacy staging demo retirement preflight", () => {
     for (const [, init] of fetchImplementation.mock.calls) {
       expect(new Headers(init?.headers).get("authorization")).toBe(`Bearer ${opaqueToken}`);
     }
+  });
+
+  it("accepts the exact deleted workflow record with no active runs", async () => {
+    const check = await loadCheck();
+    const fetchImplementation = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname.endsWith("/actions/workflows/12345678")) {
+        return json({
+          id: 12345678,
+          name: "Operate Kin Resolve synthetic staging demo session",
+          path: ".github/workflows/staging-demo-session.yml",
+          state: "deleted"
+        });
+      }
+      return json({ total_count: 0, workflow_runs: [] });
+    });
+
+    await expect(check(environment, fetchImplementation)).resolves.toEqual({
+      workflowId: "12345678",
+      state: "deleted"
+    });
+    expect(fetchImplementation).toHaveBeenCalledTimes(6);
   });
 
   it("rejects whitespace-bearing tokens before making a request", async () => {
@@ -83,7 +105,7 @@ describe("legacy staging demo retirement preflight", () => {
       id: 12345678,
       name: "Operate Kin Resolve synthetic staging demo session",
       path: ".github/workflows/staging-demo-session.yml",
-      state: "disabled_manually"
+      state: "deleted"
     }, true))).rejects.toThrow(/active/i);
   });
 });

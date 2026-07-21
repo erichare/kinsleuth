@@ -22,11 +22,12 @@ release procedure lives in [releases.md](releases.md).
 3. Keep `demo.kinresolve.com` attached only to `kinresolve-demo`. The holding workflow can
    move it atomically from the marketing project. Marketing deploys fail unless they prove
    the demo project owns the hostname and marketing does not.
-4. Keep the retired **Operate Kin Resolve synthetic staging demo session** workflow manually
-   disabled in GitHub, and keep repository variable `KINRESOLVE_STAGING_DEMO_WORKFLOW_ID`
-   set to its immutable numeric ID. The retired workflow file has been removed from the
-   repository, but GitHub retains the workflow record under that ID, and release remains
-   blocked unless GitHub reports it as `disabled_manually` with no active run.
+4. Keep the retired **Operate Kin Resolve synthetic staging demo session** workflow absent
+   or manually disabled in GitHub, and keep repository variable
+   `KINRESOLVE_STAGING_DEMO_WORKFLOW_ID` set to its immutable numeric ID. The retired
+   workflow file has been removed from the repository, but GitHub retains the workflow
+   record under that ID, and release remains blocked unless GitHub reports it as `deleted`
+   or `disabled_manually` with no active run.
 5. Set repository variable `PRODUCT_CI_WORKFLOW_ID` to the immutable numeric ID of
    `.github/workflows/ci.yml`. Release requires a successful exact-SHA `main` push run whose
    `Product release contract` job succeeded.
@@ -265,7 +266,7 @@ On failure:
 - [ ] Dedicated synthetic database and distinct migration/runtime roles are configured;
       no object store or email service is attached.
 - [ ] GitHub protected environments and immutable workflow-ID variables match this runbook.
-- [ ] Legacy staging controller is manually disabled and idle.
+- [ ] Legacy staging controller is deleted or manually disabled and idle.
 - [ ] Product CI is green and there are zero open high/critical code-scanning alerts.
 - [ ] The dedicated AI Gateway key has a $50 monthly hard budget inside the overall $250
       demo envelope; the 150-call daily application cap and overall 50%, 80%, and 100%
