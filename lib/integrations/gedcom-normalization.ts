@@ -222,8 +222,13 @@ function collectUnsupportedTags(node: GedcomNode, counts: Map<string, number>): 
 }
 
 function normalizeFamily(externalId: string, root: GedcomNode): NormalizedGedcomEntity[] {
-  const parents = [findChild(root, "HUSB")?.value, findChild(root, "WIFE")?.value].filter(isPointer);
-  const children = findChildren(root, "CHIL").map((node) => node.value).filter(isPointer);
+  // Exports may legitimately repeat a member pointer inside one FAM record
+  // (for example a child linked as both natural and adopted). Membership is a
+  // set: the repeated pointer is the same person and the same family edge, so
+  // it must produce one normalized member and one relationship, never a
+  // duplicate external identity.
+  const parents = uniquePointers([findChild(root, "HUSB")?.value, findChild(root, "WIFE")?.value]);
+  const children = uniquePointers(findChildren(root, "CHIL").map((node) => node.value));
   const raw = flattenRaw(root).join("\n");
   const family: NormalizedGedcomEntity = {
     entityType: "family",
@@ -238,10 +243,15 @@ function normalizeFamily(externalId: string, root: GedcomNode): NormalizedGedcom
   }
   for (const parent of parents) {
     for (const child of children) {
+      if (parent === child) continue;
       relationships.push(relationship(externalId, "parent_child", parent, child));
     }
   }
   return [family, ...relationships];
+}
+
+function uniquePointers(values: Array<string | undefined>): string[] {
+  return [...new Set(values.filter(isPointer))];
 }
 
 function relationship(

@@ -464,11 +464,45 @@ export async function reconcileTerminalIntegrationFailures(
   });
 }
 
+/**
+ * Terminal failure text shown to the archive owner. Every message must be
+ * user-actionable yet data-free: safe public error codes only — never file
+ * names, GEDCOM content, or storage details.
+ */
+const terminalPreparationMessages: Record<string, string> = {
+  media_retention_not_authorized:
+    "This media package requires the private-media feature to be enabled and a current rights acknowledgement.",
+  source_package_invalid:
+    "The uploaded file could not be read as a GEDCOM file or a supported export package.",
+  plain_gedcom_required:
+    "Only a plain GEDCOM file ending in .ged or .gedcom can be imported on this deployment.",
+  gedcom_file_too_large:
+    "The GEDCOM file is larger than this deployment's import limit. Export a smaller file or raise the deployment limit.",
+  gedcom_person_limit_exceeded:
+    "The GEDCOM lists more people than this deployment can import. Export a smaller tree or raise the deployment limit.",
+  gedcom_file_invalid:
+    "The staged GEDCOM file's metadata is invalid. Remove the staged file and upload the export again.",
+  provider_unavailable:
+    "This data source does not accept this kind of import package.",
+  feature_disabled:
+    "This data-source import is disabled for this deployment.",
+  capability_disabled:
+    "This data-source import is not available for this deployment.",
+  malware_detected:
+    "The import package did not pass its security scan.",
+  malware_scanner_unavailable:
+    "The security scanner was unavailable. Retry the refresh once scanning is restored.",
+  storage_unavailable:
+    "Private import storage was temporarily unavailable. Retry the refresh.",
+  artifact_integrity:
+    "The staged file failed its integrity verification. Remove the staged file and upload the export again.",
+  invalid_input:
+    "The import package contained records the importer could not safely reconcile. Retry the refresh after upgrading, or report this import."
+};
+
 function terminalPreparationMessage(errorCode: string): string {
-  if (errorCode === "media_retention_not_authorized") {
-    return "This media package requires the private-media feature to be enabled and a current rights acknowledgement.";
-  }
-  return "The import package could not be prepared for review.";
+  return terminalPreparationMessages[errorCode]
+    ?? "The import package could not be prepared for review.";
 }
 
 function validateSnapshot(input: CreateIntegrationSnapshotInput): void {

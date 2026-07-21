@@ -254,6 +254,33 @@ describeIfDatabase("atomic integration preparation commit", () => {
     });
   });
 
+  it("maps every safe terminal error code to a data-free, user-actionable message", async () => {
+    const expectedMessages: Record<string, RegExp> = {
+      source_package_invalid: /could not be read as a GEDCOM/i,
+      plain_gedcom_required: /plain GEDCOM file/i,
+      gedcom_file_too_large: /larger than this deployment's import limit/i,
+      gedcom_person_limit_exceeded: /more people than this deployment/i,
+      provider_unavailable: /does not accept this kind of import package/i,
+      feature_disabled: /disabled for this deployment/i,
+      malware_detected: /security scan/i,
+      storage_unavailable: /storage was temporarily unavailable/i,
+      invalid_input: /could not safely reconcile/i,
+      some_future_operational_code: /could not be prepared for review/i
+    };
+
+    for (const [errorCode, expected] of Object.entries(expectedMessages)) {
+      const connection = await createConnection();
+      const artifactId = await insertArtifact(connection.id, randomUUID().replaceAll("-", "").padEnd(64, "f").slice(0, 64));
+      const run = await startSyncRun(connection.id, { artifactId }, options);
+      await markSyncRunParsing(run.id, options);
+
+      const terminal = await failIntegrationPreparationTerminally(run.id, { errorCode }, options);
+      expect(terminal.run.errorMessage, errorCode).toMatch(expected);
+      // Redaction discipline: never a staged file name or storage detail.
+      expect(terminal.run.errorMessage).not.toMatch(/synthetic|minio|bucket|postgres|sha256|\//i);
+    }
+  });
+
   it("reconciles a terminal durable-job failure if run finalization was interrupted", async () => {
     const connection = await createConnection();
     const artifactId = await insertArtifact(connection.id, "d".repeat(64));

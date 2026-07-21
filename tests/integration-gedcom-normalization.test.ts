@@ -114,6 +114,66 @@ describe("provider-neutral GEDCOM entity normalization", () => {
     expect(relationships.reduce((total, entity) => total + entity.raw.length, 0)).toBe(0);
   });
 
+  it("collapses a child linked to one family twice into one membership and one edge per parent", () => {
+    const entities = normalizeGedcomSnapshotEntities([
+      "0 HEAD",
+      "1 SOUR KIN_RESOLVE_SYNTHETIC_FIXTURE",
+      "0 @I1@ INDI",
+      "1 NAME Avery /Northwood/",
+      "0 @I2@ INDI",
+      "1 NAME Rowan /Vale/",
+      "0 @I3@ INDI",
+      "1 NAME Mira /Northwood/",
+      "0 @F1@ FAM",
+      "1 HUSB @I1@",
+      "1 WIFE @I2@",
+      "1 CHIL @I3@",
+      "2 _FREL Natural",
+      "2 _MREL Natural",
+      "1 CHIL @I3@",
+      "2 _FREL Adopted",
+      "2 _MREL Adopted",
+      "0 TRLR"
+    ].join("\n"));
+
+    const family = entities.find((entity) => entity.entityType === "family")!;
+    expect(family.value).toMatchObject({ parents: ["@I1@", "@I2@"], children: ["@I3@"] });
+    // The complete FAM record, including both CHIL fragments, is still
+    // retained verbatim as review evidence.
+    expect(family.raw).toContain("_FREL Adopted");
+
+    const relationships = entities.filter((entity) => entity.entityType === "relationship");
+    expect(relationships).toHaveLength(3);
+    expect(new Set(relationships.map((entity) => entity.externalId)).size).toBe(3);
+  });
+
+  it("omits self-referential edges when one pointer fills both parent slots", () => {
+    const entities = normalizeGedcomSnapshotEntities([
+      "0 HEAD",
+      "1 SOUR KIN_RESOLVE_SYNTHETIC_FIXTURE",
+      "0 @I1@ INDI",
+      "1 NAME Avery /Northwood/",
+      "0 @I3@ INDI",
+      "1 NAME Mira /Northwood/",
+      "0 @F1@ FAM",
+      "1 HUSB @I1@",
+      "1 WIFE @I1@",
+      "1 CHIL @I3@",
+      "0 TRLR"
+    ].join("\n"));
+
+    const family = entities.find((entity) => entity.entityType === "family")!;
+    expect(family.value).toMatchObject({ parents: ["@I1@"], children: ["@I3@"] });
+
+    const relationships = entities.filter((entity) => entity.entityType === "relationship");
+    expect(relationships).toHaveLength(1);
+    expect(relationships[0].value).toMatchObject({
+      type: "parent_child",
+      fromPersonExternalId: "@I1@",
+      toPersonExternalId: "@I3@"
+    });
+  });
+
   it("keeps unchanged fact identities stable across insertion and record reordering", () => {
     const before = normalizeGedcomSnapshotEntities([
       "0 HEAD",

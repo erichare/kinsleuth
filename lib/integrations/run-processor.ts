@@ -19,7 +19,7 @@ import {
   type NormalizedGedcomEntity,
   type NormalizedGedcomEntityType
 } from "./gedcom-normalization";
-import { commitIntegrationPreparation } from "./preparation-store";
+import { commitIntegrationPreparation, type PreparationExternalRef } from "./preparation-store";
 import { scanImportPackageFiles, type MalwareScanner } from "./malware-scanner";
 import {
   detectSafeImportedMediaMime,
@@ -384,24 +384,7 @@ export async function processIntegrationSyncRun(
         artifactId: run.artifactId,
         snapshot: snapshotInput,
         changes,
-        externalRefs: manifest
-          .filter((entity) => !resolvedIdentities.ambiguous.has(entityKey(entity)))
-          .flatMap((entity) => uniqueStrings([entity.externalId, ...(entity.providerIds ?? [])])
-            .map((externalId) => ({
-              entityType: entity.entityType,
-              externalId,
-              localEntityId: entity.localEntityId
-            })))
-          .filter((externalRef) => {
-            const rememberedLocalId = rememberedIdentityRefs.get(
-              `${externalRef.entityType}:${externalRef.externalId}`
-            );
-            // Raw GEDCOM xrefs may be reassigned by an exporter. Keep the
-            // historical mapping for a reused xref instead of silently moving
-            // it to a different entity; the immutable snapshot still retains
-            // the current raw xref as provenance.
-            return !rememberedLocalId || rememberedLocalId === externalRef.localEntityId;
-          }),
+        externalRefs: rememberableExternalRefs(manifest, resolvedIdentities, rememberedIdentityRefs),
         mediaObjects,
         leaseFence: options.leaseFence
       },
@@ -488,6 +471,52 @@ async function loadRememberedIdentityRefs(
     options
   );
   return new Map(result.rows.map((row) => [`${row.entity_type}:${row.external_id}`, row.local_entity_id]));
+}
+
+/**
+ * Builds the identity mappings a committed preparation is allowed to remember.
+ * Remembered refs are a deterministic `(entityType, externalId) -> local id`
+ * index, so an external identity may only be remembered when exactly one local
+ * entity claims it in this snapshot:
+ * - identical claims collapse to one remembered row;
+ * - an external identity claimed by several local entities (a provider tag
+ *   value shared across records) identifies none of them and is not
+ *   remembered — the immutable snapshot still retains it as provenance;
+ * - a remembered mapping never silently moves to a different entity when an
+ *   exporter reuses a raw GEDCOM xref.
+ */
+function rememberableExternalRefs(
+  manifest: SnapshotEntity[],
+  resolvedIdentities: Pick<ResolvedEntityIdentities, "ambiguous">,
+  rememberedIdentityRefs: Map<string, string>
+): PreparationExternalRef[] {
+  const candidates = manifest
+    .filter((entity) => !resolvedIdentities.ambiguous.has(entityKey(entity)))
+    .flatMap((entity) => uniqueStrings([entity.externalId, ...(entity.providerIds ?? [])])
+      .map((externalId) => ({
+        entityType: entity.entityType,
+        externalId,
+        localEntityId: entity.localEntityId
+      })));
+  const localIdsByExternalKey = new Map<string, Set<string>>();
+  for (const candidate of candidates) {
+    const key = `${candidate.entityType}:${candidate.externalId}`;
+    const localIds = localIdsByExternalKey.get(key) ?? new Set<string>();
+    localIds.add(candidate.localEntityId);
+    localIdsByExternalKey.set(key, localIds);
+  }
+
+  const seen = new Set<string>();
+  const refs: PreparationExternalRef[] = [];
+  for (const candidate of candidates) {
+    const key = `${candidate.entityType}:${candidate.externalId}`;
+    if (seen.has(key) || localIdsByExternalKey.get(key)!.size > 1) continue;
+    const rememberedLocalId = rememberedIdentityRefs.get(key);
+    if (rememberedLocalId && rememberedLocalId !== candidate.localEntityId) continue;
+    seen.add(key);
+    refs.push(candidate);
+  }
+  return refs;
 }
 
 export async function applyPreparedIntegrationSyncRun(
@@ -721,6 +750,11 @@ function resolveEntityIdentities(
   const localIds = new Map<string, string>();
   const ambiguous = new Map<string, string[]>();
   const claimedLocalIds = new Set<string>();
+  const sharedIncomingProviderIds = duplicatedProviderIds(incoming);
+  const fallbackIdentitySeed = (entity: IdentityDescriptor) =>
+    (entity.providerIds ?? []).find(
+      (providerId) => !sharedIncomingProviderIds.has(`${entity.entityType}:${providerId}`)
+    ) ?? entity.externalId;
   const baseByExternal = new Map(base.map((entity) => [entityKey(entity), entity]));
   const baseByLocalId = new Map(base.map((entity) => [entity.localEntityId, entity]));
   const providerIndex = new Map<string, SnapshotEntity[]>();
@@ -810,7 +844,7 @@ function resolveEntityIdentities(
     if (ambiguous.has(key)) {
       localIds.set(
         key,
-        stableLocalId(connectionId, entity.entityType, entity.providerIds?.[0] ?? entity.externalId)
+        stableLocalId(connectionId, entity.entityType, fallbackIdentitySeed(entity))
       );
       continue;
     }
@@ -848,10 +882,29 @@ function resolveEntityIdentities(
     }
     localIds.set(
       key,
-      stableLocalId(connectionId, entity.entityType, entity.providerIds?.[0] ?? entity.externalId)
+      stableLocalId(connectionId, entity.entityType, fallbackIdentitySeed(entity))
     );
   }
   return { localIds, ambiguous };
+}
+
+/**
+ * Provider identifiers repeated across several incoming records (a shared
+ * REFN batch number, a duplicated source `_APID`, a copied `_UID`) identify a
+ * catalog entry, not one record. Seeding distinct incoming records from such a
+ * value would collapse them onto a single local entity.
+ */
+function duplicatedProviderIds(incoming: IdentityDescriptor[]): Set<string> {
+  const seenOnce = new Set<string>();
+  const duplicated = new Set<string>();
+  for (const entity of incoming) {
+    for (const providerId of entity.providerIds ?? []) {
+      const key = `${entity.entityType}:${providerId}`;
+      if (seenOnce.has(key)) duplicated.add(key);
+      else seenOnce.add(key);
+    }
+  }
+  return duplicated;
 }
 
 /** @internal Pure scale/regression seam for the connection-scoped matcher. */

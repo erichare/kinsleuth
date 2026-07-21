@@ -1114,10 +1114,17 @@ export async function applySyncRun(
           .filter((update) => update.external_id)
           .map((update) => [`${update.entity_type}\u0000${update.external_id}`, update])
       );
-      for (const entity of snapshotIdentityManifest(snapshotResult.rows[0].source_metadata)) {
+      const manifestEntities = snapshotIdentityManifest(snapshotResult.rows[0].source_metadata);
+      // A provider tag value repeated across several snapshot records (a
+      // shared REFN batch number, a duplicated source _APID) identifies none
+      // of them; it cannot be remembered as a one-to-one identity and must
+      // not fail the apply. Unique provider identifiers are still remembered.
+      const sharedProviderIds = duplicatedManifestProviderIds(manifestEntities);
+      for (const entity of manifestEntities) {
         const update = updatesByEntity.get(`${entity.entityType}\u0000${entity.externalId}`);
         if (!update?.persists_identity || !update.local_entity_id) continue;
         for (const externalId of entity.providerIds) {
+          if (sharedProviderIds.has(`${entity.entityType}:${externalId}`)) continue;
           rememberExternalRef({
             entity_type: update.entity_type,
             external_id: externalId,
@@ -1567,6 +1574,21 @@ function snapshotIdentityManifest(value: unknown): Array<{
       providerIds
     }];
   });
+}
+
+function duplicatedManifestProviderIds(
+  manifest: Array<{ entityType: string; providerIds: string[] }>
+): Set<string> {
+  const seenOnce = new Set<string>();
+  const duplicated = new Set<string>();
+  for (const entity of manifest) {
+    for (const providerId of entity.providerIds) {
+      const key = `${entity.entityType}:${providerId}`;
+      if (seenOnce.has(key)) duplicated.add(key);
+      else seenOnce.add(key);
+    }
+  }
+  return duplicated;
 }
 
 function defaultResolution(
