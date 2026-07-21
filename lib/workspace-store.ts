@@ -18,7 +18,9 @@ import {
   resolveHostedCapabilities,
   validateHostedGedcomPeople
 } from "./hosted-capabilities";
+import { integrationImportId } from "./integrations/import-id";
 import { datasetModes, resolveDatasetConfiguration, type DatasetMode } from "./hosted-config";
+import type { ImportPersonXrefMapping, PersonXrefMappingsByImportId } from "./person-relationships";
 import { publicDemoCanonicalArchiveId } from "./public-demo-config";
 import { buildResearchGuide } from "./research-guide";
 import {
@@ -405,6 +407,69 @@ export async function readWorkspaceSnapshot(
   const archiveId = getArchiveId(options);
   await requireProvisionedArchiveRow(client, archiveId, options);
   return loadWorkspace(client, archiveId);
+}
+
+// Integration-applied imports store raw GEDCOM records whose FAM members
+// point at provider xrefs, while the imported people carry generated local
+// ids. The identity layer records the xref -> local person id mapping per
+// connection in external_entity_refs; this reader regroups those mappings by
+// the workspace import each connection produced so family edges can be
+// translated back onto workspace people (see lib/person-relationships.ts).
+// Legacy GEDCOM imports have no entry here: their person ids are the xrefs.
+export async function readPersonXrefMappingsByImportId(
+  options: WorkspaceStoreOptions = {}
+): Promise<PersonXrefMappingsByImportId> {
+  const archiveId = getArchiveId(options);
+
+  return withTransaction(withRlsArchiveScope(options, archiveId), async (client) => {
+    await requireProvisionedArchiveRow(client, archiveId, options);
+    return loadPersonXrefMappingsByImportId(client, archiveId);
+  });
+}
+
+async function loadPersonXrefMappingsByImportId(
+  client: PoolClient,
+  archiveId: string
+): Promise<PersonXrefMappingsByImportId> {
+  const refsResult = await client.query<{ connection_id: string; external_id: string; local_entity_id: string }>(
+    `SELECT connection_id, external_id, local_entity_id
+     FROM external_entity_refs
+     WHERE archive_id = $1 AND entity_type = 'person'`,
+    [archiveId]
+  );
+  if (refsResult.rowCount === 0) {
+    return new Map();
+  }
+
+  // GEDCOM xrefs are only unique within one connection's exports, so each
+  // connection keeps its own map; colliding xrefs from different connections
+  // must never cross-translate.
+  const personIdByXrefByConnectionId = new Map<string, Map<string, string>>();
+  for (const row of refsResult.rows) {
+    const personIdByXref = personIdByXrefByConnectionId.get(row.connection_id) ?? new Map<string, string>();
+    personIdByXref.set(row.external_id, row.local_entity_id);
+    personIdByXrefByConnectionId.set(row.connection_id, personIdByXref);
+  }
+
+  // Integration snapshots are immutable and keep the (connection, artifact
+  // sha256) pair every applied refresh was derived from; the workspace import
+  // id is deterministic on that pair, so it can be recomputed here instead of
+  // being stored twice.
+  const snapshotsResult = await client.query<{ connection_id: string; sha256: string }>(
+    "SELECT connection_id, sha256 FROM integration_snapshots WHERE archive_id = $1",
+    [archiveId]
+  );
+
+  const mappingsByImportId = new Map<string, ImportPersonXrefMapping>();
+  for (const row of snapshotsResult.rows) {
+    const personIdByXref = personIdByXrefByConnectionId.get(row.connection_id);
+    if (!personIdByXref) continue;
+    mappingsByImportId.set(integrationImportId(row.connection_id, row.sha256), {
+      scopeId: row.connection_id,
+      personIdByXref
+    });
+  }
+  return mappingsByImportId;
 }
 
 // Keeps provisioning and the demo-guest generation fence locked for the

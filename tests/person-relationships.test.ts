@@ -9,7 +9,8 @@ import {
   familyEdgesFromGedcomRecords,
   familyEdgesFromRawRecords,
   workspaceFamilyEdges,
-  type FamilyEdge
+  type FamilyEdge,
+  type PersonXrefMappingsByImportId
 } from "@/lib/person-relationships";
 
 // All fixture people are invented for the fictional Hartwell–Mercer demo
@@ -30,18 +31,22 @@ function family(overrides: Partial<FamilyEdge>): FamilyEdge {
 }
 
 describe("deriveRelationshipLabel", () => {
+  // Family edge members are workspace person ids, never GEDCOM xrefs: the
+  // integration apply path generates local ids that look nothing like
+  // "@I1@". The fixtures use generated-style ids to keep the two id spaces
+  // distinct (regression coverage for the xref/local-id join bug).
   const coupleWithChild = family({
-    husbandId: "@I1@",
-    wifeId: "@I2@",
-    partnerIds: ["@I1@", "@I2@"],
-    childIds: ["@I3@", "@I4@"]
+    husbandId: "person-01hf-father",
+    wifeId: "person-01hf-mother",
+    partnerIds: ["person-01hf-father", "person-01hf-mother"],
+    childIds: ["person-01hf-child", "person-01hf-sibling"]
   });
 
   it("labels parents by sex for every sex value", () => {
     const expected = { M: "Father", F: "Mother", U: "Parent", undefined: "Parent" } as const;
     for (const sex of sexes) {
       expect(
-        deriveRelationshipLabel("@I3@", relative("@I1@", sex), [coupleWithChild]),
+        deriveRelationshipLabel("person-01hf-child", relative("person-01hf-father", sex), [coupleWithChild]),
         `parent sex ${String(sex)}`
       ).toBe(expected[String(sex) as keyof typeof expected]);
     }
@@ -51,7 +56,7 @@ describe("deriveRelationshipLabel", () => {
     const expected = { M: "Son", F: "Daughter", U: "Child", undefined: "Child" } as const;
     for (const sex of sexes) {
       expect(
-        deriveRelationshipLabel("@I1@", relative("@I3@", sex), [coupleWithChild]),
+        deriveRelationshipLabel("person-01hf-father", relative("person-01hf-child", sex), [coupleWithChild]),
         `child sex ${String(sex)}`
       ).toBe(expected[String(sex) as keyof typeof expected]);
     }
@@ -61,7 +66,7 @@ describe("deriveRelationshipLabel", () => {
     const expected = { M: "Brother", F: "Sister", U: "Sibling", undefined: "Sibling" } as const;
     for (const sex of sexes) {
       expect(
-        deriveRelationshipLabel("@I3@", relative("@I4@", sex), [coupleWithChild]),
+        deriveRelationshipLabel("person-01hf-child", relative("person-01hf-sibling", sex), [coupleWithChild]),
         `sibling sex ${String(sex)}`
       ).toBe(expected[String(sex) as keyof typeof expected]);
     }
@@ -69,8 +74,8 @@ describe("deriveRelationshipLabel", () => {
 
   it("labels spouses from the recorded HUSB and WIFE roles, not sex", () => {
     for (const sex of sexes) {
-      expect(deriveRelationshipLabel("@I2@", relative("@I1@", sex), [coupleWithChild])).toBe("Husband");
-      expect(deriveRelationshipLabel("@I1@", relative("@I2@", sex), [coupleWithChild])).toBe("Wife");
+      expect(deriveRelationshipLabel("person-01hf-mother", relative("person-01hf-father", sex), [coupleWithChild])).toBe("Husband");
+      expect(deriveRelationshipLabel("person-01hf-father", relative("person-01hf-mother", sex), [coupleWithChild])).toBe("Wife");
     }
   });
 
@@ -85,21 +90,35 @@ describe("deriveRelationshipLabel", () => {
   });
 
   it("falls back to Linked relative when the pair shares no family", () => {
-    expect(deriveRelationshipLabel("@I3@", relative("@I9@", "M"), [coupleWithChild])).toBe(fallbackRelationshipLabel);
-    expect(deriveRelationshipLabel("@I3@", relative("@I1@", "M"), [])).toBe(fallbackRelationshipLabel);
+    expect(deriveRelationshipLabel("person-01hf-child", relative("person-unrelated", "M"), [coupleWithChild])).toBe(fallbackRelationshipLabel);
+    expect(deriveRelationshipLabel("person-01hf-child", relative("person-01hf-father", "M"), [])).toBe(fallbackRelationshipLabel);
     expect(fallbackRelationshipLabel).toBe("Linked relative");
   });
 
   it("falls back when the subject and relative sit in unrelated families", () => {
-    const other = family({ id: "family-other", partnerIds: ["@I7@", "@I8@"], childIds: ["@I9@"] });
-    expect(deriveRelationshipLabel("@I3@", relative("@I9@"), [coupleWithChild, other])).toBe(fallbackRelationshipLabel);
+    const other = family({
+      id: "family-other",
+      partnerIds: ["person-other-father", "person-other-mother"],
+      childIds: ["person-other-child"]
+    });
+    expect(
+      deriveRelationshipLabel("person-01hf-child", relative("person-other-child"), [coupleWithChild, other])
+    ).toBe(fallbackRelationshipLabel);
   });
 
   it("uses the first matching family when several connect the pair", () => {
-    const asSpouses = family({ id: "family-first", partnerIds: ["@I1@", "@I2@"], childIds: ["@I5@"] });
-    const asSiblings = family({ id: "family-second", partnerIds: ["@I6@", "@I7@"], childIds: ["@I1@", "@I2@"] });
-    expect(deriveRelationshipLabel("@I1@", relative("@I2@", "F"), [asSpouses, asSiblings])).toBe("Spouse");
-    expect(deriveRelationshipLabel("@I1@", relative("@I2@", "F"), [asSiblings, asSpouses])).toBe("Sister");
+    const asSpouses = family({
+      id: "family-first",
+      partnerIds: ["person-01hf-father", "person-01hf-mother"],
+      childIds: ["person-01hf-child"]
+    });
+    const asSiblings = family({
+      id: "family-second",
+      partnerIds: ["person-grandfather", "person-grandmother"],
+      childIds: ["person-01hf-father", "person-01hf-mother"]
+    });
+    expect(deriveRelationshipLabel("person-01hf-father", relative("person-01hf-mother", "F"), [asSpouses, asSiblings])).toBe("Spouse");
+    expect(deriveRelationshipLabel("person-01hf-father", relative("person-01hf-mother", "F"), [asSiblings, asSpouses])).toBe("Sister");
   });
 });
 
@@ -199,6 +218,100 @@ describe("familyEdgesFromRawRecords", () => {
     expect(familyEdgesFromRawRecords([individual], imports)).toEqual([]);
     expect(familyEdgesFromRawRecords([], [])).toEqual([]);
   });
+
+  it("translates member xrefs to the import's generated local person ids", () => {
+    const integrationImports = [{ id: "import-integration-aaaa", appliedAt: "2026-07-18T00:00:00.000Z" }];
+    const rawRecord = { ...olderImportFamily, importId: "import-integration-aaaa" };
+    const mappings: PersonXrefMappingsByImportId = new Map([[
+      "import-integration-aaaa",
+      {
+        scopeId: "conn-1",
+        personIdByXref: new Map([
+          ["@I1@", "person-local-husband"],
+          ["@I2@", "person-local-wife"],
+          ["@I3@", "person-local-child"]
+        ])
+      }
+    ]]);
+
+    expect(familyEdgesFromRawRecords([rawRecord], integrationImports, mappings)).toEqual([{
+      id: "conn-1:@F1@",
+      husbandId: "person-local-husband",
+      wifeId: "person-local-wife",
+      partnerIds: ["person-local-husband", "person-local-wife"],
+      childIds: ["person-local-child"]
+    }]);
+  });
+
+  it("keeps unmapped member xrefs so skipped people simply match nothing", () => {
+    const integrationImports = [{ id: "import-integration-aaaa", appliedAt: "2026-07-18T00:00:00.000Z" }];
+    const rawRecord = { ...olderImportFamily, importId: "import-integration-aaaa" };
+    const mappings: PersonXrefMappingsByImportId = new Map([[
+      "import-integration-aaaa",
+      { scopeId: "conn-1", personIdByXref: new Map([["@I1@", "person-local-husband"]]) }
+    ]]);
+
+    expect(familyEdgesFromRawRecords([rawRecord], integrationImports, mappings)).toEqual([{
+      id: "conn-1:@F1@",
+      husbandId: "person-local-husband",
+      wifeId: "@I2@",
+      partnerIds: ["person-local-husband", "@I2@"],
+      childIds: ["@I3@"]
+    }]);
+  });
+
+  it("keeps colliding family xrefs from different connections apart", () => {
+    const integrationImports = [
+      { id: "import-integration-aaaa", appliedAt: "2026-07-01T00:00:00.000Z" },
+      { id: "import-integration-bbbb", appliedAt: "2026-07-18T00:00:00.000Z" }
+    ];
+    const rawRecordsAcrossConnections = [
+      { ...olderImportFamily, importId: "import-integration-aaaa" },
+      { ...olderImportFamily, id: "raw-9", importId: "import-integration-bbbb" }
+    ];
+    const mappings: PersonXrefMappingsByImportId = new Map([
+      ["import-integration-aaaa", { scopeId: "conn-1", personIdByXref: new Map([["@I1@", "person-conn1-husband"]]) }],
+      ["import-integration-bbbb", { scopeId: "conn-2", personIdByXref: new Map([["@I1@", "person-conn2-husband"]]) }]
+    ]);
+
+    const edges = familyEdgesFromRawRecords(rawRecordsAcrossConnections, integrationImports, mappings);
+    expect(edges.map((edge) => [edge.id, edge.husbandId])).toEqual([
+      ["conn-1:@F1@", "person-conn1-husband"],
+      ["conn-2:@F1@", "person-conn2-husband"]
+    ]);
+  });
+
+  it("lets the newest refresh of one connection own a family xref", () => {
+    const sharedMapping = {
+      scopeId: "conn-1",
+      personIdByXref: new Map([
+        ["@I1@", "person-local-husband"],
+        ["@I2@", "person-local-wife"],
+        ["@I3@", "person-local-child"],
+        ["@I4@", "person-local-second-child"]
+      ])
+    };
+    const integrationImports = [
+      { id: "import-integration-aaaa", appliedAt: "2026-07-01T00:00:00.000Z" },
+      { id: "import-integration-bbbb", appliedAt: "2026-07-18T00:00:00.000Z" }
+    ];
+    const refreshedRawRecords = [
+      { ...newerImportFamily, importId: "import-integration-bbbb" },
+      { ...olderImportFamily, importId: "import-integration-aaaa" }
+    ];
+    const mappings: PersonXrefMappingsByImportId = new Map([
+      ["import-integration-aaaa", sharedMapping],
+      ["import-integration-bbbb", sharedMapping]
+    ]);
+
+    expect(familyEdgesFromRawRecords(refreshedRawRecords, integrationImports, mappings)).toEqual([{
+      id: "conn-1:@F1@",
+      husbandId: "person-local-husband",
+      wifeId: "person-local-wife",
+      partnerIds: ["person-local-husband", "person-local-wife"],
+      childIds: ["person-local-child", "person-local-second-child"]
+    }]);
+  });
 });
 
 describe("workspaceFamilyEdges", () => {
@@ -222,5 +335,40 @@ describe("workspaceFamilyEdges", () => {
 
   it("returns only the demo edges when nothing was imported", () => {
     expect(workspaceFamilyEdges({ rawRecords: [], imports: [] })).toEqual(demoFamilyTreeEdges);
+  });
+
+  it("passes xref mappings through so integration edges resolve to local ids", () => {
+    const rawRecords = [{
+      id: "raw-1",
+      importId: "import-integration-aaaa",
+      xref: "@F1@",
+      type: "FAM",
+      checksum: "checksum-1",
+      raw: ["0 @F1@ FAM", "1 HUSB @I1@", "1 WIFE @I2@", "1 CHIL @I3@"].join("\n")
+    }];
+    const mappings: PersonXrefMappingsByImportId = new Map([[
+      "import-integration-aaaa",
+      {
+        scopeId: "conn-1",
+        personIdByXref: new Map([
+          ["@I1@", "person-local-husband"],
+          ["@I2@", "person-local-wife"],
+          ["@I3@", "person-local-child"]
+        ])
+      }
+    ]]);
+    const edges = workspaceFamilyEdges({
+      rawRecords,
+      imports: [{ id: "import-integration-aaaa", appliedAt: "2026-07-01T00:00:00.000Z" }]
+    }, mappings);
+
+    expect(edges[0]).toEqual({
+      id: "conn-1:@F1@",
+      husbandId: "person-local-husband",
+      wifeId: "person-local-wife",
+      partnerIds: ["person-local-husband", "person-local-wife"],
+      childIds: ["person-local-child"]
+    });
+    expect(edges.slice(1)).toEqual(demoFamilyTreeEdges);
   });
 });

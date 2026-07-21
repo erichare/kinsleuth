@@ -12,8 +12,9 @@ import { resolveHostedCapabilities } from "@/lib/hosted-capabilities";
 import { getSessionContext, workspaceOptionsForSession } from "@/lib/auth-session";
 import { buildPersonMiniTree } from "@/lib/person-mini-tree";
 import { buildPersonProfile } from "@/lib/person-profile";
+import { isIntegrationImportId } from "@/lib/integrations/import-id";
 import { workspaceFamilyEdges } from "@/lib/person-relationships";
-import { readWorkspace } from "@/lib/workspace-store";
+import { readPersonXrefMappingsByImportId, readWorkspace } from "@/lib/workspace-store";
 
 export const dynamic = "force-dynamic";
 
@@ -23,7 +24,8 @@ export default async function AppPersonPage({ params }: { params: Promise<{ id: 
   const personId = decodeURIComponent(id);
   const session = await getSessionContext(await headers());
   if (!session) notFound();
-  const workspace = await readWorkspace(workspaceOptionsForSession(session));
+  const workspaceOptions = workspaceOptionsForSession(session);
+  const workspace = await readWorkspace(workspaceOptions);
   const person = workspace.people.find((item) => item.id === personId);
 
   if (!person) {
@@ -41,7 +43,13 @@ export default async function AppPersonPage({ params }: { params: Promise<{ id: 
   });
   // GEDCOM FAM structures already live in the workspace read above; typed
   // relationship labels and the mini tree both derive from these edges.
-  const familyEdges = workspaceFamilyEdges(workspace);
+  // Integration-applied imports store FAM members as provider xrefs while the
+  // people carry generated local ids, so their per-connection xref mappings
+  // are read only when such an import exists.
+  const xrefMappings = (workspace.imports ?? []).some((item) => isIntegrationImportId(item.id))
+    ? await readPersonXrefMappingsByImportId(workspaceOptions)
+    : undefined;
+  const familyEdges = workspaceFamilyEdges(workspace, xrefMappings);
   const miniTree = buildPersonMiniTree(person, workspace.people, familyEdges);
   const profile = buildPersonProfile(person, {
     ...workspace,

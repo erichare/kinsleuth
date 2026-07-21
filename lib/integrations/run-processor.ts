@@ -11,6 +11,7 @@ import {
 import { readWorkspace } from "../workspace-store";
 import { classifyRefreshChange } from "./refresh";
 import { getIntegrationFeatureFlags, isIntegrationProviderEnabled } from "./feature-flags";
+import { integrationImportId } from "./import-id";
 import {
   hashRetainedGedcomExtensions,
   normalizeGedcomSnapshotEntities,
@@ -611,7 +612,7 @@ function namespacePreparedImport(
   identities: IdentityDescriptor[],
   localIds: Map<string, string>
 ): PreparedGedcomImport {
-  const importId = `import-integration-${sha256(`${connectionId}:${artifactSha256}`).slice(0, 20)}`;
+  const importId = integrationImportId(connectionId, artifactSha256);
   const personIdentities = identities.filter((identity) => identity.entityType === "person");
   const sourceIdentities = identities.filter((identity) => identity.entityType === "source");
   const personIdMap = new Map(

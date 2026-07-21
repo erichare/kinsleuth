@@ -7,11 +7,15 @@ import { buildPersonMiniTree, lifespanLabel } from "@/lib/person-mini-tree";
 import { demoFamilyTreeEdges, type FamilyEdge } from "@/lib/person-relationships";
 
 // Every fixture below is synthetic Hartwell–Mercer style fictional data.
+// Synthetic ids use the generated local-id shape, NOT GEDCOM xrefs: family
+// edges reference workspace person ids, and only the legacy import path
+// happens to reuse xrefs as ids (regression coverage for the xref/local-id
+// join bug).
 function person(id: string, overrides: Partial<PersonSummary> = {}): PersonSummary {
   return {
     id,
-    slug: id.replace(/@/g, "").toLowerCase(),
-    displayName: `Fictional ${id.replace(/@/g, "")}`,
+    slug: id.toLowerCase(),
+    displayName: `Fictional ${id}`,
     livingStatus: "deceased",
     privacy: "private",
     published: false,
@@ -92,35 +96,35 @@ describe("buildPersonMiniTree", () => {
   });
 
   it("returns undefined when the person has no relatives in the family edges", () => {
-    const loner = person("@I1@");
+    const loner = person("person-subject");
     expect(buildPersonMiniTree(loner, [loner], [])).toBeUndefined();
     expect(buildPersonMiniTree(loner, [loner], demoFamilyTreeEdges)).toBeUndefined();
   });
 
   it("returns undefined when the person is missing from the people list", () => {
-    expect(buildPersonMiniTree(person("@I1@"), [person("@I2@")], [])).toBeUndefined();
+    expect(buildPersonMiniTree(person("person-subject"), [person("person-second")], [])).toBeUndefined();
   });
 
   it("returns undefined when every referenced relative is unknown", () => {
-    const subject = person("@I1@");
+    const subject = person("person-subject");
     const edges: FamilyEdge[] = [{
-      id: "@F1@",
-      husbandId: "@I8@",
-      wifeId: "@I9@",
-      partnerIds: ["@I8@", "@I9@"],
-      childIds: ["@I1@"]
+      id: "family-conn:@F1@",
+      husbandId: "person-unknown-a",
+      wifeId: "person-unknown-b",
+      partnerIds: ["person-unknown-a", "person-unknown-b"],
+      childIds: ["person-subject"]
     }];
     expect(buildPersonMiniTree(subject, [subject], edges)).toBeUndefined();
   });
 
   it("shows a single known parent without a connector", () => {
-    const subject = person("@I1@");
-    const mother = person("@I2@", { sex: "F" });
+    const subject = person("person-subject");
+    const mother = person("person-second", { sex: "F" });
     const edges: FamilyEdge[] = [{
-      id: "@F1@",
-      wifeId: "@I2@",
-      partnerIds: ["@I2@"],
-      childIds: ["@I1@"]
+      id: "family-conn:@F1@",
+      wifeId: "person-second",
+      partnerIds: ["person-second"],
+      childIds: ["person-subject"]
     }];
     const miniTree = buildPersonMiniTree(subject, [subject, mother], edges);
 
@@ -130,58 +134,58 @@ describe("buildPersonMiniTree", () => {
   });
 
   it("keeps spouses beside the person and children below, dropping empty rows", () => {
-    const subject = person("@I1@", { sex: "M" });
-    const spouse = person("@I2@", { sex: "F" });
-    const child = person("@I3@");
+    const subject = person("person-subject", { sex: "M" });
+    const spouse = person("person-second", { sex: "F" });
+    const child = person("person-third");
     const edges: FamilyEdge[] = [{
-      id: "@F1@",
-      husbandId: "@I1@",
-      wifeId: "@I2@",
-      partnerIds: ["@I1@", "@I2@"],
-      childIds: ["@I3@"]
+      id: "family-conn:@F1@",
+      husbandId: "person-subject",
+      wifeId: "person-second",
+      partnerIds: ["person-subject", "person-second"],
+      childIds: ["person-third"]
     }];
     const miniTree = buildPersonMiniTree(subject, [subject, spouse, child], edges);
 
     expect(miniTree?.tree.generations.map((generation) => generation.id)).toEqual(["focus", "children"]);
-    expect(miniTree?.tree.generations[0]?.members.map((member) => member.personId)).toEqual(["@I1@", "@I2@"]);
+    expect(miniTree?.tree.generations[0]?.members.map((member) => member.personId)).toEqual(["person-subject", "person-second"]);
     expect(miniTree?.tree.families).toEqual([{
-      id: "@F1@",
-      partnerIds: ["@I1@", "@I2@"],
-      childIds: ["@I3@"]
+      id: "family-conn:@F1@",
+      partnerIds: ["person-subject", "person-second"],
+      childIds: ["person-third"]
     }]);
     expect(() => buildFamilyTreeLayout(miniTree!.tree)).not.toThrow();
   });
 
   it("orders parents husband-first from the recorded roles", () => {
-    const subject = person("@I3@");
-    const father = person("@I1@", { sex: "M" });
-    const mother = person("@I2@", { sex: "F" });
+    const subject = person("person-third");
+    const father = person("person-subject", { sex: "M" });
+    const mother = person("person-second", { sex: "F" });
     const edges: FamilyEdge[] = [{
-      id: "@F1@",
-      husbandId: "@I1@",
-      wifeId: "@I2@",
-      partnerIds: ["@I1@", "@I2@"],
-      childIds: ["@I3@"]
+      id: "family-conn:@F1@",
+      husbandId: "person-subject",
+      wifeId: "person-second",
+      partnerIds: ["person-subject", "person-second"],
+      childIds: ["person-third"]
     }];
     const miniTree = buildPersonMiniTree(subject, [subject, mother, father], edges);
     const parentsRow = miniTree?.tree.generations.find((generation) => generation.id === "parents");
 
-    expect(parentsRow?.members.map((member) => member.personId)).toEqual(["@I1@", "@I2@"]);
+    expect(parentsRow?.members.map((member) => member.personId)).toEqual(["person-subject", "person-second"]);
   });
 
   it("places every person exactly once even with contradictory edges", () => {
-    const subject = person("@I1@");
-    const other = person("@I2@");
+    const subject = person("person-subject");
+    const other = person("person-second");
     const contradictory: FamilyEdge[] = [
-      { id: "@F1@", partnerIds: ["@I1@", "@I2@"], childIds: [] },
-      { id: "@F2@", partnerIds: [], childIds: ["@I1@", "@I2@"] }
+      { id: "family-conn:@F1@", partnerIds: ["person-subject", "person-second"], childIds: [] },
+      { id: "family-conn:@F2@", partnerIds: [], childIds: ["person-subject", "person-second"] }
     ];
     const miniTree = buildPersonMiniTree(subject, [subject, other], contradictory);
     const placements = miniTree?.tree.generations.flatMap((generation) =>
       generation.members.map((member) => member.personId)
     );
 
-    expect(placements).toEqual(["@I1@", "@I2@"]);
+    expect(placements).toEqual(["person-subject", "person-second"]);
     expect(() => buildFamilyTreeLayout(miniTree!.tree)).not.toThrow();
   });
 

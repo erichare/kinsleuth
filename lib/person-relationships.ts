@@ -14,6 +14,22 @@ export type FamilyEdge = {
   childIds: readonly string[];
 };
 
+// The xref -> local person id mapping for one applied import, scoped to the
+// integration connection that produced it. Integration-applied imports store
+// generated local person ids on people while their raw FAM records still
+// point at provider xrefs; translating through this mapping joins the two.
+// Legacy GEDCOM imports need no mapping because their person ids ARE the
+// xrefs (see lib/gedcom/parser.ts extractPeople).
+export type ImportPersonXrefMapping = {
+  // The integration connection id. Colliding xrefs from different
+  // connections must never cross-translate, so edges are deduplicated within
+  // this scope instead of globally.
+  scopeId: string;
+  personIdByXref: ReadonlyMap<string, string>;
+};
+
+export type PersonXrefMappingsByImportId = ReadonlyMap<string, ImportPersonXrefMapping>;
+
 export const fallbackRelationshipLabel = "Linked relative";
 
 // Derives the relative's relationship to the viewed person from family edges.
@@ -78,10 +94,15 @@ export function familyEdgesFromGedcomRecords(records: readonly GedcomRecord[]): 
 // isolation and replayed oldest-first: the newest import containing a family
 // xref owns that family's structure, matching the last-write-wins merge the
 // importer applies to people (see buildRepairedRelativesByPersonId in
-// lib/workspace-store.ts).
+// lib/workspace-store.ts). Integration-applied imports additionally translate
+// FAM member xrefs to the generated local person ids through their
+// connection's mapping (see readPersonXrefMappingsByImportId in
+// lib/workspace-store.ts); imports without a mapping keep raw xrefs, which
+// already ARE the person ids on the legacy import path.
 export function familyEdgesFromRawRecords(
   rawRecords: readonly RawGedcomRecord[],
-  imports: readonly Pick<AppliedGedcomImport, "id" | "appliedAt">[]
+  imports: readonly Pick<AppliedGedcomImport, "id" | "appliedAt">[],
+  xrefMappings?: PersonXrefMappingsByImportId
 ): FamilyEdge[] {
   const familyRecords = rawRecords.filter((record) => record.type === "FAM");
   if (familyRecords.length === 0) return [];
@@ -95,16 +116,41 @@ export function familyEdgesFromRawRecords(
     (appliedAtByImportId.get(left) ?? "").localeCompare(appliedAtByImportId.get(right) ?? "")
   );
 
-  const edgesByFamilyId = new Map<string, FamilyEdge>();
+  // Last-write-wins is scoped: legacy imports share the unscoped family xref
+  // key (re-importing a file lineage replaces its families), while mapped
+  // imports key per connection so identical xrefs from unrelated connections
+  // never clobber each other.
+  const edgesByScopedFamilyId = new Map<string, FamilyEdge>();
   for (const importId of orderedImportIds) {
     const records = recordsByImportId.get(importId) ?? [];
     const parsed = parseGedcom(records.map((record) => record.raw).join("\n"));
+    const mapping = xrefMappings?.get(importId);
     for (const edge of familyEdgesFromGedcomRecords(parsed.records)) {
-      edgesByFamilyId.set(edge.id, edge);
+      const translated = mapping ? translateFamilyEdge(edge, mapping) : edge;
+      const scopedFamilyId = mapping ? `${mapping.scopeId}\u0000${edge.id}` : edge.id;
+      edgesByScopedFamilyId.set(scopedFamilyId, translated);
     }
   }
 
-  return [...edgesByFamilyId.values()];
+  return [...edgesByScopedFamilyId.values()];
+}
+
+// Translates one FAM edge's member xrefs to local person ids. Members the
+// connection never mapped (for example an individual whose incoming change
+// was skipped at review) keep their xref: it matches no workspace person,
+// which is the same behavior an unresolved pointer has today.
+function translateFamilyEdge(edge: FamilyEdge, mapping: ImportPersonXrefMapping): FamilyEdge {
+  const translate = (xref: string): string => mapping.personIdByXref.get(xref) ?? xref;
+  return {
+    // Namespace the edge id by connection so families from different
+    // connections that reuse the same FAM xref stay distinct for consumers
+    // that deduplicate by id (see dedupeFamilies in lib/person-mini-tree.ts).
+    id: `${mapping.scopeId}:${edge.id}`,
+    husbandId: edge.husbandId === undefined ? undefined : translate(edge.husbandId),
+    wifeId: edge.wifeId === undefined ? undefined : translate(edge.wifeId),
+    partnerIds: [...new Set(edge.partnerIds.map(translate))],
+    childIds: [...new Set(edge.childIds.map(translate))]
+  };
 }
 
 // The fictional demo workspace stores no raw GEDCOM records; its family
@@ -118,17 +164,20 @@ export const demoFamilyTreeEdges: readonly FamilyEdge[] = demoFamilyTree.familie
 
 // Family edges for a private workspace: imported GEDCOM FAM structures first,
 // then the fictional demo edges. Demo person ids (p-*) never collide with
-// GEDCOM xrefs (@...@), so appending them unconditionally is safe and keeps
-// demo archives labeled without a dataset-mode branch. Both collections are
-// optional because callers may hold partial workspace projections.
+// GEDCOM xrefs (@...@) or generated local ids, so appending them
+// unconditionally is safe and keeps demo archives labeled without a
+// dataset-mode branch. Both collections are optional because callers may hold
+// partial workspace projections. Callers with integration-applied imports
+// must pass the xref mappings so edge members resolve to local person ids.
 export function workspaceFamilyEdges(
   workspace: {
     rawRecords?: readonly RawGedcomRecord[];
     imports?: readonly Pick<AppliedGedcomImport, "id" | "appliedAt">[];
-  }
+  },
+  xrefMappings?: PersonXrefMappingsByImportId
 ): FamilyEdge[] {
   return [
-    ...familyEdgesFromRawRecords(workspace.rawRecords ?? [], workspace.imports ?? []),
+    ...familyEdgesFromRawRecords(workspace.rawRecords ?? [], workspace.imports ?? [], xrefMappings),
     ...demoFamilyTreeEdges
   ];
 }
