@@ -787,6 +787,16 @@ jobs:
             if test "$attempt" = 20; then exit 1; fi
             sleep 3
           done
+          canonical_ready="false"
+          for attempt in $(seq 1 20); do
+            if node --experimental-strip-types scripts/public-demo-monitor.mjs shallow; then
+              canonical_ready="true"
+              break
+            fi
+            if test "$attempt" = 20; then break; fi
+            sleep 3
+          done
+          test "$canonical_ready" = "true"
           node --experimental-strip-types scripts/public-demo-monitor.mjs full
           node --experimental-strip-types scripts/public-demo-internal-health-monitor.mjs
 

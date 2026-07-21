@@ -116,6 +116,26 @@ describe("public demo operational boundary", () => {
     expect(promotion).toBeGreaterThan(canary);
   });
 
+  it("waits for canonical data-plane readiness before the full post-promotion journey", () => {
+    const canonicalProof = stepBlock(
+      publicDemoRelease,
+      "Prove canonical promotion and run the full public demo monitor",
+      "Roll back a failed promotion to the previously validated deployment"
+    );
+    const shallowMonitor = canonicalProof.indexOf(
+      "scripts/public-demo-monitor.mjs shallow"
+    );
+    const fullMonitor = canonicalProof.indexOf(
+      "scripts/public-demo-monitor.mjs full"
+    );
+
+    expect(canonicalProof).toContain('canonical_ready="false"');
+    expect(canonicalProof).toMatch(/for attempt in \$\(seq 1 [1-9][0-9]*\)/);
+    expect(canonicalProof).toContain('test "$canonical_ready" = "true"');
+    expect(shallowMonitor).toBeGreaterThan(-1);
+    expect(fullMonitor).toBeGreaterThan(shallowMonitor);
+  });
+
   it("binds the public demo release to its own hosted-demo cell identities", () => {
     expect(publicDemoRelease).toContain('test "$APP_BASE_URL" = "https://demo.kinresolve.com"');
     expect(publicDemoRelease).toContain("EXPECTED_DATASET_MODE: demo");
