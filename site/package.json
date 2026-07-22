@@ -19,9 +19,9 @@
     "verify": "npm run check && npm run test:scripts && npm run build && npm run test:export"
   },
   "dependencies": {
-    "next": "16.2.10",
-    "react": "19.2.7",
-    "react-dom": "19.2.7"
+    "next": "16.2.11",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
   },
   "devDependencies": {
     "@eslint/compat": "^2.1.0",
@@ -30,7 +30,7 @@
     "@types/react-dom": "^19.2.3",
     "@typescript/native": "npm:typescript@^7.0.2",
     "eslint": "^10.7.0",
-    "eslint-config-next": "16.2.10",
+    "eslint-config-next": "16.2.11",
     "parse5": "^8.0.1",
     "typescript": "npm:@typescript/typescript6@^6.0.2"
   },
